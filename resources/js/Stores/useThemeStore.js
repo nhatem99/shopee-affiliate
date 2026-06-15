@@ -1,4 +1,5 @@
 import { defineStore } from 'pinia'
+import { ref, computed } from 'vue'
 
 const STORAGE_KEY = 'theme'
 
@@ -9,36 +10,31 @@ function resolveInitial() {
     return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'
 }
 
-export const useThemeStore = defineStore('theme', {
-    state: () => ({
-        theme: 'light',
-        initialized: false,
-    }),
+export const useThemeStore = defineStore('theme', () => {
+    const theme = ref('light')
+    const initialized = ref(false)
+    const isDark = computed(() => theme.value === 'dark')
 
-    getters: {
-        isDark: (state) => state.theme === 'dark',
-    },
+    function apply() {
+        if (typeof document === 'undefined') return
+        document.documentElement.classList.toggle('dark', theme.value === 'dark')
+    }
 
-    actions: {
-        // Đồng bộ state với class .dark mà inline script đã đặt sẵn (chống nhấp nháy)
-        init() {
-            if (this.initialized) return
-            this.theme = resolveInitial()
-            this.apply()
-            this.initialized = true
-        },
+    // Đồng bộ state với class .dark mà inline script đã đặt sẵn (chống nhấp nháy)
+    function init() {
+        if (initialized.value) return
+        theme.value = resolveInitial()
+        apply()
+        initialized.value = true
+    }
 
-        apply() {
-            if (typeof document === 'undefined') return
-            document.documentElement.classList.toggle('dark', this.theme === 'dark')
-        },
+    function toggle() {
+        theme.value = theme.value === 'dark' ? 'light' : 'dark'
+        if (typeof window !== 'undefined') {
+            localStorage.setItem(STORAGE_KEY, theme.value)
+        }
+        apply()
+    }
 
-        toggle() {
-            this.theme = this.theme === 'dark' ? 'light' : 'dark'
-            if (typeof window !== 'undefined') {
-                localStorage.setItem(STORAGE_KEY, this.theme)
-            }
-            this.apply()
-        },
-    },
+    return { theme, isDark, init, toggle }
 })

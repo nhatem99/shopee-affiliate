@@ -7,21 +7,21 @@
     --font-sans: 'Be Vietnam Pro', ui-sans-serif, system-ui, sans-serif;
     --font-mono: 'Space Mono', ui-monospace, monospace;
 
-    --color-bg: #FFF6EE;
+    --color-bg: #FBFBFC;
     --color-surface: #ffffff;
-    --color-ink: #241811;
-    --color-muted: #7a5c4e;
+    --color-ink: #1B1B1F;
+    --color-muted: #6B7280;
     --color-accent: #F5511E;
     --color-accent-deep: #D43F12;
     --color-peach: #FFE3D2;
-    --color-peach-soft: #FFEFE4;
+    --color-peach-soft: #FFF3EC;
     --color-brand-green: #1E9E6A;
-    --color-green-soft: #E4F4EC;
-    --color-line: #C8A898;
-    --color-ticket: #FFF3D4;
-    --color-ticket-border: #e7c873;
-    --color-side: #241811;
-    --color-side-soft: #3a2a1f;
+    --color-green-soft: #E7F5EE;
+    --color-line: #ECECEF;
+    --color-ticket: #FFF6E0;
+    --color-ticket-border: #F0D89A;
+    --color-side: #1B1B1F;
+    --color-side-soft: #2C2C33;
 }
 
 /* Bật dark mode theo class .dark trên <html> (Tailwind 4 class strategy) */

@@ -1,27 +1,27 @@
 import { defineStore } from 'pinia'
+import { ref } from 'vue'
 import { router } from '@inertiajs/vue3'
 
-export const useAffiliateStore = defineStore('affiliate', {
-    state: () => ({
-        url: '',
-        scanning: false,
-        error: null,
-    }),
-    actions: {
-        scan() {
-            if (!this.url) return
-            this.scanning = true
-            this.error = null
+export const useAffiliateStore = defineStore('affiliate', () => {
+    const url = ref('')
+    const scanning = ref(false)
+    const error = ref(null)
 
-            router.post('/affiliate/scan', { url: this.url }, {
-                onSuccess: () => {
-                    this.scanning = false
-                },
-                onError: (errors) => {
-                    this.error = errors.url || 'Có lỗi xảy ra, vui lòng thử lại.'
-                    this.scanning = false
-                },
-            })
-        },
-    },
+    function scan() {
+        if (!url.value) return
+        scanning.value = true
+        error.value = null
+
+        router.post('/affiliate/scan', { url: url.value }, {
+            onSuccess: () => {
+                scanning.value = false
+            },
+            onError: (errors) => {
+                error.value = errors.url || 'Có lỗi xảy ra, vui lòng thử lại.'
+                scanning.value = false
+            },
+        })
+    }
+
+    return { url, scanning, error, scan }
 })
