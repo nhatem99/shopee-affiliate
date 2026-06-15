@@ -5,6 +5,7 @@ namespace App\Services;
 use App\Exceptions\AffiliateScanException;
 use App\Models\AffiliateLink;
 use App\Models\Commission;
+use App\Models\PlatformVoucher;
 use App\Models\User;
 use App\Models\Voucher;
 
@@ -76,6 +77,9 @@ class AffiliateScanOrchestrator
             $savedVouchers = $vouchers;
         }
 
+        // Fetch platform-wide vouchers (Facebook/YouTube) for this platform
+        $platformVouchers = PlatformVoucher::active()->forPlatform($platform)->get()->toArray();
+
         return [
             'product' => [
                 'name' => $productInfo['product_name'],
@@ -88,6 +92,7 @@ class AffiliateScanOrchestrator
                 'sold_count' => $productInfo['sold_count'] ?? 0,
             ],
             'vouchers' => $savedVouchers,
+            'platformVouchers' => $platformVouchers,
             'affiliateLink' => $affiliateLink,
             'cashback' => $cashback,
             'savings' => [

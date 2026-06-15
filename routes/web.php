@@ -3,6 +3,7 @@
 use App\Http\Controllers\Admin\ApiConfigController;
 use App\Http\Controllers\Admin\DashboardController;
 use App\Http\Controllers\Admin\OrderController;
+use App\Http\Controllers\Admin\VoucherController;
 use App\Http\Controllers\AffiliateController;
 use App\Http\Controllers\Auth\LoginController;
 use App\Http\Controllers\Auth\OtpController;
@@ -47,4 +48,8 @@ Route::middleware(['auth', 'auth.admin'])->prefix('admin')->name('admin.')->grou
     Route::get('/api-config', [ApiConfigController::class, 'index'])->name('api-config');
     Route::post('/api-config', [ApiConfigController::class, 'store'])->name('api-config.store');
     Route::post('/api-config/{config}/test', [ApiConfigController::class, 'test'])->name('api-config.test');
+    Route::get('/vouchers', [VoucherController::class, 'index'])->name('vouchers');
+    Route::post('/vouchers', [VoucherController::class, 'store'])->name('vouchers.store');
+    Route::patch('/vouchers/{voucher}', [VoucherController::class, 'update'])->name('vouchers.update');
+    Route::delete('/vouchers/{voucher}', [VoucherController::class, 'destroy'])->name('vouchers.destroy');
 });

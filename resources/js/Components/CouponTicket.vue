@@ -9,6 +9,8 @@ const props = defineProps({
     minimumOrder: { type: Number, default: 0 },
     expiresAt: { type: String, default: null },
     isFreeship: { type: Boolean, default: false },
+    source: { type: String, default: null }, // facebook|youtube|manual
+    subtitle: { type: String, default: null },
 })
 
 const { copy, copied } = useClipboard({ source: props.code })
@@ -35,10 +37,15 @@ const label = props.isFreeship
 
         <!-- Left: discount info -->
         <div class="flex-1 px-5 py-4 pr-8">
-            <p class="text-xs font-semibold text-[var(--color-muted)] uppercase tracking-wide mb-1">
-                {{ isFreeship ? 'Freeship' : 'Voucher' }}
-            </p>
+            <div class="flex items-center gap-2 mb-1">
+                <p class="text-xs font-semibold text-[var(--color-muted)] uppercase tracking-wide">
+                    {{ isFreeship ? 'Freeship' : 'Voucher' }}
+                </p>
+                <span v-if="source === 'facebook'" class="text-xs bg-blue-100 text-blue-700 font-semibold px-1.5 py-0.5 rounded">📘 Facebook</span>
+                <span v-else-if="source === 'youtube'" class="text-xs bg-red-100 text-red-700 font-semibold px-1.5 py-0.5 rounded">▶️ YouTube</span>
+            </div>
             <p class="text-lg font-extrabold text-[var(--color-ink)]">{{ label }}</p>
+            <p v-if="subtitle" class="text-xs text-[var(--color-muted)] mt-0.5">{{ subtitle }}</p>
             <p v-if="minimumOrder > 0" class="text-xs text-[var(--color-muted)] mt-1">
                 Đơn tối thiểu {{ formatVnd(minimumOrder) }}
             </p>
