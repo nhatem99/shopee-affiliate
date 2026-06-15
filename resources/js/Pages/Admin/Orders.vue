@@ -47,16 +47,16 @@ function approve(orderId) {
 
         <!-- Filters -->
         <div class="flex gap-2 mb-6">
-            <button @click="filter('')" :class="!filters?.status ? 'bg-[var(--color-accent)] text-white' : 'bg-white text-[var(--color-ink)] border border-[var(--color-line)] hover:border-[var(--color-accent)] hover:text-[var(--color-accent)]'"
+            <button @click="filter('')" :class="!filters?.status ? 'bg-[var(--color-accent)] text-white' : 'bg-[var(--color-surface)] text-[var(--color-ink)] border border-[var(--color-line)] hover:border-[var(--color-accent)] hover:text-[var(--color-accent)]'"
                 class="px-4 py-2 rounded-xl text-sm font-semibold transition">Tất cả</button>
             <button v-for="s in ['pending','approved','paid']" :key="s" @click="filter(s)"
-                :class="filters?.status === s ? 'bg-[var(--color-accent)] text-white' : 'bg-white text-[var(--color-ink)] border border-[var(--color-line)] hover:border-[var(--color-accent)] hover:text-[var(--color-accent)]'"
+                :class="filters?.status === s ? 'bg-[var(--color-accent)] text-white' : 'bg-[var(--color-surface)] text-[var(--color-ink)] border border-[var(--color-line)] hover:border-[var(--color-accent)] hover:text-[var(--color-accent)]'"
                 class="px-4 py-2 rounded-xl text-sm font-semibold transition">
                 {{ statusLabels[s] }}
             </button>
         </div>
 
-        <div class="bg-white rounded-2xl border border-[var(--color-line)] overflow-hidden">
+        <div class="bg-[var(--color-surface)] rounded-2xl border border-[var(--color-line)] overflow-hidden">
             <table class="w-full text-sm">
                 <thead class="bg-[var(--color-peach-soft)]">
                     <tr class="text-left text-xs text-[var(--color-muted)]">

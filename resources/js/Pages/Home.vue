@@ -45,7 +45,7 @@ function scan() {
 
             <div class="relative max-w-3xl mx-auto text-center">
                 <!-- Badge -->
-                <div class="inline-flex items-center gap-2 bg-white border border-[var(--color-line)] rounded-full px-4 py-2 text-sm font-semibold text-[var(--color-ink)] mb-6 shadow-sm">
+                <div class="inline-flex items-center gap-2 bg-[var(--color-surface)] border border-[var(--color-line)] rounded-full px-4 py-2 text-sm font-semibold text-[var(--color-ink)] mb-6 shadow-sm">
                     <span class="w-2 h-2 rounded-full bg-[var(--color-brand-green)] animate-blink-dot"></span>
                     Hỗ trợ Shopee · Lazada · TikTok Shop · Tiki
                 </div>
@@ -67,7 +67,7 @@ function scan() {
                             type="url"
                             @keydown.enter="scan"
                             placeholder="Dán link sản phẩm vào đây..."
-                            class="w-full pl-10 pr-4 py-4 border border-[var(--color-line)] rounded-2xl text-sm bg-white focus:outline-none focus:border-[var(--color-accent)] focus:ring-2 focus:ring-[var(--color-peach)] transition shadow-sm"
+                            class="w-full pl-10 pr-4 py-4 border border-[var(--color-line)] rounded-2xl text-sm bg-[var(--color-surface)] focus:outline-none focus:border-[var(--color-accent)] focus:ring-2 focus:ring-[var(--color-peach)] transition shadow-sm"
                         />
                     </div>
                     <button
@@ -94,7 +94,7 @@ function scan() {
         </section>
 
         <!-- How it works -->
-        <section class="py-16 px-4 bg-white">
+        <section class="py-16 px-4 bg-[var(--color-surface)]">
             <div class="max-w-4xl mx-auto text-center">
                 <h2 class="text-2xl md:text-3xl font-extrabold text-[var(--color-ink)] mb-12">Chỉ 3 bước đơn giản</h2>
                 <div class="grid grid-cols-1 md:grid-cols-3 gap-8">
@@ -120,7 +120,7 @@ function scan() {
                     <div
                         v-for="(faq, i) in faqs"
                         :key="i"
-                        class="bg-white rounded-2xl border border-[var(--color-line)] overflow-hidden"
+                        class="bg-[var(--color-surface)] rounded-2xl border border-[var(--color-line)] overflow-hidden"
                     >
                         <button
                             @click="openFaq = openFaq === i ? null : i"

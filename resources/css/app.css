@@ -24,12 +24,41 @@
     --color-side-soft: #3a2a1f;
 }
 
+/* Bật dark mode theo class .dark trên <html> (Tailwind 4 class strategy) */
+@custom-variant dark (&:where(.dark, .dark *));
+
+/* Dark mode: override toàn bộ biến màu — mọi util bg-[var(--color-*)] tự thích ứng */
+.dark {
+    --color-bg: #15100c;
+    --color-surface: #211a14;
+    --color-ink: #f4ebe3;
+    --color-muted: #b39a8b;
+    --color-accent: #F5511E;
+    --color-accent-deep: #ff6a3c;
+    --color-peach: #3a261b;
+    --color-peach-soft: #2c1d15;
+    --color-brand-green: #2bbd84;
+    --color-green-soft: #16291f;
+    --color-line: #3d2e24;
+    --color-ticket: #322817;
+    --color-ticket-border: #6b5630;
+    --color-side: #100b08;
+    --color-side-soft: #241a12;
+}
+
 @layer base {
+    html {
+        color-scheme: light;
+    }
+    html.dark {
+        color-scheme: dark;
+    }
     body {
         background-color: var(--color-bg);
         color: var(--color-ink);
         font-family: var(--font-sans);
         -webkit-font-smoothing: antialiased;
+        transition: background-color 0.3s ease, color 0.3s ease;
     }
 }
 

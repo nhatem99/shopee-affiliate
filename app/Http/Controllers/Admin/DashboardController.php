@@ -22,7 +22,7 @@ class DashboardController extends Controller
                     ->sum('amount'),
                 'total_users' => User::where('role', 'user')->count(),
             ],
-            'daily_revenue' => Commission::selectRaw("strftime('%Y-%m-%d', created_at) as date, SUM(amount) as total")
+            'daily_revenue' => Commission::selectRaw('DATE(created_at) as date, SUM(amount) as total')
                 ->where('created_at', '>=', now()->subDays(7))
                 ->groupBy('date')
                 ->orderBy('date')

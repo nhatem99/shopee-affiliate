@@ -12,7 +12,7 @@ const items = [
 </script>
 
 <template>
-    <nav class="md:hidden fixed bottom-0 left-0 right-0 z-50 bg-white border-t border-[var(--color-line)] flex safe-area-inset-bottom">
+    <nav class="md:hidden fixed bottom-0 left-0 right-0 z-50 bg-[var(--color-surface)] border-t border-[var(--color-line)] flex safe-area-inset-bottom">
         <Link
             v-for="item in items"
             :key="item.href"

@@ -3,6 +3,7 @@ import { Link, usePage } from '@inertiajs/vue3'
 import { computed } from 'vue'
 import { useAuthStore } from '@/Stores/useAuthStore'
 import ToastContainer from '@/Components/ToastContainer.vue'
+import ThemeToggle from '@/Components/ThemeToggle.vue'
 
 const page = usePage()
 const auth = useAuthStore()
@@ -50,11 +51,14 @@ const navItems = [
 
         <!-- Main content -->
         <div class="flex-1 ml-[248px] flex flex-col min-h-screen">
-            <header class="sticky top-0 z-30 bg-white border-b border-[var(--color-line)] px-6 h-14 flex items-center justify-between">
+            <header class="sticky top-0 z-30 bg-[var(--color-surface)] border-b border-[var(--color-line)] px-6 h-14 flex items-center justify-between">
                 <h1 class="font-bold text-[var(--color-ink)] text-base">
                     <slot name="title">Admin</slot>
                 </h1>
-                <div class="text-sm text-[var(--color-muted)]">{{ new Date().toLocaleDateString('vi-VN') }}</div>
+                <div class="flex items-center gap-3">
+                    <span class="text-sm text-[var(--color-muted)]">{{ new Date().toLocaleDateString('vi-VN') }}</span>
+                    <ThemeToggle />
+                </div>
             </header>
             <main class="flex-1 p-6">
                 <slot />

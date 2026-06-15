@@ -1,5 +1,6 @@
 ﻿<script setup>
 import { Head, useForm, Link } from '@inertiajs/vue3'
+import ThemeToggle from '@/Components/ThemeToggle.vue'
 
 const form = useForm({
     name: '',
@@ -17,7 +18,8 @@ function submit() {
 <template>
     <Head title="Đăng ký" />
     <div class="min-h-screen bg-[var(--color-bg)] flex items-center justify-center px-4">
-        <div class="w-full max-w-md bg-white rounded-2xl shadow-lg p-8">
+        <div class="fixed top-4 right-4 z-50"><ThemeToggle /></div>
+        <div class="w-full max-w-md bg-[var(--color-surface)] rounded-2xl shadow-lg p-8">
             <div class="text-center mb-8">
                 <h1 class="text-2xl font-extrabold text-[var(--color-ink)]">Tạo tài khoản</h1>
                 <p class="text-[var(--color-muted)] text-sm mt-1">Miễn phí, không quảng cáo</p>

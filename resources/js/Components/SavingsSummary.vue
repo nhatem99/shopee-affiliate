@@ -11,7 +11,7 @@ function vnd(n) {
 </script>
 
 <template>
-    <div class="bg-white rounded-2xl border border-[var(--color-line)] p-6 sticky top-20">
+    <div class="bg-[var(--color-surface)] rounded-2xl border border-[var(--color-line)] p-6 sticky top-20">
         <h3 class="font-extrabold text-[var(--color-ink)] text-base mb-4">Tóm tắt tiết kiệm</h3>
 
         <div class="space-y-3 text-sm">

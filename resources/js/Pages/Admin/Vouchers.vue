@@ -96,7 +96,7 @@ function discountText(v) {
             </button>
         </div>
 
-        <div class="bg-white rounded-2xl border border-[var(--color-line)] overflow-hidden">
+        <div class="bg-[var(--color-surface)] rounded-2xl border border-[var(--color-line)] overflow-hidden">
             <table class="w-full text-sm">
                 <thead class="bg-[var(--color-peach-soft)]">
                     <tr class="text-left text-xs text-[var(--color-muted)]">
@@ -144,7 +144,7 @@ function discountText(v) {
 
         <!-- Form modal -->
         <div v-if="showForm" class="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
-            <div class="bg-white rounded-2xl p-6 w-full max-w-lg max-h-[90vh] overflow-y-auto">
+            <div class="bg-[var(--color-surface)] rounded-2xl p-6 w-full max-w-lg max-h-[90vh] overflow-y-auto">
                 <h2 class="font-extrabold text-[var(--color-ink)] mb-5">{{ editing ? 'Chỉnh sửa voucher' : 'Thêm voucher mới' }}</h2>
                 <form @submit.prevent="save" class="space-y-4">
                     <div class="grid grid-cols-2 gap-3">

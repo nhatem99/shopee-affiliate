@@ -23,7 +23,7 @@ const platformLabels = { shopee: 'Shopee', lazada: 'Lazada', tiki: 'Tiki', tikto
                 <div
                     v-for="link in links.data"
                     :key="link.id"
-                    class="bg-white rounded-2xl border border-[var(--color-line)] p-5 flex gap-4 items-start"
+                    class="bg-[var(--color-surface)] rounded-2xl border border-[var(--color-line)] p-5 flex gap-4 items-start"
                 >
                     <div class="w-16 h-16 rounded-xl bg-[var(--color-peach-soft)] flex-none overflow-hidden">
                         <img v-if="link.product_image" :src="link.product_image" :alt="link.product_name" class="w-full h-full object-cover" />

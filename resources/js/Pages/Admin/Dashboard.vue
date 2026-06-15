@@ -26,26 +26,26 @@ const statusColors = {
 
         <!-- Stat cards -->
         <div class="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
-            <div class="bg-white rounded-2xl border border-[var(--color-line)] p-5">
+            <div class="bg-[var(--color-surface)] rounded-2xl border border-[var(--color-line)] p-5">
                 <p class="text-xs text-[var(--color-muted)] font-semibold uppercase tracking-wide mb-1">Tổng mã đã quét</p>
                 <p class="text-2xl font-extrabold text-[var(--color-ink)]">{{ stats?.total_codes?.toLocaleString('vi-VN') || 0 }}</p>
             </div>
-            <div class="bg-white rounded-2xl border border-[var(--color-line)] p-5">
+            <div class="bg-[var(--color-surface)] rounded-2xl border border-[var(--color-line)] p-5">
                 <p class="text-xs text-[var(--color-muted)] font-semibold uppercase tracking-wide mb-1">Đơn chờ duyệt</p>
                 <p class="text-2xl font-extrabold text-[var(--color-accent)]">{{ stats?.pending_orders || 0 }}</p>
             </div>
-            <div class="bg-white rounded-2xl border border-[var(--color-line)] p-5">
+            <div class="bg-[var(--color-surface)] rounded-2xl border border-[var(--color-line)] p-5">
                 <p class="text-xs text-[var(--color-muted)] font-semibold uppercase tracking-wide mb-1">Hoa hồng tuần</p>
                 <p class="text-2xl font-extrabold text-[var(--color-brand-green)]">{{ vnd(stats?.weekly_commission) }}</p>
             </div>
-            <div class="bg-white rounded-2xl border border-[var(--color-line)] p-5">
+            <div class="bg-[var(--color-surface)] rounded-2xl border border-[var(--color-line)] p-5">
                 <p class="text-xs text-[var(--color-muted)] font-semibold uppercase tracking-wide mb-1">Người dùng</p>
                 <p class="text-2xl font-extrabold text-[var(--color-ink)]">{{ stats?.total_users || 0 }}</p>
             </div>
         </div>
 
         <!-- Recent orders table -->
-        <div class="bg-white rounded-2xl border border-[var(--color-line)] p-6">
+        <div class="bg-[var(--color-surface)] rounded-2xl border border-[var(--color-line)] p-6">
             <h2 class="font-extrabold text-[var(--color-ink)] mb-4">Đơn hàng gần đây</h2>
             <div class="overflow-x-auto">
                 <table class="w-full text-sm">

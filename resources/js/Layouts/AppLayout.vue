@@ -3,6 +3,7 @@ import { Link } from '@inertiajs/vue3'
 import { useAuthStore } from '@/Stores/useAuthStore'
 import BottomNav from '@/Components/BottomNav.vue'
 import ToastContainer from '@/Components/ToastContainer.vue'
+import ThemeToggle from '@/Components/ThemeToggle.vue'
 
 const auth = useAuthStore()
 </script>
@@ -10,7 +11,7 @@ const auth = useAuthStore()
 <template>
     <div class="min-h-screen bg-[var(--color-bg)]">
         <!-- Header -->
-        <header class="sticky top-0 z-50 bg-white/80 backdrop-blur-md border-b border-[var(--color-line)]">
+        <header class="sticky top-0 z-50 bg-[var(--color-surface)]/80 backdrop-blur-md border-b border-[var(--color-line)]">
             <div class="max-w-6xl mx-auto px-4 h-16 flex items-center justify-between">
                 <Link href="/" class="flex items-center gap-2 font-extrabold text-xl text-[var(--color-ink)]">
                     <span class="w-8 h-8 rounded-lg bg-[var(--color-accent)] flex items-center justify-center text-white text-sm font-black">M</span>
@@ -24,6 +25,7 @@ const auth = useAuthStore()
                 </nav>
 
                 <div class="flex items-center gap-3">
+                    <ThemeToggle />
                     <template v-if="auth.isLoggedIn">
                         <span class="hidden md:block text-sm text-[var(--color-muted)] font-medium">{{ auth.user?.name }}</span>
                         <button @click="auth.logout()"

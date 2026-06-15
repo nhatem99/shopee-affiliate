@@ -48,7 +48,7 @@ async function testConfig(config) {
             <div
                 v-for="config in configs"
                 :key="config.id"
-                class="bg-white rounded-2xl border border-[var(--color-line)] p-6"
+                class="bg-[var(--color-surface)] rounded-2xl border border-[var(--color-line)] p-6"
             >
                 <div class="flex items-center justify-between mb-4">
                     <div class="flex items-center gap-3">
@@ -84,7 +84,7 @@ async function testConfig(config) {
 
         <!-- Edit form modal -->
         <div v-if="editing" class="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
-            <div class="bg-white rounded-2xl p-6 w-full max-w-md">
+            <div class="bg-[var(--color-surface)] rounded-2xl p-6 w-full max-w-md">
                 <h2 class="font-extrabold text-[var(--color-ink)] mb-4">Chỉnh sửa cấu hình</h2>
                 <form @submit.prevent="saveConfig" class="space-y-4">
                     <div>

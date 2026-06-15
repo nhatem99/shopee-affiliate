@@ -2,6 +2,7 @@
 import { ref } from 'vue'
 import { Head, useForm, Link } from '@inertiajs/vue3'
 import axios from 'axios'
+import ThemeToggle from '@/Components/ThemeToggle.vue'
 
 const tab = ref('email') // 'email' | 'otp'
 const otpStep = ref('phone') // 'phone' | 'verify'
@@ -44,7 +45,8 @@ function submitOtp() {
 <template>
     <Head title="Đăng nhập" />
     <div class="min-h-screen bg-[var(--color-bg)] flex items-center justify-center px-4">
-        <div class="w-full max-w-md bg-white rounded-2xl shadow-lg p-8">
+        <div class="fixed top-4 right-4 z-50"><ThemeToggle /></div>
+        <div class="w-full max-w-md bg-[var(--color-surface)] rounded-2xl shadow-lg p-8">
             <div class="text-center mb-8">
                 <h1 class="text-2xl font-extrabold text-[var(--color-ink)]">Đăng nhập</h1>
                 <p class="text-[var(--color-muted)] text-sm mt-1">Chào mừng bạn trở lại!</p>
@@ -54,12 +56,12 @@ function submitOtp() {
             <div class="flex bg-[var(--color-peach)] rounded-xl p-1 mb-6">
                 <button
                     @click="tab = 'email'"
-                    :class="tab === 'email' ? 'bg-white shadow text-[var(--color-ink)]' : 'text-[var(--color-ink)]/60 hover:text-[var(--color-ink)]'"
+                    :class="tab === 'email' ? 'bg-[var(--color-surface)] shadow text-[var(--color-ink)]' : 'text-[var(--color-ink)]/60 hover:text-[var(--color-ink)]'"
                     class="flex-1 py-2 rounded-lg text-sm font-semibold transition"
                 >Email & Mật khẩu</button>
                 <button
                     @click="tab = 'otp'"
-                    :class="tab === 'otp' ? 'bg-white shadow text-[var(--color-ink)]' : 'text-[var(--color-ink)]/60 hover:text-[var(--color-ink)]'"
+                    :class="tab === 'otp' ? 'bg-[var(--color-surface)] shadow text-[var(--color-ink)]' : 'text-[var(--color-ink)]/60 hover:text-[var(--color-ink)]'"
                     class="flex-1 py-2 rounded-lg text-sm font-semibold transition"
                 >OTP Zalo/SMS</button>
             </div>
