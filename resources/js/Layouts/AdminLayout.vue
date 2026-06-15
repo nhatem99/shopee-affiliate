@@ -2,6 +2,7 @@
 import { Link, usePage } from '@inertiajs/vue3'
 import { computed } from 'vue'
 import { useAuthStore } from '@/Stores/useAuthStore'
+import ToastContainer from '@/Components/ToastContainer.vue'
 
 const page = usePage()
 const auth = useAuthStore()
@@ -58,5 +59,6 @@ const navItems = [
                 <slot />
             </main>
         </div>
+        <ToastContainer />
     </div>
 </template>

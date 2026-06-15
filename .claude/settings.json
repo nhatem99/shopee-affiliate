@@ -1,0 +1,45 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(php artisan*)",
+      "Bash(composer*)",
+      "Bash(npm run dev)",
+      "Bash(npm run build)",
+      "Bash(npm install*)",
+      "Bash(./vendor/bin/pint*)",
+      "Bash(git status)",
+      "Bash(git diff*)",
+      "Bash(git log*)",
+      "Bash(git add*)",
+      "Bash(git commit*)",
+      "Bash(git branch*)",
+      "Bash(git checkout*)",
+      "Bash(git stash*)",
+      "Bash(ls*)",
+      "Bash(cat*)"
+    ],
+    "deny": [
+      "Bash(rm -rf*)",
+      "Bash(git push --force*)",
+      "Bash(git reset --hard*)",
+      "Bash(DROP TABLE*)",
+      "Bash(php artisan down)"
+    ]
+  },
+  "hooks": {
+    "PostToolUse": [
+      {
+        "matcher": "Edit|Write",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "powershell -Command \"$f = $env:CLAUDE_TOOL_INPUT_FILE_PATH; if ($f -match '\\.php$' -and (Test-Path $f)) { & './vendor/bin/pint' $f 2>&1 | Out-Null }\""
+          }
+        ]
+      }
+    ]
+  },
+  "env": {
+    "APP_ENV": "local"
+  }
+}

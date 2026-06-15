@@ -1,0 +1,68 @@
+name: CI
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+    branches: [main, master]
+
+jobs:
+  # ── PHP: Tests + Code Style ────────────────────────────────────────────────
+  php:
+    name: PHP Tests
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.3'
+          extensions: sqlite3, pdo_sqlite, mbstring, xml, ctype, fileinfo
+          coverage: none
+
+      - name: Cache Composer dependencies
+        uses: actions/cache@v4
+        with:
+          path: vendor
+          key: composer-${{ hashFiles('composer.lock') }}
+          restore-keys: composer-
+
+      - name: Install PHP dependencies
+        run: composer install --no-interaction --prefer-dist --optimize-autoloader
+
+      - name: Copy .env
+        run: cp .env.example .env
+
+      - name: Generate app key
+        run: php artisan key:generate
+
+      - name: Run PHPUnit tests
+        run: php artisan test --parallel
+        env:
+          DB_CONNECTION: sqlite
+          DB_DATABASE: ':memory:'
+
+      - name: Check code style (Laravel Pint)
+        run: ./vendor/bin/pint --test
+
+  # ── Node: Build frontend ───────────────────────────────────────────────────
+  node:
+    name: Frontend Build
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install npm dependencies
+        run: npm ci
+
+      - name: Build Vite assets
+        run: npm run build

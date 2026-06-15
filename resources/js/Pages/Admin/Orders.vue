@@ -2,8 +2,10 @@
 import { Head, router } from '@inertiajs/vue3'
 import AdminLayout from '@/Layouts/AdminLayout.vue'
 import { useAdminStore } from '@/Stores/useAdminStore'
+import { useToast } from '@/composables/useToast'
 
 const admin = useAdminStore()
+const toast = useToast()
 
 defineProps({
     orders: Object,
@@ -28,6 +30,13 @@ const statusLabels = {
 
 function filter(status) {
     router.get('/admin/orders', { status }, { preserveState: true })
+}
+
+function approve(orderId) {
+    admin.approveOrder(orderId, {
+        onSuccess: () => toast.success('Đã duyệt đơn hàng thành công'),
+        onError: () => toast.error('Không thể duyệt đơn hàng, vui lòng thử lại'),
+    })
 }
 </script>
 
@@ -71,8 +80,17 @@ function filter(status) {
                             </span>
                         </td>
                         <td class="px-6 py-4">
-                            <button v-if="order.status === 'pending'" @click="admin.approveOrder(order.id)"
-                                class="text-xs font-semibold text-green-600 hover:underline">Duyệt</button>
+                            <button
+                                v-if="order.status === 'pending'"
+                                @click="approve(order.id)"
+                                :disabled="admin.loadingOrders.includes(order.id)"
+                                class="flex items-center gap-1.5 text-xs font-semibold text-green-600 hover:underline disabled:opacity-50 disabled:cursor-not-allowed transition"
+                            >
+                                <svg v-if="admin.loadingOrders.includes(order.id)" class="w-3 h-3 animate-spin shrink-0" viewBox="0 0 24 24" fill="none">
+                                    <circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" stroke-dasharray="30 70" />
+                                </svg>
+                                {{ admin.loadingOrders.includes(order.id) ? 'Đang duyệt...' : 'Duyệt' }}
+                            </button>
                         </td>
                     </tr>
                     <tr v-if="!orders?.data?.length">

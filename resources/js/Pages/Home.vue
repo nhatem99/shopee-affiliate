@@ -3,10 +3,12 @@ import { ref } from 'vue'
 import { Head } from '@inertiajs/vue3'
 import { router } from '@inertiajs/vue3'
 import AppLayout from '@/Layouts/AppLayout.vue'
+import { useToast } from '@/composables/useToast'
 
 const url = ref('')
 const scanning = ref(false)
 const error = ref(null)
+const toast = useToast()
 
 const faqs = [
     { q: 'Công cụ này hoạt động như thế nào?', a: 'Bạn dán link sản phẩm Shopee, Lazada hoặc TikTok Shop — hệ thống tự động tìm mã giảm giá và tạo link affiliate có hoàn tiền cho bạn.' },
@@ -25,6 +27,7 @@ function scan() {
         onSuccess: () => { scanning.value = false },
         onError: (errors) => {
             error.value = errors.url || 'Có lỗi xảy ra, vui lòng thử lại.'
+            toast.error(error.value)
             scanning.value = false
         },
     })

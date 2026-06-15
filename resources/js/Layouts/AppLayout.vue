@@ -2,6 +2,7 @@
 import { Link } from '@inertiajs/vue3'
 import { useAuthStore } from '@/Stores/useAuthStore'
 import BottomNav from '@/Components/BottomNav.vue'
+import ToastContainer from '@/Components/ToastContainer.vue'
 
 const auth = useAuthStore()
 </script>
@@ -49,5 +50,6 @@ const auth = useAuthStore()
         </main>
 
         <BottomNav />
+        <ToastContainer />
     </div>
 </template>

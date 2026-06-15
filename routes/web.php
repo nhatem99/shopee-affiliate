@@ -28,6 +28,8 @@ Route::middleware('guest')->group(function () {
 Route::post('/logout', [LoginController::class, 'destroy'])->middleware('auth')->name('logout');
 
 // Affiliate scan (throttled, open to all)
+// GET fallback: redirect home if user refreshes after a scan
+Route::get('/affiliate/scan', fn () => redirect()->route('home'));
 Route::post('/affiliate/scan', [AffiliateController::class, 'scan'])
     ->middleware('throttle:affiliate-scan')
     ->name('affiliate.scan');
