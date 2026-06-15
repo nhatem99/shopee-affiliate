@@ -1,4 +1,4 @@
-<script setup>
+﻿<script setup>
 import { Link, usePage } from '@inertiajs/vue3'
 import { computed } from 'vue'
 import { useAuthStore } from '@/Stores/useAuthStore'
@@ -17,11 +17,11 @@ const navItems = [
 </script>
 
 <template>
-    <div class="flex min-h-screen bg-gray-50">
+    <div class="flex min-h-screen bg-[var(--color-bg)]">
         <!-- Sidebar -->
-        <aside class="w-[248px] flex-none bg-[--color-side] text-white flex flex-col py-6 px-4 fixed h-screen z-40">
+        <aside class="w-[248px] flex-none bg-[var(--color-side)] text-white flex flex-col py-6 px-4 fixed h-screen z-40">
             <Link href="/" class="flex items-center gap-2 font-extrabold text-lg text-white mb-10 px-2">
-                <span class="w-8 h-8 rounded-lg bg-[--color-accent] flex items-center justify-center text-sm">M</span>
+                <span class="w-8 h-8 rounded-lg bg-[var(--color-accent)] flex items-center justify-center text-sm">M</span>
                 Mã Giảm Giá
             </Link>
 
@@ -32,8 +32,8 @@ const navItems = [
                     :href="item.href"
                     class="flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-semibold transition"
                     :class="current.startsWith(item.href) && item.href !== '/'
-                        ? 'bg-[--color-side-soft] text-white'
-                        : 'text-white/60 hover:text-white hover:bg-[--color-side-soft]'"
+                        ? 'bg-[var(--color-side-soft)] text-white'
+                        : 'text-white/60 hover:text-white hover:bg-[var(--color-side-soft)]'"
                 >
                     <span>{{ item.icon }}</span>
                     {{ item.label }}
@@ -49,11 +49,11 @@ const navItems = [
 
         <!-- Main content -->
         <div class="flex-1 ml-[248px] flex flex-col min-h-screen">
-            <header class="sticky top-0 z-30 bg-white border-b border-gray-200 px-6 h-14 flex items-center justify-between">
-                <h1 class="font-bold text-gray-800 text-base">
+            <header class="sticky top-0 z-30 bg-white border-b border-[var(--color-line)] px-6 h-14 flex items-center justify-between">
+                <h1 class="font-bold text-[var(--color-ink)] text-base">
                     <slot name="title">Admin</slot>
                 </h1>
-                <div class="text-sm text-gray-500">{{ new Date().toLocaleDateString('vi-VN') }}</div>
+                <div class="text-sm text-[var(--color-muted)]">{{ new Date().toLocaleDateString('vi-VN') }}</div>
             </header>
             <main class="flex-1 p-6">
                 <slot />

@@ -1,4 +1,4 @@
-<script setup>
+﻿<script setup>
 import { useToast } from '@/composables/useToast'
 
 const { toasts, remove } = useToast()
@@ -15,9 +15,9 @@ const icons = { success: '✓', error: '✕', info: 'ℹ' }
                     :key="toast.id"
                     class="pointer-events-auto flex items-center gap-3 px-4 py-3 rounded-2xl shadow-xl text-sm font-semibold max-w-xs w-full"
                     :class="{
-                        'bg-[--color-brand-green] text-white': toast.type === 'success',
+                        'bg-[var(--color-brand-green)] text-white': toast.type === 'success',
                         'bg-red-500 text-white': toast.type === 'error',
-                        'bg-[--color-ink] text-white': toast.type === 'info',
+                        'bg-[var(--color-ink)] text-white': toast.type === 'info',
                     }"
                 >
                     <span class="text-base leading-none shrink-0">{{ icons[toast.type] }}</span>

@@ -1,4 +1,4 @@
-<script setup>
+﻿<script setup>
 import { ref } from 'vue'
 import { useClipboard } from '@vueuse/core'
 
@@ -25,34 +25,34 @@ const label = props.isFreeship
 </script>
 
 <template>
-    <div class="relative flex rounded-xl overflow-hidden border border-[--color-ticket-border] bg-[--color-ticket]">
+    <div class="relative flex rounded-xl overflow-hidden border border-[var(--color-ticket-border)] bg-[var(--color-ticket)]">
         <!-- Left notch -->
         <div class="absolute left-[calc(50%-12px)] top-0 bottom-0 flex flex-col justify-between pointer-events-none z-10">
-            <div class="w-6 h-3 rounded-b-full bg-[--color-bg]"></div>
-            <div class="border-l-2 border-dashed border-[--color-ticket-border] flex-1 mx-auto"></div>
-            <div class="w-6 h-3 rounded-t-full bg-[--color-bg]"></div>
+            <div class="w-6 h-3 rounded-b-full bg-[var(--color-bg)]"></div>
+            <div class="border-l-2 border-dashed border-[var(--color-ticket-border)] flex-1 mx-auto"></div>
+            <div class="w-6 h-3 rounded-t-full bg-[var(--color-bg)]"></div>
         </div>
 
         <!-- Left: discount info -->
         <div class="flex-1 px-5 py-4 pr-8">
-            <p class="text-xs font-semibold text-[--color-muted] uppercase tracking-wide mb-1">
+            <p class="text-xs font-semibold text-[var(--color-muted)] uppercase tracking-wide mb-1">
                 {{ isFreeship ? 'Freeship' : 'Voucher' }}
             </p>
-            <p class="text-lg font-extrabold text-[--color-ink]">{{ label }}</p>
-            <p v-if="minimumOrder > 0" class="text-xs text-[--color-muted] mt-1">
+            <p class="text-lg font-extrabold text-[var(--color-ink)]">{{ label }}</p>
+            <p v-if="minimumOrder > 0" class="text-xs text-[var(--color-muted)] mt-1">
                 Đơn tối thiểu {{ formatVnd(minimumOrder) }}
             </p>
-            <p v-if="expiresAt" class="text-xs text-[--color-muted]">
+            <p v-if="expiresAt" class="text-xs text-[var(--color-muted)]">
                 HSD: {{ new Date(expiresAt).toLocaleDateString('vi-VN') }}
             </p>
         </div>
 
         <!-- Right: code + copy -->
         <div class="flex flex-col items-center justify-center px-5 py-4 pl-8 min-w-[130px]">
-            <p class="font-mono font-bold text-[--color-ink] text-sm tracking-widest mb-2">{{ code }}</p>
+            <p class="font-mono font-bold text-[var(--color-ink)] text-sm tracking-widest mb-2">{{ code }}</p>
             <button
                 @click="copy()"
-                :class="copied ? 'bg-[--color-brand-green] text-white' : 'bg-[--color-accent] text-white hover:bg-[--color-accent-deep]'"
+                :class="copied ? 'bg-[var(--color-brand-green)] text-white' : 'bg-[var(--color-accent)] text-white hover:bg-[var(--color-accent-deep)]'"
                 class="px-4 py-1.5 rounded-lg text-xs font-semibold transition-all duration-300"
             >
                 {{ copied ? '✓ Đã sao chép' : 'Copy mã' }}

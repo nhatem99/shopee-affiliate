@@ -32,7 +32,11 @@ class LoginController extends Controller
 
         $request->session()->regenerate();
 
-        return redirect()->intended(route('home'));
+        $intended = Auth::user()->hasRole('admin')
+            ? route('admin.dashboard')
+            : route('home');
+
+        return redirect()->intended($intended);
     }
 
     public function destroy(Request $request): RedirectResponse

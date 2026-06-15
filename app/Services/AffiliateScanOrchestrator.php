@@ -4,6 +4,7 @@ namespace App\Services;
 
 use App\Exceptions\AffiliateScanException;
 use App\Models\AffiliateLink;
+use App\Models\Commission;
 use App\Models\User;
 use App\Models\Voucher;
 
@@ -29,26 +30,7 @@ class AffiliateScanOrchestrator
         // 4. Get vouchers
         $vouchers = $this->fetchVouchers($url, $platform);
 
-        // 5. Store to DB
-        $record = AffiliateLink::create([
-            'user_id' => $user?->id,
-            'original_url' => $url,
-            'short_url' => $affiliateLink,
-            'platform' => $platform,
-            ...$productInfo,
-        ]);
-
-        foreach ($vouchers as $v) {
-            // De-duplicate by code
-            Voucher::firstOrCreate(
-                ['affiliate_link_id' => $record->id, 'code' => $v['code']],
-                $v
-            );
-        }
-
-        $record->load('vouchers');
-
-        // 6. Calculate savings
+        // 5. Calculate savings
         $original = (float) ($productInfo['original_price'] ?? 0);
         $discounted = (float) ($productInfo['discounted_price'] ?? $original);
         $productDiscount = $original - $discounted;
@@ -59,6 +41,40 @@ class AffiliateScanOrchestrator
         $totalSaved = $original - $finalPrice;
         $pctSaved = $original > 0 ? round($totalSaved / $original * 100) : 0;
         $cashback = round($finalPrice * $this->accessTrade->getCashbackRate($platform));
+
+        // 6. Save to DB and track commission only for logged-in users
+        if ($user) {
+            $record = AffiliateLink::updateOrCreate(
+                ['user_id' => $user->id, 'original_url' => $url],
+                [
+                    'short_url' => $affiliateLink,
+                    'platform' => $platform,
+                    ...$productInfo,
+                ]
+            );
+
+            foreach ($vouchers as $v) {
+                Voucher::firstOrCreate(
+                    ['affiliate_link_id' => $record->id, 'code' => $v['code']],
+                    $v
+                );
+            }
+
+            $record->load('vouchers');
+            $savedVouchers = $record->vouchers->toArray();
+
+            if ($cashback > 0) {
+                Commission::create([
+                    'user_id' => $user->id,
+                    'affiliate_link_id' => $record->id,
+                    'amount' => $cashback,
+                    'status' => 'pending',
+                ]);
+            }
+        } else {
+            // Guest: no DB save, return raw vouchers
+            $savedVouchers = $vouchers;
+        }
 
         return [
             'product' => [
@@ -71,7 +87,7 @@ class AffiliateScanOrchestrator
                 'rating' => $productInfo['rating'] ?? 0,
                 'sold_count' => $productInfo['sold_count'] ?? 0,
             ],
-            'vouchers' => $record->vouchers->toArray(),
+            'vouchers' => $savedVouchers,
             'affiliateLink' => $affiliateLink,
             'cashback' => $cashback,
             'savings' => [

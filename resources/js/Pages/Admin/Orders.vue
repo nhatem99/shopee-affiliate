@@ -1,4 +1,4 @@
-<script setup>
+﻿<script setup>
 import { Head, router } from '@inertiajs/vue3'
 import AdminLayout from '@/Layouts/AdminLayout.vue'
 import { useAdminStore } from '@/Stores/useAdminStore'
@@ -47,19 +47,19 @@ function approve(orderId) {
 
         <!-- Filters -->
         <div class="flex gap-2 mb-6">
-            <button @click="filter('')" :class="!filters?.status ? 'bg-gray-800 text-white' : 'bg-white text-gray-600 border border-gray-200'"
+            <button @click="filter('')" :class="!filters?.status ? 'bg-[var(--color-accent)] text-white' : 'bg-white text-[var(--color-ink)] border border-[var(--color-line)] hover:border-[var(--color-accent)] hover:text-[var(--color-accent)]'"
                 class="px-4 py-2 rounded-xl text-sm font-semibold transition">Tất cả</button>
             <button v-for="s in ['pending','approved','paid']" :key="s" @click="filter(s)"
-                :class="filters?.status === s ? 'bg-gray-800 text-white' : 'bg-white text-gray-600 border border-gray-200'"
-                class="px-4 py-2 rounded-xl text-sm font-semibold transition capitalize">
+                :class="filters?.status === s ? 'bg-[var(--color-accent)] text-white' : 'bg-white text-[var(--color-ink)] border border-[var(--color-line)] hover:border-[var(--color-accent)] hover:text-[var(--color-accent)]'"
+                class="px-4 py-2 rounded-xl text-sm font-semibold transition">
                 {{ statusLabels[s] }}
             </button>
         </div>
 
-        <div class="bg-white rounded-2xl border border-gray-200 overflow-hidden">
+        <div class="bg-white rounded-2xl border border-[var(--color-line)] overflow-hidden">
             <table class="w-full text-sm">
-                <thead class="bg-gray-50">
-                    <tr class="text-left text-xs text-gray-500">
+                <thead class="bg-[var(--color-peach-soft)]">
+                    <tr class="text-left text-xs text-[var(--color-muted)]">
                         <th class="px-6 py-3 font-semibold">ID</th>
                         <th class="px-6 py-3 font-semibold">Người dùng</th>
                         <th class="px-6 py-3 font-semibold">Sản phẩm</th>
@@ -68,12 +68,12 @@ function approve(orderId) {
                         <th class="px-6 py-3 font-semibold">Thao tác</th>
                     </tr>
                 </thead>
-                <tbody class="divide-y divide-gray-50">
+                <tbody class="divide-y divide-[var(--color-line)]">
                     <tr v-for="order in orders?.data" :key="order.id">
-                        <td class="px-6 py-4 text-gray-500">#{{ order.id }}</td>
-                        <td class="px-6 py-4 font-medium text-gray-800">{{ order.user }}</td>
-                        <td class="px-6 py-4 text-gray-600 max-w-[180px] truncate">{{ order.product }}</td>
-                        <td class="px-6 py-4 font-semibold text-green-600">{{ vnd(order.amount) }}</td>
+                        <td class="px-6 py-4 text-[var(--color-muted)]">#{{ order.id }}</td>
+                        <td class="px-6 py-4 font-medium text-[var(--color-ink)]">{{ order.user }}</td>
+                        <td class="px-6 py-4 text-[var(--color-ink)]/70 max-w-[180px] truncate">{{ order.product }}</td>
+                        <td class="px-6 py-4 font-semibold text-[var(--color-brand-green)]">{{ vnd(order.amount) }}</td>
                         <td class="px-6 py-4">
                             <span :class="statusColors[order.status]" class="px-2 py-1 rounded-full text-xs font-semibold">
                                 {{ statusLabels[order.status] }}
@@ -84,7 +84,7 @@ function approve(orderId) {
                                 v-if="order.status === 'pending'"
                                 @click="approve(order.id)"
                                 :disabled="admin.loadingOrders.includes(order.id)"
-                                class="flex items-center gap-1.5 text-xs font-semibold text-green-600 hover:underline disabled:opacity-50 disabled:cursor-not-allowed transition"
+                                class="flex items-center gap-1.5 text-xs font-semibold text-[var(--color-brand-green)] hover:underline disabled:opacity-50 disabled:cursor-not-allowed transition"
                             >
                                 <svg v-if="admin.loadingOrders.includes(order.id)" class="w-3 h-3 animate-spin shrink-0" viewBox="0 0 24 24" fill="none">
                                     <circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" stroke-dasharray="30 70" />
@@ -94,7 +94,7 @@ function approve(orderId) {
                         </td>
                     </tr>
                     <tr v-if="!orders?.data?.length">
-                        <td colspan="6" class="px-6 py-10 text-center text-gray-400">Không có đơn hàng.</td>
+                        <td colspan="6" class="px-6 py-10 text-center text-[var(--color-muted)]">Không có đơn hàng.</td>
                     </tr>
                 </tbody>
             </table>
