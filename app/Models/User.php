@@ -36,8 +36,44 @@ class User extends Authenticatable
         return $this->hasMany(Commission::class);
     }
 
+    public function payoutAccounts(): HasMany
+    {
+        return $this->hasMany(PayoutAccount::class);
+    }
+
+    public function withdrawals(): HasMany
+    {
+        return $this->hasMany(Withdrawal::class);
+    }
+
     public function isAdmin(): bool
     {
         return $this->role === 'admin';
+    }
+
+    /**
+     * Tổng hoa hồng đã được duyệt (approved).
+     */
+    public function approvedCommissionTotal(): float
+    {
+        return (float) $this->commissions()->where('status', 'approved')->sum('amount');
+    }
+
+    /**
+     * Tổng số tiền đã/đang bị giữ cho các lệnh rút chưa bị từ chối.
+     */
+    public function reservedWithdrawalTotal(): float
+    {
+        return (float) $this->withdrawals()
+            ->whereIn('status', ['pending', 'approved', 'completed'])
+            ->sum('amount');
+    }
+
+    /**
+     * Số dư khả dụng để rút.
+     */
+    public function availableBalance(): float
+    {
+        return $this->approvedCommissionTotal() - $this->reservedWithdrawalTotal();
     }
 }

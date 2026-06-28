@@ -1,14 +1,34 @@
 ﻿<script setup>
-import { ref } from 'vue'
+import { ref, computed } from 'vue'
 import { Head } from '@inertiajs/vue3'
 import { router } from '@inertiajs/vue3'
 import AppLayout from '@/Layouts/AppLayout.vue'
+import CouponTicket from '@/Components/CouponTicket.vue'
 import { useToast } from '@/composables/useToast'
+
+const props = defineProps({
+    vouchers: { type: Array, default: () => [] },
+})
 
 const url = ref('')
 const scanning = ref(false)
 const error = ref(null)
 const toast = useToast()
+
+// --- Mã gợi ý ---
+const platformTabs = [
+    { key: 'all', label: 'Tất cả' },
+    { key: 'shopee', label: 'Shopee' },
+    { key: 'lazada', label: 'Lazada' },
+    { key: 'tiki', label: 'Tiki' },
+    { key: 'tiktok', label: 'TikTok' },
+]
+const activePlatform = ref('all')
+
+const filteredVouchers = computed(() => {
+    if (activePlatform.value === 'all') return props.vouchers
+    return props.vouchers.filter(v => v.platform === activePlatform.value || v.platform === 'all')
+})
 
 const faqs = [
     { q: 'Công cụ này hoạt động như thế nào?', a: 'Bạn dán link sản phẩm Shopee, Lazada hoặc TikTok Shop — hệ thống tự động tìm mã giảm giá và tạo link affiliate có hoàn tiền cho bạn.' },
@@ -90,6 +110,50 @@ function scan() {
                     <span>⚡ Quét trong 3 giây</span>
                     <span>🔐 Bảo mật tuyệt đối</span>
                 </div>
+            </div>
+        </section>
+
+        <!-- Mã giảm giá gợi ý -->
+        <section v-if="vouchers.length" class="py-16 px-4 bg-[var(--color-bg)]">
+            <div class="max-w-5xl mx-auto">
+                <div class="text-center mb-8">
+                    <h2 class="text-2xl md:text-3xl font-extrabold text-[var(--color-ink)] mb-2">🎁 Mã giảm giá gợi ý</h2>
+                    <p class="text-[var(--color-muted)] text-sm">Mã từ Facebook & YouTube đang có hiệu lực — copy và dùng ngay khi mua hàng.</p>
+                </div>
+
+                <!-- Platform filter -->
+                <div class="flex flex-wrap justify-center gap-2 mb-8">
+                    <button
+                        v-for="tab in platformTabs"
+                        :key="tab.key"
+                        @click="activePlatform = tab.key"
+                        :class="activePlatform === tab.key
+                            ? 'bg-[var(--color-accent)] text-white'
+                            : 'bg-[var(--color-surface)] text-[var(--color-ink)] border border-[var(--color-line)] hover:border-[var(--color-accent)] hover:text-[var(--color-accent)]'"
+                        class="px-4 py-2 rounded-xl text-sm font-semibold transition"
+                    >
+                        {{ tab.label }}
+                    </button>
+                </div>
+
+                <!-- Voucher grid -->
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <CouponTicket
+                        v-for="v in filteredVouchers"
+                        :key="v.id"
+                        :code="v.code"
+                        :discount-type="v.discount_type"
+                        :discount-value="Number(v.discount_value)"
+                        :minimum-order="Number(v.minimum_order)"
+                        :expires-at="v.expires_at"
+                        :is-freeship="v.discount_type === 'freeship'"
+                        :source="v.source"
+                        :subtitle="v.title"
+                    />
+                </div>
+                <p v-if="!filteredVouchers.length" class="text-center text-[var(--color-muted)] text-sm py-8">
+                    Chưa có mã cho sàn này. Thử chọn sàn khác nhé!
+                </p>
             </div>
         </section>
 

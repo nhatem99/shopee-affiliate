@@ -12,9 +12,9 @@ const current = computed(() => page.url)
 const navItems = [
     { href: '/admin/dashboard', icon: '📊', label: 'Dashboard' },
     { href: '/admin/orders', icon: '📦', label: 'Đơn hàng' },
+    { href: '/admin/withdrawals', icon: '💸', label: 'Rút tiền' },
     { href: '/admin/vouchers', icon: '🎫', label: 'Voucher FB/YT' },
     { href: '/admin/api-config', icon: '⚙️', label: 'Cấu hình API' },
-    { href: '/', icon: '🌐', label: 'Trang chủ' },
 ]
 </script>
 

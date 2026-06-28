@@ -2,7 +2,6 @@
 
 namespace App\Services;
 
-use App\Exceptions\AffiliateScanException;
 use App\Models\AffiliateLink;
 use App\Models\Commission;
 use App\Models\PlatformVoucher;
@@ -15,6 +14,7 @@ class AffiliateScanOrchestrator
         private UrlValidationService $urlValidator,
         private ShopeeApiService $shopeeApi,
         private AccessTradeService $accessTrade,
+        private ProductMetadataService $productMetadata,
     ) {}
 
     public function scan(string $url, ?User $user): array
@@ -108,6 +108,21 @@ class AffiliateScanOrchestrator
 
     private function fetchProductInfo(string $url, string $platform): array
     {
+        // 1. Best-effort: đọc dữ liệu thật từ trang sản phẩm (JSON-LD / OG / API Tiki)
+        $meta = $this->productMetadata->fetch($url, $platform);
+        if ($meta && ($meta['product_name'] || $meta['product_image'])) {
+            return [
+                'product_name' => $meta['product_name'] ?? 'Sản phẩm',
+                'product_image' => $meta['product_image'],
+                'original_price' => $meta['original_price'],
+                'discounted_price' => $meta['discounted_price'],
+                'discount_percent' => $meta['discount_percent'],
+                'sold_count' => $meta['sold_count'],
+                'rating' => $meta['rating'],
+            ];
+        }
+
+        // 2. Fallback: Shopee Open API nếu đã cấu hình credentials
         if ($platform === 'shopee') {
             $ids = $this->urlValidator->extractShopeeIds($url);
             if ($ids) {
@@ -115,6 +130,7 @@ class AffiliateScanOrchestrator
             }
         }
 
+        // 3. Fallback cuối: placeholder
         return [
             'product_name' => 'Sản phẩm',
             'product_image' => null,

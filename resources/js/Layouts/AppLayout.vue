@@ -19,15 +19,17 @@ const auth = useAuthStore()
                 </Link>
 
                 <nav class="hidden md:flex items-center gap-6 text-sm font-medium">
-                    <Link href="/" class="text-[var(--color-muted)] hover:text-[var(--color-ink)] transition">Trang chủ</Link>
-                    <Link v-if="auth.isLoggedIn" href="/history" class="text-[var(--color-muted)] hover:text-[var(--color-ink)] transition">Lịch sử</Link>
+                    <Link v-if="!auth.isAdmin" href="/" class="text-[var(--color-muted)] hover:text-[var(--color-ink)] transition">Trang chủ</Link>
+                    <Link v-if="auth.isLoggedIn && !auth.isAdmin" href="/history" class="text-[var(--color-muted)] hover:text-[var(--color-ink)] transition">Lịch sử</Link>
+                    <Link v-if="auth.isLoggedIn && !auth.isAdmin" href="/profile" class="text-[var(--color-muted)] hover:text-[var(--color-ink)] transition">Tài khoản</Link>
                     <Link v-if="auth.isAdmin" href="/admin/dashboard" class="text-[var(--color-muted)] hover:text-[var(--color-ink)] transition">Admin</Link>
                 </nav>
 
                 <div class="flex items-center gap-3">
                     <ThemeToggle />
                     <template v-if="auth.isLoggedIn">
-                        <span class="hidden md:block text-sm text-[var(--color-muted)] font-medium">{{ auth.user?.name }}</span>
+                        <Link v-if="!auth.isAdmin" href="/profile" class="hidden md:block text-sm text-[var(--color-muted)] hover:text-[var(--color-ink)] font-medium transition">{{ auth.user?.name }}</Link>
+                        <span v-else class="hidden md:block text-sm text-[var(--color-muted)] font-medium">{{ auth.user?.name }}</span>
                         <button @click="auth.logout()"
                             class="text-sm text-[var(--color-muted)] hover:text-[var(--color-ink)] font-medium transition">
                             Đăng xuất
