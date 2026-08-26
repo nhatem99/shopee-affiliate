@@ -111,7 +111,7 @@ const providerLabels = { momo: 'MoMo', zalopay: 'ZaloPay' }
             <h1 class="text-2xl font-extrabold text-[var(--color-ink)]">Tài khoản của tôi</h1>
 
             <!-- Số dư -->
-            <div class="bg-[var(--color-surface)] rounded-2xl border border-[var(--color-line)] p-6">
+            <div class="card-glass rounded-2xl p-6">
                 <div class="flex items-end justify-between flex-wrap gap-4">
                     <div>
                         <p class="text-sm text-[var(--color-muted)]">Số dư khả dụng</p>
@@ -123,7 +123,7 @@ const providerLabels = { momo: 'MoMo', zalopay: 'ZaloPay' }
                     <button
                         @click="openWithdraw"
                         :disabled="!canWithdraw"
-                        class="bg-[var(--color-accent)] hover:bg-[var(--color-accent-deep)] text-white text-sm font-semibold px-5 py-2.5 rounded-xl transition disabled:opacity-50 disabled:cursor-not-allowed"
+                        class="btn-fire text-sm px-5 py-2.5 rounded-xl"
                     >
                         Rút tiền
                     </button>
@@ -134,7 +134,7 @@ const providerLabels = { momo: 'MoMo', zalopay: 'ZaloPay' }
             </div>
 
             <!-- Thông tin cá nhân -->
-            <div class="bg-[var(--color-surface)] rounded-2xl border border-[var(--color-line)] p-6">
+            <div class="card-glass rounded-2xl p-6">
                 <h2 class="font-bold text-[var(--color-ink)] mb-4">Thông tin cá nhân</h2>
                 <form @submit.prevent="saveProfile" class="space-y-4">
                     <div>
@@ -155,14 +155,14 @@ const providerLabels = { momo: 'MoMo', zalopay: 'ZaloPay' }
                         <p v-if="profileForm.errors.phone" class="text-xs text-red-500 mt-1">{{ profileForm.errors.phone }}</p>
                     </div>
                     <button type="submit" :disabled="profileForm.processing"
-                        class="bg-[var(--color-accent)] hover:bg-[var(--color-accent-deep)] text-white text-sm font-semibold px-5 py-2.5 rounded-xl transition disabled:opacity-60">
+                        class="btn-fire text-sm px-5 py-2.5 rounded-xl">
                         Lưu thông tin
                     </button>
                 </form>
             </div>
 
             <!-- Ví nhận tiền -->
-            <div class="bg-[var(--color-surface)] rounded-2xl border border-[var(--color-line)] p-6">
+            <div class="card-glass rounded-2xl p-6">
                 <h2 class="font-bold text-[var(--color-ink)] mb-1">Ví nhận tiền</h2>
                 <p class="text-xs text-[var(--color-muted)] mb-4">Thiết lập ví MoMo / ZaloPay để nhận hoa hồng khi rút.</p>
                 <div class="grid md:grid-cols-2 gap-4">
@@ -190,7 +190,7 @@ const providerLabels = { momo: 'MoMo', zalopay: 'ZaloPay' }
             </div>
 
             <!-- Lịch sử rút -->
-            <div class="bg-[var(--color-surface)] rounded-2xl border border-[var(--color-line)] overflow-hidden">
+            <div class="card-glass rounded-2xl overflow-hidden">
                 <h2 class="font-bold text-[var(--color-ink)] p-6 pb-3">Lịch sử rút tiền</h2>
                 <table class="w-full text-sm">
                     <thead class="bg-[var(--color-peach-soft)]">
@@ -225,7 +225,7 @@ const providerLabels = { momo: 'MoMo', zalopay: 'ZaloPay' }
 
         <!-- Modal rút tiền -->
         <div v-if="showWithdraw" class="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
-            <div class="bg-[var(--color-surface)] rounded-2xl p-6 w-full max-w-md">
+            <div class="card-glass rounded-2xl p-6 w-full max-w-md">
                 <h2 class="font-extrabold text-[var(--color-ink)] mb-1">Yêu cầu rút tiền</h2>
                 <p class="text-xs text-[var(--color-muted)] mb-5">Số dư khả dụng: {{ vnd(balance.available) }}</p>
                 <form @submit.prevent="submitWithdraw" class="space-y-4">
@@ -248,7 +248,7 @@ const providerLabels = { momo: 'MoMo', zalopay: 'ZaloPay' }
                     </div>
                     <div class="flex gap-3 pt-2">
                         <button type="submit" :disabled="withdrawForm.processing"
-                            class="flex-1 bg-[var(--color-accent)] hover:bg-[var(--color-accent-deep)] text-white font-semibold py-2.5 rounded-xl text-sm transition disabled:opacity-60">
+                            class="btn-fire flex-1 py-2.5 rounded-xl text-sm">
                             Gửi yêu cầu
                         </button>
                         <button type="button" @click="showWithdraw = false"

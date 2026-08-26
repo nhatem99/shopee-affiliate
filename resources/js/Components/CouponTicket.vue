@@ -27,7 +27,7 @@ const label = props.isFreeship
 </script>
 
 <template>
-    <div class="relative flex rounded-xl overflow-hidden border border-[var(--color-ticket-border)] bg-[var(--color-ticket)]">
+    <div class="relative flex rounded-xl overflow-hidden border border-[var(--color-ticket-border)] bg-[var(--color-ticket)] transition-shadow dark:hover:shadow-[0_0_24px_rgba(var(--color-accent-rgb),0.12)]">
         <!-- Left notch -->
         <div class="absolute left-[calc(50%-12px)] top-0 bottom-0 flex flex-col justify-between pointer-events-none z-10">
             <div class="w-6 h-3 rounded-b-full bg-[var(--color-bg)]"></div>
@@ -59,7 +59,7 @@ const label = props.isFreeship
             <p class="font-mono font-bold text-[var(--color-ink)] text-sm tracking-widest mb-2">{{ code }}</p>
             <button
                 @click="copy()"
-                :class="copied ? 'bg-[var(--color-brand-green)] text-white' : 'bg-[var(--color-accent)] text-white hover:bg-[var(--color-accent-deep)]'"
+                :class="copied ? 'bg-[var(--color-brand-green)] text-white' : 'btn-fire'"
                 class="px-4 py-1.5 rounded-lg text-xs font-semibold transition-all duration-300"
             >
                 {{ copied ? '✓ Đã sao chép' : 'Copy mã' }}

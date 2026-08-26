@@ -1,12 +1,11 @@
 ﻿<script setup>
-import { ref, computed } from 'vue'
+import { ref, computed, nextTick } from 'vue'
 import { Head } from '@inertiajs/vue3'
 import { router } from '@inertiajs/vue3'
 import axios from 'axios'
 import { useLocalStorage } from '@vueuse/core'
 import AppLayout from '@/Layouts/AppLayout.vue'
 import CouponTicket from '@/Components/CouponTicket.vue'
-import Disclaimer from '@/Components/Disclaimer.vue'
 import { useToast } from '@/composables/useToast'
 
 const props = defineProps({
@@ -14,21 +13,61 @@ const props = defineProps({
     voucherResult: { type: Object, default: null },
 })
 
-const url = ref('')
-const scanning = ref(false)
-const error = ref(null)
 const toast = useToast()
 
-// --- sanvoucher.vn: công cụ lấy link voucher công khai, không cần đăng nhập ---
+// --- tietkiemvi.com: công cụ lấy link voucher công khai, không cần đăng nhập ---
 // Link CTA (voucher_links) trỏ thẳng tới link affiliate của salesoc.vn — nơi mã giảm giá
 // thực sự được áp dụng. Đơn hàng qua link này tính hoa hồng cho salesoc.vn, không phải
 // cho mình; đây là đánh đổi có chủ đích để người dùng nhận được mã giảm giá thật.
 const SOURCE_LABELS = { facebook: 'Facebook', instagram: 'Instagram', zalo: 'Zalo', youtube: 'YouTube' }
+// Icon SVG đơn sắc (kế thừa màu chữ nút) thay cho emoji — emoji hiển thị không đồng nhất giữa các máy/font.
+const SOURCE_ICON_SVG = {
+    facebook: '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M22 12.06C22 6.48 17.52 2 11.94 2 6.36 2 1.88 6.48 1.88 12.06c0 5.02 3.66 9.18 8.44 9.94v-7.03H7.9v-2.91h2.42V9.91c0-2.39 1.42-3.71 3.6-3.71 1.04 0 2.13.19 2.13.19v2.34h-1.2c-1.18 0-1.55.73-1.55 1.48v1.78h2.64l-.42 2.91h-2.22V22c4.78-.76 8.44-4.92 8.44-9.94Z"/></svg>',
+    youtube: '<svg viewBox="0 0 24 24"><rect x="2" y="5" width="20" height="14" rx="4" fill="#FF0000"/><path d="M10 8.5v7l6-3.5-6-3.5Z" fill="#fff"/></svg>',
+    instagram: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="5"/><circle cx="12" cy="12" r="4"/><circle cx="17.5" cy="6.5" r="1.2" fill="currentColor" stroke="none"/></svg>',
+    zalo: '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C6.48 2 2 5.94 2 10.8c0 2.68 1.4 5.06 3.6 6.66-.16 1.1-.6 2.5-1.4 3.54 0 0 2.2-.24 4.24-1.7.8.2 1.66.3 2.56.3 5.52 0 10-3.94 10-8.8S17.52 2 12 2Z"/></svg>',
+    default: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 13a5 5 0 0 0 7.07 0l1.93-1.93a5 5 0 0 0-7.07-7.07L10.5 5.5"/><path d="M14 11a5 5 0 0 0-7.07 0l-1.93 1.93a5 5 0 0 0 7.07 7.07L13.5 18.5"/></svg>',
+}
+// Màu nút theo thương hiệu từng nền tảng, giống cách salesoc.vn phân biệt Mã FB/YTB/IG.
+const SOURCE_STYLES = {
+    facebook: 'text-white bg-gradient-to-r from-blue-600 to-blue-500 shadow-[0_4px_14px_rgba(37,99,235,0.35)] hover:brightness-110',
+    youtube: 'text-white bg-gradient-to-r from-[#f97316] to-[#ea580c] shadow-[0_4px_14px_rgba(249,115,22,0.4)] hover:brightness-110',
+    instagram: 'text-white bg-gradient-to-r from-[#e1306c] via-[#fd1d1d] to-[#fcb045] shadow-[0_4px_14px_rgba(225,48,108,0.35)] hover:brightness-110',
+    zalo: 'text-white bg-gradient-to-r from-[#0068ff] to-[#0052cc] shadow-[0_4px_14px_rgba(0,104,255,0.35)] hover:brightness-110',
+}
 
 const voucherUrl = ref('')
+const voucherUrlInput = ref(null)
+const voucherResultEl = ref(null)
 const resolving = ref(false)
 const voucherError = ref(null)
 const history = useLocalStorage('sv_history', [])
+
+async function pasteVoucherUrl() {
+    try {
+        const text = (await navigator.clipboard.readText()).trim()
+        if (text) {
+            voucherUrl.value = text
+            resolveVoucher()
+        }
+    } catch (e) {
+        toast.error('Không thể đọc clipboard. Hãy dán thủ công (Ctrl+V).')
+    }
+}
+
+// Dán link vào ô là tự động quét luôn, không cần bấm nút — giống các trang tương tự.
+function onVoucherUrlPaste(e) {
+    const text = (e.clipboardData || window.clipboardData)?.getData('text')?.trim()
+    if (!text) return
+    e.preventDefault()
+    voucherUrl.value = text
+    resolveVoucher()
+}
+
+function focusVoucherTool() {
+    voucherUrlInput.value?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+    voucherUrlInput.value?.focus()
+}
 
 function resolveVoucher() {
     if (!voucherUrl.value.trim()) return
@@ -43,14 +82,18 @@ function resolveVoucher() {
             if (result) {
                 history.value = [
                     {
-                        url: result.canonical_url,
                         product_name: result.product?.product_name || null,
                         product_image: result.product?.product_image || null,
                         created_at: new Date().toISOString(),
+                        // Lưu lại các nút mã (nguồn/label/url) để "mua lại" sau này chỉ cần bấm nút,
+                        // không cần hiện đường dẫn thô cho khách.
+                        links: voucherLinkEntries.value.map(({ source, url, label }) => ({ source, url, label })),
                     },
                     ...history.value,
                 ].slice(0, 5)
             }
+            // Cuộn thẳng tới khu vực chọn mã ngay khi có kết quả — khách không cần tự kéo xuống.
+            nextTick(() => voucherResultEl.value?.scrollIntoView({ behavior: 'smooth', block: 'start' }))
         },
         onError: (errors) => {
             voucherError.value = errors.voucher_url || 'Có lỗi xảy ra, vui lòng thử lại.'
@@ -80,7 +123,7 @@ const voucherLinkEntries = computed(() => {
 
 const shorteningKey = ref(null)
 
-async function openVoucherLink(entry) {
+async function openVoucherLink(entry, productName = null) {
     if (!entry?.url || shorteningKey.value) return
 
     shorteningKey.value = entry.key
@@ -92,7 +135,7 @@ async function openVoucherLink(entry) {
         const { data } = await axios.post('/voucher/shorten', {
             url: entry.url,
             source: entry.source,
-            product_name: props.voucherResult?.product?.product_name || null,
+            product_name: productName ?? props.voucherResult?.product?.product_name ?? null,
         })
         if (newTab) {
             newTab.location.href = data.short_url
@@ -128,129 +171,71 @@ const filteredVouchers = computed(() => {
 })
 
 const faqs = [
-    { q: 'Công cụ này hoạt động như thế nào?', a: 'Bạn dán link sản phẩm Shopee, Lazada hoặc TikTok Shop — hệ thống tự động tìm mã giảm giá và tạo link affiliate có hoàn tiền cho bạn.' },
-    { q: 'Tôi có được hoàn tiền không?', a: 'Có! Khi mua qua link affiliate của chúng tôi, bạn nhận được cashback sau khi đơn hàng được xác nhận thành công (thường 3–7 ngày).' },
-    { q: 'Có mất phí không?', a: 'Hoàn toàn miễn phí. Chúng tôi nhận hoa hồng từ Shopee/Lazada khi bạn mua thành công.' },
-    { q: 'Hỗ trợ những sàn nào?', a: 'Hiện tại hỗ trợ Shopee, Lazada, TikTok Shop và Tiki.' },
+    { q: 'Công cụ này hoạt động như thế nào?', a: 'Bạn dán link sản phẩm Shopee vào ô ở đầu trang — hệ thống tự động tìm và hiển thị mã giảm giá Facebook, YouTube, Instagram đang áp dụng cho sản phẩm đó, không cần bấm thêm nút nào.' },
+    { q: 'Tôi có được hoàn tiền không?', a: 'Công cụ lấy mã giảm giá không tạo hoàn tiền — mục đích là giúp bạn tìm nhanh mã Facebook/YouTube/Instagram để áp khi thanh toán trên Shopee.' },
+    { q: 'Có mất phí không?', a: 'Hoàn toàn miễn phí, bạn không mất phí gì khi dùng công cụ lấy mã.' },
+    { q: 'Hỗ trợ những sàn nào?', a: 'Ô dán link ở đầu trang hiện chỉ hỗ trợ Shopee. Riêng mục "Mã giảm giá gợi ý" bên dưới có thêm mã cho Lazada, TikTok Shop và Tiki.' },
 ]
 const openFaq = ref(null)
-
-function scan() {
-    if (!url.value.trim()) return
-    scanning.value = true
-    error.value = null
-
-    router.post('/affiliate/scan', { url: url.value }, {
-        onSuccess: () => { scanning.value = false },
-        onError: (errors) => {
-            error.value = errors.url || 'Có lỗi xảy ra, vui lòng thử lại.'
-            toast.error(error.value)
-            scanning.value = false
-        },
-    })
-}
 </script>
 
 <template>
     <Head>
-        <title>Tìm Voucher Shopee Facebook YouTube Instagram | sanvoucher.vn</title>
+        <title>Tìm Voucher Shopee Facebook YouTube Instagram | tietkiemvi.com</title>
         <meta name="description" content="Dán link sản phẩm Shopee → nhận link voucher độc quyền Facebook, YouTube, Instagram. Xem giá sau giảm ngay." />
     </Head>
     <AppLayout>
-        <!-- Hero -->
-        <section class="relative overflow-hidden pt-16 pb-20 px-4">
-            <!-- Background blobs -->
-            <div class="absolute top-0 left-1/4 w-96 h-96 bg-[var(--color-peach)] rounded-full blur-3xl opacity-40 animate-float pointer-events-none"></div>
-            <div class="absolute bottom-0 right-1/4 w-64 h-64 bg-[var(--color-green-soft)] rounded-full blur-3xl opacity-40 animate-float pointer-events-none" style="animation-delay:3s"></div>
+        <!-- Công cụ chính: hiện ngay khi vào trang, không cần mô tả dài trước đó -->
+        <section id="voucher-tool" class="px-4 pt-6 pb-4">
+            <div class="max-w-3xl mx-auto">
+                <div class="rounded-3xl p-6 md:p-8 bg-gradient-to-br from-[var(--color-peach)] via-[var(--color-peach-soft)] to-[var(--color-green-soft)] border border-[var(--color-line)]">
+                    <h1 class="text-xl md:text-2xl font-extrabold text-[var(--color-ink)] mb-1">
+                        Dán link sản phẩm Shopee để lấy mã giảm giá
+                    </h1>
+                    <p class="text-sm text-[var(--color-muted)] mb-4">Nhận link voucher riêng cho Facebook, YouTube, Instagram — miễn phí.</p>
 
-            <div class="relative max-w-3xl mx-auto text-center">
-                <!-- Badge -->
-                <div class="inline-flex items-center gap-2 bg-[var(--color-surface)] border border-[var(--color-line)] rounded-full px-4 py-2 text-sm font-semibold text-[var(--color-ink)] mb-6 shadow-sm">
-                    <span class="w-2 h-2 rounded-full bg-[var(--color-brand-green)] animate-blink-dot"></span>
-                    Hỗ trợ Shopee · Lazada · TikTok Shop · Tiki
-                </div>
-
-                <!-- H1 -->
-                <h1 class="text-4xl md:text-5xl lg:text-6xl font-extrabold text-[var(--color-ink)] leading-tight mb-4">
-                    Lấy <span class="relative inline-block px-2 rounded-lg bg-[var(--color-peach)] text-[var(--color-accent)]">mã giảm</span> giá<br>siêu tốc — 3 giây
-                </h1>
-                <p class="text-[var(--color-muted)] text-lg mb-10 max-w-xl mx-auto">
-                    Dán link sản phẩm, nhận ngay voucher giảm giá tốt nhất + link affiliate hoàn tiền. Miễn phí, không cần cài app.
-                </p>
-
-                <!-- URL Input -->
-                <div class="flex gap-3 max-w-xl mx-auto mb-4">
-                    <div class="relative flex-1">
-                        <span class="absolute left-4 top-1/2 -translate-y-1/2 text-[var(--color-muted)]">🔗</span>
-                        <input
-                            v-model="url"
-                            type="url"
-                            @keydown.enter="scan"
-                            placeholder="Dán link sản phẩm vào đây..."
-                            class="w-full pl-10 pr-4 py-4 border border-[var(--color-line)] rounded-2xl text-sm bg-[var(--color-surface)] focus:outline-none focus:border-[var(--color-accent)] focus:ring-2 focus:ring-[var(--color-peach)] transition shadow-sm"
-                        />
+                    <div class="flex flex-col md:flex-row gap-3">
+                        <div class="relative flex-1">
+                            <span class="absolute left-4 top-1/2 -translate-y-1/2 text-[var(--color-muted)]">🔗</span>
+                            <input
+                                ref="voucherUrlInput"
+                                v-model="voucherUrl"
+                                type="url"
+                                @keydown.enter="resolveVoucher"
+                                @paste="onVoucherUrlPaste"
+                                placeholder="Dán link Shopee (shopee.vn hoặc s.shopee.vn)..."
+                                class="w-full pl-10 pr-20 py-4 border border-[var(--color-line)] rounded-xl text-sm bg-[var(--color-surface)] focus:outline-none focus:border-[var(--color-accent)] focus:ring-2 focus:ring-[var(--color-peach)] transition"
+                            />
+                            <button
+                                @click="pasteVoucherUrl"
+                                type="button"
+                                class="absolute right-1.5 top-1/2 -translate-y-1/2 text-xs font-bold text-[var(--color-accent)] bg-[var(--color-peach-soft)] hover:bg-[var(--color-peach)] border border-[var(--color-accent)]/30 rounded-lg px-3 py-1.5 transition"
+                            >Dán</button>
+                        </div>
+                        <button
+                            @click="resolveVoucher"
+                            :disabled="resolving || !voucherUrl.trim()"
+                            class="btn-fire px-8 py-4 rounded-xl flex items-center justify-center gap-2 whitespace-nowrap"
+                        >
+                            <svg v-if="resolving" class="w-4 h-4 animate-spin" viewBox="0 0 24 24" fill="none">
+                                <circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" stroke-dasharray="30 70" />
+                            </svg>
+                            <span v-else>🔍</span>
+                            {{ resolving ? 'Đang xử lý...' : 'Tìm mã ngay' }}
+                        </button>
                     </div>
-                    <button
-                        @click="scan"
-                        :disabled="scanning || !url.trim()"
-                        class="bg-[var(--color-accent)] hover:bg-[var(--color-accent-deep)] text-white font-bold px-7 py-4 rounded-2xl transition shadow-md disabled:opacity-60 flex items-center gap-2 whitespace-nowrap"
-                    >
-                        <svg v-if="scanning" class="w-4 h-4 animate-spin" viewBox="0 0 24 24" fill="none">
-                            <circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" stroke-dasharray="30 70" />
-                        </svg>
-                        {{ scanning ? 'Đang quét...' : 'Lấy mã' }}
-                    </button>
-                </div>
-                <p v-if="error" class="text-red-500 text-sm text-center mb-2">{{ error }}</p>
-
-                <!-- Trust strip -->
-                <div class="flex flex-wrap justify-center gap-6 text-xs text-[var(--color-muted)] font-medium">
-                    <span>⭐ 4.9/5 (50,000+ đánh giá)</span>
-                    <span>💰 ₫4.2 tỷ đã tiết kiệm</span>
-                    <span>⚡ Quét trong 3 giây</span>
-                    <span>🔐 Bảo mật tuyệt đối</span>
-                </div>
-            </div>
-        </section>
-
-        <!-- sanvoucher.vn: Công cụ lấy voucher công khai (không cần đăng nhập) -->
-        <section class="py-12 px-4 bg-[var(--color-bg)]">
-            <div class="max-w-xl mx-auto">
-                <div class="text-center mb-6">
-                    <h2 class="text-2xl font-extrabold text-[var(--color-ink)] mb-2">sanvoucher.vn — Lấy link voucher Shopee</h2>
-                    <p class="text-[var(--color-muted)] text-sm">Dán link sản phẩm Shopee, nhận link voucher riêng cho Facebook, YouTube, Instagram.</p>
-                </div>
-
-                <!-- Mobile-first: 1 cột, input trên, nút to bên dưới -->
-                <div class="flex flex-col gap-3">
-                    <input
-                        v-model="voucherUrl"
-                        type="url"
-                        @keydown.enter="resolveVoucher"
-                        placeholder="Dán link Shopee (shopee.vn hoặc s.shopee.vn)..."
-                        class="w-full px-4 py-4 border border-[var(--color-line)] rounded-2xl text-sm bg-[var(--color-surface)] focus:outline-none focus:border-[var(--color-accent)] focus:ring-2 focus:ring-[var(--color-peach)] transition shadow-sm"
-                    />
-                    <button
-                        @click="resolveVoucher"
-                        :disabled="resolving || !voucherUrl.trim()"
-                        class="w-full bg-[var(--color-accent)] hover:bg-[var(--color-accent-deep)] text-white font-bold px-7 py-4 rounded-2xl transition shadow-md disabled:opacity-60 flex items-center justify-center gap-2"
-                    >
-                        <svg v-if="resolving" class="w-4 h-4 animate-spin" viewBox="0 0 24 24" fill="none">
-                            <circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" stroke-dasharray="30 70" />
-                        </svg>
-                        {{ resolving ? 'Đang xử lý...' : 'Lấy link voucher' }}
-                    </button>
-                    <p v-if="voucherError" class="text-red-500 text-sm text-center">{{ voucherError }}</p>
+                    <p v-if="voucherError" class="text-red-500 text-sm mt-2">{{ voucherError }}</p>
                 </div>
 
                 <!-- Kết quả -->
-                <div v-if="voucherResult" class="mt-6 bg-[var(--color-surface)] rounded-2xl border border-[var(--color-line)] p-5">
+                <div v-if="voucherResult" ref="voucherResultEl" class="mt-4 card-glass rounded-2xl p-5 scroll-mt-24">
                     <div v-if="voucherResult.product" class="flex gap-4 items-start mb-5">
                         <div class="w-16 h-16 rounded-xl bg-[var(--color-peach-soft)] flex-none overflow-hidden">
                             <img v-if="voucherResult.product.product_image" :src="voucherResult.product.product_image" :alt="voucherResult.product.product_name" class="w-full h-full object-cover" />
                             <div v-else class="w-full h-full flex items-center justify-center text-2xl">🛍️</div>
                         </div>
                         <div class="flex-1 min-w-0">
+                            <span class="inline-flex items-center justify-center w-5 h-5 rounded bg-[#F5511E] text-white text-[10px] font-black mb-1">S</span>
                             <p class="font-semibold text-[var(--color-ink)] text-sm line-clamp-2">{{ voucherResult.product.product_name || 'Sản phẩm' }}</p>
                             <p class="font-bold text-[var(--color-accent)] mt-1">{{ vnd(voucherResult.product.discounted_price) }}</p>
                         </div>
@@ -261,46 +246,71 @@ function scan() {
                         <span
                             v-for="(label, i) in voucherResult.voucher_labels"
                             :key="i"
-                            class="text-xs font-semibold px-3 py-1 rounded-full bg-[var(--color-green-soft)] text-[var(--color-ink)]"
+                            class="text-xs font-semibold px-3 py-1 rounded-full bg-[var(--color-green-soft)] text-[var(--color-brand-green)] border border-[var(--color-brand-green)]/20"
                         >
                             {{ label }}
                         </span>
                     </div>
 
-                    <div v-if="voucherLinkEntries.length" class="flex flex-col gap-2 mb-4">
-                        <button
-                            v-for="entry in voucherLinkEntries"
-                            :key="entry.key"
-                            @click="openVoucherLink(entry)"
-                            :disabled="shorteningKey === entry.key"
-                            class="w-full bg-[var(--color-peach-soft)] hover:bg-[var(--color-peach)] text-[var(--color-ink)] font-semibold px-5 py-3 rounded-xl transition text-sm flex items-center justify-between disabled:opacity-60"
-                        >
-                            {{ shorteningKey === entry.key ? 'Đang chuyển hướng...' : `Mua ngay — ${entry.label}` }}
-                            <span class="text-[var(--color-accent)]">→</span>
-                        </button>
+                    <div v-if="voucherLinkEntries.length" class="grid grid-cols-1 sm:grid-cols-2 gap-2 mb-4 mt-3">
+                        <div v-for="(entry, i) in voucherLinkEntries" :key="entry.key" class="relative">
+                            <span
+                                v-if="i === 0"
+                                class="absolute -top-2.5 left-3 z-10 bg-[#facc15] text-[#1c0a00] text-[10px] font-extrabold px-2.5 py-0.5 rounded-full shadow-md"
+                            >Đề xuất</span>
+                            <button
+                                @click="openVoucherLink(entry)"
+                                :disabled="shorteningKey === entry.key"
+                                class="w-full font-semibold px-4 py-3 rounded-xl transition-all text-sm flex items-center justify-between gap-2 disabled:opacity-60"
+                                :class="[SOURCE_STYLES[entry.source] || 'bg-[var(--color-peach-soft)] hover:bg-[var(--color-peach)] text-[var(--color-ink)]', i === 0 && 'animate-pulse-ring']"
+                            >
+                                <span class="flex items-center gap-2 min-w-0">
+                                    <span v-html="SOURCE_ICON_SVG[entry.source] || SOURCE_ICON_SVG.default" class="flex-none [&>svg]:w-4 [&>svg]:h-4"></span>
+                                    <span class="truncate">{{ shorteningKey === entry.key ? 'Đang chuyển hướng...' : entry.label }}</span>
+                                </span>
+                                <span class="flex-none">→</span>
+                            </button>
+                        </div>
                     </div>
                     <p v-else class="text-sm text-[var(--color-muted)] mb-4">Không tìm thấy link voucher cho sản phẩm này.</p>
 
-                    <p class="text-xs text-[var(--color-muted)] mb-4">Nếu 1 mã báo hết lượt, thử mã khác bên trên — salesoc.vn không báo trước mã nào còn hạn.</p>
-
-                    <Disclaimer />
+                    <div class="flex items-start gap-2 bg-[var(--color-peach-soft)] border border-[var(--color-accent)]/25 rounded-xl px-3 py-2.5">
+                        <span class="text-sm leading-none">⚠️</span>
+                        <p class="text-xs text-[var(--color-accent-deep)] leading-relaxed">Nếu 1 mã báo hết lượt, thử mã khác bên trên nhé.</p>
+                    </div>
                 </div>
 
-                <!-- Lịch sử link (lưu trên trình duyệt) -->
+                <!-- Lịch sử chuyển đổi (lưu trên trình duyệt) -->
                 <div v-if="history.length" class="mt-8">
-                    <h3 class="text-sm font-bold text-[var(--color-ink)] mb-3">Link gần đây</h3>
-                    <div class="flex flex-col gap-2">
-                        <a
-                            v-for="(h, i) in history"
-                            :key="i"
-                            :href="h.url"
-                            target="_blank"
-                            rel="noopener"
-                            class="flex items-center gap-3 bg-[var(--color-surface)] border border-[var(--color-line)] rounded-xl px-4 py-3 text-sm text-[var(--color-ink)] hover:border-[var(--color-accent)] transition"
+                    <h3 class="text-sm font-bold text-[var(--color-ink)] mb-3">Lịch sử chuyển đổi</h3>
+                    <div class="flex flex-col gap-3">
+                        <div
+                            v-for="(h, hi) in history"
+                            :key="hi"
+                            class="card-glass rounded-xl px-4 py-3"
                         >
-                            <span class="truncate flex-1">{{ h.product_name || h.url }}</span>
-                            <span class="text-[var(--color-muted)] text-xs whitespace-nowrap">{{ new Date(h.created_at).toLocaleDateString('vi-VN') }}</span>
-                        </a>
+                            <div class="flex items-center gap-3 mb-2.5">
+                                <div class="w-10 h-10 rounded-lg bg-[var(--color-peach-soft)] flex-none overflow-hidden">
+                                    <img v-if="h.product_image" :src="h.product_image" :alt="h.product_name" class="w-full h-full object-cover" />
+                                    <div v-else class="w-full h-full flex items-center justify-center text-lg">🛍️</div>
+                                </div>
+                                <span class="truncate flex-1 text-sm text-[var(--color-ink)] font-medium">{{ h.product_name || 'Sản phẩm' }}</span>
+                                <span class="text-[var(--color-muted)] text-xs whitespace-nowrap">{{ new Date(h.created_at).toLocaleDateString('vi-VN') }}</span>
+                            </div>
+                            <div v-if="h.links?.length" class="flex flex-wrap gap-2">
+                                <button
+                                    v-for="link in h.links"
+                                    :key="`hist-${hi}-${link.source}`"
+                                    @click="openVoucherLink({ key: `hist-${hi}-${link.source}`, source: link.source, url: link.url }, h.product_name)"
+                                    :disabled="shorteningKey === `hist-${hi}-${link.source}`"
+                                    class="font-semibold px-3 py-2 rounded-lg transition-all text-xs flex items-center gap-1.5 disabled:opacity-60"
+                                    :class="SOURCE_STYLES[link.source] || 'bg-[var(--color-peach-soft)] hover:bg-[var(--color-peach)] text-[var(--color-ink)]'"
+                                >
+                                    <span v-html="SOURCE_ICON_SVG[link.source] || SOURCE_ICON_SVG.default" class="flex-none [&>svg]:w-3.5 [&>svg]:h-3.5"></span>
+                                    {{ shorteningKey === `hist-${hi}-${link.source}` ? 'Đang mở...' : link.label }}
+                                </button>
+                            </div>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -321,7 +331,7 @@ function scan() {
                         :key="tab.key"
                         @click="activePlatform = tab.key"
                         :class="activePlatform === tab.key
-                            ? 'bg-[var(--color-accent)] text-white'
+                            ? 'btn-fire'
                             : 'bg-[var(--color-surface)] text-[var(--color-ink)] border border-[var(--color-line)] hover:border-[var(--color-accent)] hover:text-[var(--color-accent)]'"
                         class="px-4 py-2 rounded-xl text-sm font-semibold transition"
                     >
@@ -351,17 +361,17 @@ function scan() {
         </section>
 
         <!-- How it works -->
-        <section class="py-16 px-4 bg-[var(--color-surface)]">
+        <section class="py-16 px-4 bg-[var(--color-bg)]">
             <div class="max-w-4xl mx-auto text-center">
                 <h2 class="text-2xl md:text-3xl font-extrabold text-[var(--color-ink)] mb-12">Chỉ 3 bước đơn giản</h2>
-                <div class="grid grid-cols-1 md:grid-cols-3 gap-8">
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
                     <div v-for="(step, i) in [
-                        { icon: '📎', title: 'Dán link sản phẩm', desc: 'Sao chép link từ Shopee, Lazada, TikTok Shop hoặc Tiki và dán vào ô tìm kiếm.' },
-                        { icon: '🔍', title: 'Quét voucher', desc: 'Hệ thống tự động tìm tất cả mã giảm giá tốt nhất đang có hiệu lực.' },
-                        { icon: '🛍️', title: 'Copy & mua ngay', desc: 'Copy mã, nhấn link affiliate để mua và nhận cashback sau khi đơn thành công.' },
-                    ]" :key="i" class="flex flex-col items-center text-center">
+                        { icon: '📎', title: 'Dán link sản phẩm Shopee', desc: 'Copy link sản phẩm từ app hoặc web Shopee, dán vào ô ở đầu trang.', badge: 'cyan' },
+                        { icon: '🔍', title: 'Tự động quét mã', desc: 'Không cần bấm nút — hệ thống tự tìm mã Facebook, YouTube, Instagram còn hiệu lực ngay khi bạn dán link.', badge: 'orange' },
+                        { icon: '🛍️', title: 'Chọn mã & mua ngay', desc: 'Bấm vào mã phù hợp (mã có nhãn “Đề xuất” là tốt nhất) — link mua hàng đã áp sẵn voucher sẽ tự mở ra.', badge: 'emerald' },
+                    ]" :key="i" class="card-glass rounded-2xl p-6 flex flex-col items-center text-center">
+                        <span class="step-badge px-2.5 py-1 text-xs mb-4" :class="`step-badge--${step.badge}`">BƯỚC {{ i + 1 }}</span>
                         <div class="w-16 h-16 rounded-2xl bg-[var(--color-peach-soft)] flex items-center justify-center text-3xl mb-4">{{ step.icon }}</div>
-                        <div class="w-8 h-8 rounded-full bg-[var(--color-accent)] text-white font-extrabold text-sm flex items-center justify-center -mt-8 mb-4 ml-8">{{ i+1 }}</div>
                         <h3 class="font-extrabold text-[var(--color-ink)] mb-2">{{ step.title }}</h3>
                         <p class="text-[var(--color-muted)] text-sm leading-relaxed">{{ step.desc }}</p>
                     </div>
@@ -377,7 +387,7 @@ function scan() {
                     <div
                         v-for="(faq, i) in faqs"
                         :key="i"
-                        class="bg-[var(--color-surface)] rounded-2xl border border-[var(--color-line)] overflow-hidden"
+                        class="card-glass rounded-2xl overflow-hidden"
                     >
                         <button
                             @click="openFaq = openFaq === i ? null : i"
@@ -397,13 +407,13 @@ function scan() {
         </section>
 
         <!-- CTA -->
-        <section class="py-16 px-4 bg-[var(--color-accent)]">
+        <section class="py-16 px-4 bg-gradient-to-br from-[var(--color-accent)] to-[var(--color-accent-deep)]">
             <div class="max-w-xl mx-auto text-center">
                 <h2 class="text-2xl md:text-3xl font-extrabold text-white mb-4">Sẵn sàng tiết kiệm tiền?</h2>
                 <p class="text-white/80 mb-8">Hơn 1.2 triệu mã đã được tạo. Tham gia ngay hôm nay.</p>
-                <button @click="$el.querySelector('input')?.focus()" onclick="window.scrollTo({top:0,behavior:'smooth'})"
+                <button @click="focusVoucherTool"
                     class="bg-white text-[var(--color-accent)] font-bold px-8 py-4 rounded-2xl hover:shadow-xl transition">
-                    Lấy mã ngay — Miễn phí
+                    Lấy link ngay — Miễn phí
                 </button>
             </div>
         </section>

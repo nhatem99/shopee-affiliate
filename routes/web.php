@@ -44,7 +44,7 @@ Route::post('/affiliate/scan', [AffiliateController::class, 'scan'])
     ->middleware('throttle:affiliate-scan')
     ->name('affiliate.scan');
 
-// sanvoucher.vn public voucher tool — no auth required
+// tietkiemvi.com public voucher tool — no auth required
 // GET fallback: redirect home if user refreshes after a resolve
 Route::get('/voucher/resolve', fn () => redirect()->route('home'));
 Route::post('/voucher/resolve', [ShopeeVoucherController::class, 'resolve'])

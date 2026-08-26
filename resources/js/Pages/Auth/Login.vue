@@ -46,7 +46,7 @@ function submitOtp() {
     <Head title="Đăng nhập" />
     <div class="min-h-screen bg-[var(--color-bg)] flex items-center justify-center px-4">
         <div class="fixed top-4 right-4 z-50"><ThemeToggle /></div>
-        <div class="w-full max-w-md bg-[var(--color-surface)] rounded-2xl shadow-lg p-8">
+        <div class="w-full max-w-md card-glass rounded-2xl shadow-lg p-8">
             <div class="text-center mb-8">
                 <h1 class="text-2xl font-extrabold text-[var(--color-ink)]">Đăng nhập</h1>
                 <p class="text-[var(--color-muted)] text-sm mt-1">Chào mừng bạn trở lại!</p>
@@ -82,7 +82,7 @@ function submitOtp() {
                         placeholder="••••••••" />
                 </div>
                 <button type="submit" :disabled="emailForm.processing"
-                    class="w-full bg-[var(--color-accent)] hover:bg-[var(--color-accent-deep)] text-white font-semibold py-3 rounded-xl transition disabled:opacity-60">
+                    class="btn-fire w-full py-3 rounded-xl">
                     {{ emailForm.processing ? 'Đang đăng nhập...' : 'Đăng nhập' }}
                 </button>
             </form>
@@ -97,7 +97,7 @@ function submitOtp() {
                             placeholder="0901234567" />
                     </div>
                     <button @click="sendOtp" :disabled="otpSending || !phoneInput"
-                        class="w-full bg-[var(--color-accent)] hover:bg-[var(--color-accent-deep)] text-white font-semibold py-3 rounded-xl transition disabled:opacity-60">
+                        class="btn-fire w-full py-3 rounded-xl">
                         {{ otpSending ? 'Đang gửi...' : 'Gửi mã OTP' }}
                     </button>
                 </div>
@@ -109,7 +109,7 @@ function submitOtp() {
                         placeholder="_ _ _ _ _ _" />
                     <p v-if="otpForm.errors.otp" class="text-red-500 text-xs text-center">{{ otpForm.errors.otp }}</p>
                     <button type="submit" :disabled="otpForm.processing || otpForm.otp.length < 6"
-                        class="w-full bg-[var(--color-accent)] hover:bg-[var(--color-accent-deep)] text-white font-semibold py-3 rounded-xl transition disabled:opacity-60">
+                        class="btn-fire w-full py-3 rounded-xl">
                         {{ otpForm.processing ? 'Đang xác nhận...' : 'Xác nhận OTP' }}
                     </button>
                     <button type="button" @click="otpStep = 'phone'" class="w-full text-sm text-[var(--color-muted)] hover:text-[var(--color-ink)] transition">

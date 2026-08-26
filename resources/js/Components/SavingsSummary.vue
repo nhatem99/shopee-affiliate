@@ -11,7 +11,7 @@ function vnd(n) {
 </script>
 
 <template>
-    <div class="bg-[var(--color-surface)] rounded-2xl border border-[var(--color-line)] p-6 sticky top-20">
+    <div class="card-glass rounded-2xl p-6 sticky top-20">
         <h3 class="font-extrabold text-[var(--color-ink)] text-base mb-4">Tóm tắt tiết kiệm</h3>
 
         <div class="space-y-3 text-sm">
@@ -52,7 +52,7 @@ function vnd(n) {
             :href="affiliateLink"
             target="_blank"
             rel="noopener noreferrer"
-            class="mt-5 flex items-center justify-center gap-2 w-full bg-[var(--color-accent)] hover:bg-[var(--color-accent-deep)] text-white font-bold py-3.5 rounded-xl transition"
+            class="btn-fire mt-5 flex items-center justify-center gap-2 w-full py-3.5 rounded-xl"
         >
             Mở Shopee &amp; mua ngay →
         </a>

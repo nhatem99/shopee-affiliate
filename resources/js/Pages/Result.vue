@@ -44,7 +44,7 @@ const platformLabels = {
                 <!-- Left column -->
                 <div class="space-y-6">
                     <!-- Product card -->
-                    <div class="bg-[var(--color-surface)] rounded-2xl border border-[var(--color-line)] p-6 flex gap-4">
+                    <div class="card-glass rounded-2xl p-6 flex gap-4">
                         <div class="w-24 h-24 rounded-xl bg-[var(--color-peach-soft)] flex-none overflow-hidden">
                             <img v-if="product?.image" :src="product.image" :alt="product.name" class="w-full h-full object-cover" />
                             <div v-else class="w-full h-full flex items-center justify-center text-3xl">🛍️</div>
@@ -109,12 +109,12 @@ const platformLabels = {
                     </div>
 
                     <!-- Affiliate link -->
-                    <div class="bg-[var(--color-surface)] rounded-2xl border border-[var(--color-line)] p-5">
+                    <div class="card-glass rounded-2xl p-5">
                         <p class="text-xs font-semibold text-[var(--color-muted)] uppercase tracking-wide mb-2">Link mua hàng (có hoàn tiền)</p>
                         <div class="flex items-center gap-2">
                             <input :value="affiliateLink" readonly class="flex-1 text-xs font-mono bg-[var(--color-peach-soft)] rounded-lg px-3 py-2 border border-[var(--color-line)] truncate" />
                             <a :href="affiliateLink" target="_blank" rel="noopener"
-                                class="bg-[var(--color-accent)] text-white text-xs font-bold px-4 py-2 rounded-lg hover:bg-[var(--color-accent-deep)] transition whitespace-nowrap">
+                                class="btn-fire text-xs px-4 py-2 rounded-lg whitespace-nowrap">
                                 Mở →
                             </a>
                         </div>

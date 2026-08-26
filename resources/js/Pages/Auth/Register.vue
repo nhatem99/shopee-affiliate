@@ -19,7 +19,7 @@ function submit() {
     <Head title="Đăng ký" />
     <div class="min-h-screen bg-[var(--color-bg)] flex items-center justify-center px-4">
         <div class="fixed top-4 right-4 z-50"><ThemeToggle /></div>
-        <div class="w-full max-w-md bg-[var(--color-surface)] rounded-2xl shadow-lg p-8">
+        <div class="w-full max-w-md card-glass rounded-2xl shadow-lg p-8">
             <div class="text-center mb-8">
                 <h1 class="text-2xl font-extrabold text-[var(--color-ink)]">Tạo tài khoản</h1>
                 <p class="text-[var(--color-muted)] text-sm mt-1">Miễn phí, không quảng cáo</p>
@@ -60,7 +60,7 @@ function submit() {
                         placeholder="Nhập lại mật khẩu" />
                 </div>
                 <button type="submit" :disabled="form.processing"
-                    class="w-full bg-[var(--color-accent)] hover:bg-[var(--color-accent-deep)] text-white font-semibold py-3 rounded-xl transition disabled:opacity-60">
+                    class="btn-fire w-full py-3 rounded-xl">
                     {{ form.processing ? 'Đang tạo tài khoản...' : 'Đăng ký' }}
                 </button>
             </form>

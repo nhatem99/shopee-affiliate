@@ -9,8 +9,8 @@ defineProps({
 
 <template>
     <Head>
-        <title>Blog | sanvoucher.vn</title>
-        <meta name="description" content="Hướng dẫn lấy voucher Shopee cho Facebook, YouTube, Instagram và cách sử dụng sanvoucher.vn." />
+        <title>Blog | tietkiemvi.com</title>
+        <meta name="description" content="Hướng dẫn lấy voucher Shopee cho Facebook, YouTube, Instagram và cách sử dụng tietkiemvi.com." />
     </Head>
     <AppLayout>
         <div class="max-w-2xl mx-auto px-4 py-10">

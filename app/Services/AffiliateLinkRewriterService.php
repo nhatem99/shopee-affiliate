@@ -105,7 +105,7 @@ class AffiliateLinkRewriterService
             $query['utm_source'] = $mmpPid;
         }
         if (isset($query['utm_content'])) {
-            $query['utm_content'] = 'sanvoucher';
+            $query['utm_content'] = 'tietkiemvi';
         }
 
         $base = ($parts['scheme'] ?? 'https').'://'.($parts['host'] ?? '').($parts['path'] ?? '');

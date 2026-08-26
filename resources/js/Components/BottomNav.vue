@@ -17,13 +17,13 @@ const items = computed(() => [
 </script>
 
 <template>
-    <nav v-if="items.length" class="md:hidden fixed bottom-0 left-0 right-0 z-50 bg-[var(--color-surface)] border-t border-[var(--color-line)] flex safe-area-inset-bottom">
+    <nav v-if="items.length" class="md:hidden fixed bottom-0 left-0 right-0 z-50 bg-[var(--color-surface)]/95 backdrop-blur-md border-t border-[var(--color-line)] flex safe-area-inset-bottom dark:shadow-[0_-4px_24px_rgba(0,0,0,0.4)]">
         <Link
             v-for="item in items"
             :key="item.href"
             :href="item.href"
             class="flex-1 flex flex-col items-center justify-center py-3 gap-0.5 text-xs font-semibold transition"
-            :class="current === item.href ? 'text-[var(--color-accent)]' : 'text-[var(--color-muted)]'"
+            :class="current === item.href ? 'text-[var(--color-accent)] dark:drop-shadow-[0_0_8px_rgba(var(--color-accent-rgb),0.5)]' : 'text-[var(--color-muted)]'"
         >
             <span class="text-xl">{{ item.icon }}</span>
             <span>{{ item.label }}</span>

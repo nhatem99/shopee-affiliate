@@ -23,7 +23,7 @@ const platformLabels = { shopee: 'Shopee', lazada: 'Lazada', tiki: 'Tiki', tikto
                 <div
                     v-for="link in links.data"
                     :key="link.id"
-                    class="bg-[var(--color-surface)] rounded-2xl border border-[var(--color-line)] p-5 flex gap-4 items-start"
+                    class="card-glass rounded-2xl p-5 flex gap-4 items-start"
                 >
                     <div class="w-16 h-16 rounded-xl bg-[var(--color-peach-soft)] flex-none overflow-hidden">
                         <img v-if="link.product_image" :src="link.product_image" :alt="link.product_name" class="w-full h-full object-cover" />
@@ -66,7 +66,7 @@ const platformLabels = { shopee: 'Shopee', lazada: 'Lazada', tiki: 'Tiki', tikto
             <div v-else class="text-center py-20">
                 <p class="text-4xl mb-4">📋</p>
                 <p class="text-[var(--color-muted)] font-semibold">Chưa có lịch sử quét mã nào.</p>
-                <Link href="/" class="mt-4 inline-block bg-[var(--color-accent)] text-white font-bold px-6 py-3 rounded-xl hover:bg-[var(--color-accent-deep)] transition">
+                <Link href="/" class="btn-fire mt-4 inline-block px-6 py-3 rounded-xl">
                     Lấy mã ngay →
                 </Link>
             </div>

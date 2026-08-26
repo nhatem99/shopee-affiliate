@@ -1,7 +1,6 @@
 <script setup>
 import { Head, Link } from '@inertiajs/vue3'
 import AppLayout from '@/Layouts/AppLayout.vue'
-import Disclaimer from '@/Components/Disclaimer.vue'
 
 const props = defineProps({
     post: { type: Object, required: true },
@@ -10,7 +9,7 @@ const props = defineProps({
 
 <template>
     <Head>
-        <title>{{ post.title }} | sanvoucher.vn</title>
+        <title>{{ post.title }} | tietkiemvi.com</title>
         <meta name="description" :content="post.excerpt" />
     </Head>
     <AppLayout>
@@ -19,7 +18,6 @@ const props = defineProps({
             <p class="text-xs text-[var(--color-muted)] mb-2">{{ new Date(post.published_at).toLocaleDateString('vi-VN') }}</p>
             <h1 class="text-2xl font-extrabold text-[var(--color-ink)] mb-6">{{ post.title }}</h1>
             <p class="text-[var(--color-ink)] leading-relaxed whitespace-pre-line mb-8">{{ post.body }}</p>
-            <Disclaimer />
         </div>
     </AppLayout>
 </template>
