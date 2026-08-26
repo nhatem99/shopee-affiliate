@@ -192,6 +192,7 @@ const providerLabels = { momo: 'MoMo', zalopay: 'ZaloPay' }
             <!-- Lịch sử rút -->
             <div class="card-glass rounded-2xl overflow-hidden">
                 <h2 class="font-bold text-[var(--color-ink)] p-6 pb-3">Lịch sử rút tiền</h2>
+                <div class="overflow-x-auto">
                 <table class="w-full text-sm">
                     <thead class="bg-[var(--color-peach-soft)]">
                         <tr class="text-left text-xs text-[var(--color-muted)]">
@@ -220,6 +221,7 @@ const providerLabels = { momo: 'MoMo', zalopay: 'ZaloPay' }
                         </tr>
                     </tbody>
                 </table>
+                </div>
             </div>
         </div>
 

@@ -96,7 +96,7 @@ function discountText(v) {
             </button>
         </div>
 
-        <div class="bg-[var(--color-surface)] rounded-2xl border border-[var(--color-line)] overflow-hidden">
+        <div class="bg-[var(--color-surface)] rounded-2xl border border-[var(--color-line)] overflow-hidden overflow-x-auto">
             <table class="w-full text-sm">
                 <thead class="bg-[var(--color-peach-soft)]">
                     <tr class="text-left text-xs text-[var(--color-muted)]">

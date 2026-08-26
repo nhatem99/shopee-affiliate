@@ -9,6 +9,7 @@ import ThemeToggle from '@/Components/ThemeToggle.vue'
 const auth = useAuthStore()
 const page = usePage()
 const current = computed(() => page.url)
+const customerAuthEnabled = computed(() => page.props.settings?.customerAuthEnabled ?? true)
 </script>
 
 <template>
@@ -39,7 +40,7 @@ const current = computed(() => page.url)
                             Đăng xuất
                         </button>
                     </template>
-                    <template v-else>
+                    <template v-else-if="customerAuthEnabled">
                         <Link href="/login" class="text-sm text-[var(--color-muted)] hover:text-[var(--color-ink)] font-medium transition">Đăng nhập</Link>
                         <Link href="/register" class="btn-fire text-sm px-4 py-2 rounded-xl">
                             Đăng ký

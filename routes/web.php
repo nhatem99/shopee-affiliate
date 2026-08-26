@@ -4,6 +4,7 @@ use App\Http\Controllers\Admin\ActivityController;
 use App\Http\Controllers\Admin\ApiConfigController;
 use App\Http\Controllers\Admin\DashboardController;
 use App\Http\Controllers\Admin\OrderController;
+use App\Http\Controllers\Admin\SettingsController;
 use App\Http\Controllers\Admin\VoucherController;
 use App\Http\Controllers\Admin\WithdrawalController as AdminWithdrawalController;
 use App\Http\Controllers\AffiliateController;
@@ -33,12 +34,18 @@ Route::get('/', function (Request $request, TrackingService $tracking) {
 
 // Auth (guests only)
 Route::middleware('guest')->group(function () {
+    // /login KHÔNG bị tắt bởi Admin > Cài đặt — đây là lối vào duy nhất của admin,
+    // tắt nó thì admin tự khoá luôn chính mình. Cài đặt chỉ ẩn link khỏi menu công khai.
     Route::get('/login', [LoginController::class, 'show'])->name('login');
     Route::post('/login', [LoginController::class, 'store']);
-    Route::get('/register', [RegisterController::class, 'show'])->name('register');
-    Route::post('/register', [RegisterController::class, 'store']);
-    Route::post('/auth/otp/send', [OtpController::class, 'send'])->name('otp.send');
-    Route::post('/auth/otp/verify', [OtpController::class, 'verify'])->name('otp.verify');
+
+    // Đăng ký + OTP là lối tạo tài khoản KHÁCH mới — cái này tắt được.
+    Route::middleware('customer.auth.enabled')->group(function () {
+        Route::get('/register', [RegisterController::class, 'show'])->name('register');
+        Route::post('/register', [RegisterController::class, 'store']);
+        Route::post('/auth/otp/send', [OtpController::class, 'send'])->name('otp.send');
+        Route::post('/auth/otp/verify', [OtpController::class, 'verify'])->name('otp.verify');
+    });
 });
 
 Route::post('/logout', [LoginController::class, 'destroy'])->middleware('auth')->name('logout');
@@ -96,4 +103,6 @@ Route::middleware(['auth', 'auth.admin'])->prefix('admin')->name('admin.')->grou
     Route::delete('/vouchers/{voucher}', [VoucherController::class, 'destroy'])->name('vouchers.destroy');
     Route::get('/withdrawals', [AdminWithdrawalController::class, 'index'])->name('withdrawals');
     Route::patch('/withdrawals/{withdrawal}', [AdminWithdrawalController::class, 'update'])->name('withdrawals.update');
+    Route::get('/settings', [SettingsController::class, 'index'])->name('settings');
+    Route::post('/settings', [SettingsController::class, 'update'])->name('settings.update');
 });
