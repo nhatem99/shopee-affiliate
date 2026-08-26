@@ -136,6 +136,7 @@ async function openVoucherLink(entry, productName = null) {
             url: entry.url,
             source: entry.source,
             product_name: productName ?? props.voucherResult?.product?.product_name ?? null,
+            voucher_label: entry.label ?? null,
         })
         if (newTab) {
             newTab.location.href = data.short_url

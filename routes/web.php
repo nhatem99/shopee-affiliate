@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\Admin\ActivityController;
 use App\Http\Controllers\Admin\ApiConfigController;
 use App\Http\Controllers\Admin\DashboardController;
 use App\Http\Controllers\Admin\OrderController;
@@ -13,13 +14,18 @@ use App\Http\Controllers\BlogController;
 use App\Http\Controllers\ProfileController;
 use App\Http\Controllers\ShopeeVoucherController;
 use App\Http\Controllers\ShortLinkController;
+use App\Http\Controllers\TrackingController;
 use App\Http\Controllers\WithdrawalController;
 use App\Models\PlatformVoucher;
+use App\Services\TrackingService;
+use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 use Inertia\Inertia;
 
 // Home
-Route::get('/', function () {
+Route::get('/', function (Request $request, TrackingService $tracking) {
+    $tracking->log('page_view', $request, ['url' => $request->fullUrl()]);
+
     return Inertia::render('Home', [
         'vouchers' => PlatformVoucher::suggestedList(),
     ]);
@@ -57,6 +63,11 @@ Route::post('/voucher/shorten', [ShortLinkController::class, 'store'])
     ->name('voucher.shorten');
 Route::get('/go/{code}', [ShortLinkController::class, 'redirect'])->name('go');
 
+// Theo dõi hành vi frontend (copy mã...), mở cho khách, chung throttle chống spam
+Route::post('/track/event', [TrackingController::class, 'store'])
+    ->middleware('throttle:affiliate-scan')
+    ->name('track.event');
+
 // Blog
 Route::get('/blog', [BlogController::class, 'index'])->name('blog.index');
 Route::get('/blog/{slug}', [BlogController::class, 'show'])->name('blog.show');
@@ -73,6 +84,7 @@ Route::middleware('auth')->group(function () {
 // Admin routes
 Route::middleware(['auth', 'auth.admin'])->prefix('admin')->name('admin.')->group(function () {
     Route::get('/dashboard', [DashboardController::class, 'index'])->name('dashboard');
+    Route::get('/activities', [ActivityController::class, 'index'])->name('activities');
     Route::get('/orders', [OrderController::class, 'index'])->name('orders');
     Route::patch('/orders/{commission}', [OrderController::class, 'update'])->name('orders.update');
     Route::get('/api-config', [ApiConfigController::class, 'index'])->name('api-config');

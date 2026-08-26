@@ -17,7 +17,7 @@ const current = computed(() => page.url)
         <header class="sticky top-0 z-50 bg-[var(--color-surface)]/80 backdrop-blur-md border-b border-[var(--color-line)] dark:shadow-[0_4px_24px_rgba(0,0,0,0.45)]">
             <div class="max-w-6xl mx-auto px-4 h-16 flex items-center justify-between">
                 <Link href="/" class="flex items-center gap-2 font-extrabold text-xl text-[var(--color-ink)]">
-                    <span class="w-8 h-8 rounded-lg bg-gradient-to-br from-[var(--color-accent)] to-[var(--color-accent-deep)] flex items-center justify-center text-white text-sm font-black dark:shadow-[0_4px_14px_rgba(var(--color-accent-rgb),0.4)]">M</span>
+                    <span class="w-8 h-8 rounded-lg bg-gradient-to-br from-[var(--color-accent)] to-[var(--color-accent-deep)] flex items-center justify-center text-white text-base font-extrabold dark:shadow-[0_4px_14px_rgba(var(--color-accent-rgb),0.4)]">%</span>
                     <span class="text-fire font-mono tracking-wide">Mã Giảm Giá</span>
                 </Link>
 

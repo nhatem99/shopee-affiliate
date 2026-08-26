@@ -37,6 +37,10 @@ return [
 
     'zalo' => [
         'oa_token' => env('ZALO_OA_TOKEN'),
+        // app_id/secret_key dùng để xác thực chữ ký webhook (X-ZEvent-Signature) —
+        // bắt buộc phải cấu hình trước khi bật group reply, nếu không webhook sẽ bị từ chối.
+        'app_id' => env('ZALO_APP_ID'),
+        'secret_key' => env('ZALO_OA_SECRET_KEY'),
     ],
 
     'shopee_affiliate' => [

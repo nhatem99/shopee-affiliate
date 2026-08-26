@@ -1,6 +1,7 @@
 ﻿<script setup>
 import { ref } from 'vue'
 import { useClipboard } from '@vueuse/core'
+import axios from 'axios'
 
 const props = defineProps({
     code: { type: String, required: true },
@@ -14,6 +15,17 @@ const props = defineProps({
 })
 
 const { copy, copied } = useClipboard({ source: props.code })
+
+function onCopyClick() {
+    copy()
+    // Ghi nhận sự kiện copy mã, không chặn UI nếu request lỗi/chậm.
+    axios.post('/track/event', {
+        event_type: 'voucher_copy',
+        voucher_code: props.code,
+        source: props.source,
+        product_name: props.subtitle,
+    }).catch(() => {})
+}
 
 function formatVnd(n) {
     return '₫' + Number(n).toLocaleString('vi-VN')
@@ -58,7 +70,7 @@ const label = props.isFreeship
         <div class="flex flex-col items-center justify-center px-5 py-4 pl-8 min-w-[130px]">
             <p class="font-mono font-bold text-[var(--color-ink)] text-sm tracking-widest mb-2">{{ code }}</p>
             <button
-                @click="copy()"
+                @click="onCopyClick"
                 :class="copied ? 'bg-[var(--color-brand-green)] text-white' : 'btn-fire'"
                 class="px-4 py-1.5 rounded-lg text-xs font-semibold transition-all duration-300"
             >

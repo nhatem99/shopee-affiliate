@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Exceptions\AffiliateScanException;
 use App\Services\AffiliateLinkRewriterService;
 use App\Services\ShortLinkService;
+use App\Services\TrackingService;
 use App\Services\UrlValidationService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
@@ -17,6 +18,7 @@ class ShortLinkController extends Controller
         private UrlValidationService $urlValidator,
         private ShortLinkService $shortLinks,
         private AffiliateLinkRewriterService $rewriter,
+        private TrackingService $tracking,
     ) {}
 
     public function store(Request $request): JsonResponse
@@ -25,6 +27,7 @@ class ShortLinkController extends Controller
             'url' => ['required', 'url', 'max:2000'],
             'source' => ['nullable', 'string', 'in:facebook,instagram,zalo,youtube'],
             'product_name' => ['nullable', 'string', 'max:255'],
+            'voucher_label' => ['nullable', 'string', 'max:100'],
         ]);
 
         try {
@@ -52,13 +55,20 @@ class ShortLinkController extends Controller
             'target_url' => $targetUrl,
         ]);
 
+        $this->tracking->log('voucher_select', $request, [
+            'url' => $targetUrl,
+            'source' => $validated['source'] ?? null,
+            'product_name' => $validated['product_name'] ?? null,
+            'voucher_code' => $validated['voucher_label'] ?? null,
+        ]);
+
         return response()->json([
             'code' => $link->code,
             'short_url' => url('/go/'.$link->code),
         ]);
     }
 
-    public function redirect(string $code): RedirectResponse
+    public function redirect(Request $request, string $code): RedirectResponse
     {
         $targetUrl = $this->shortLinks->resolveAndTrack($code);
 
@@ -68,6 +78,8 @@ class ShortLinkController extends Controller
             'code' => $code,
             'target_url' => $targetUrl,
         ]);
+
+        $this->tracking->log('short_link_click', $request, ['url' => $targetUrl]);
 
         return redirect()->away($targetUrl, 302);
     }

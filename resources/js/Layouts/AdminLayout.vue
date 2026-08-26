@@ -11,6 +11,7 @@ const current = computed(() => page.url)
 
 const navItems = [
     { href: '/admin/dashboard', icon: '📊', label: 'Dashboard' },
+    { href: '/admin/activities', icon: '🕵️', label: 'Theo dõi' },
     { href: '/admin/orders', icon: '📦', label: 'Đơn hàng' },
     { href: '/admin/withdrawals', icon: '💸', label: 'Rút tiền' },
     { href: '/admin/vouchers', icon: '🎫', label: 'Voucher FB/YT' },
@@ -23,7 +24,7 @@ const navItems = [
         <!-- Sidebar -->
         <aside class="w-[248px] flex-none bg-[var(--color-side)] text-white flex flex-col py-6 px-4 fixed h-screen z-40">
             <Link href="/" class="flex items-center gap-2 font-extrabold text-lg text-white mb-10 px-2">
-                <span class="w-8 h-8 rounded-lg bg-[var(--color-accent)] flex items-center justify-center text-sm">M</span>
+                <span class="w-8 h-8 rounded-lg bg-gradient-to-br from-[var(--color-accent)] to-[var(--color-accent-deep)] flex items-center justify-center text-base font-extrabold">%</span>
                 Mã Giảm Giá
             </Link>
 

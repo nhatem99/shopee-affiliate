@@ -6,6 +6,7 @@ use App\Exceptions\AffiliateScanException;
 use App\Models\PlatformVoucher;
 use App\Services\SalesOcService;
 use App\Services\ShopeeLinkResolverService;
+use App\Services\TrackingService;
 use App\Services\UrlValidationService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -18,6 +19,7 @@ class ShopeeVoucherController extends Controller
         private UrlValidationService $urlValidator,
         private ShopeeLinkResolverService $resolver,
         private SalesOcService $salesOc,
+        private TrackingService $tracking,
     ) {}
 
     public function resolve(Request $request): Response|RedirectResponse
@@ -49,6 +51,12 @@ class ShopeeVoucherController extends Controller
         $product = $salesOcData ?? ($ids
             ? $this->resolver->fetchProductInfo($ids['item_id'], $ids['shop_id'])
             : null);
+
+        $this->tracking->log('url_paste', $request, [
+            'url' => $canonicalUrl,
+            'platform' => 'shopee',
+            'product_name' => $product['product_name'] ?? null,
+        ]);
 
         return Inertia::render('Home', [
             'vouchers' => PlatformVoucher::suggestedList(),
