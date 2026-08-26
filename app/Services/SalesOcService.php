@@ -56,9 +56,10 @@ class SalesOcService
                 // API không trả trạng thái còn/hết lượt của từng mã, nên trả TẤT CẢ lựa chọn
                 // (không chỉ mã % cao nhất) để người dùng thử link khác nếu link đầu đã hết lượt.
                 'voucher_links' => [
-                    'facebook' => $this->extractOptions($data, 'facebookAffiliateUrls', $data['facebookAffiliateUrl'] ?? null),
-                    'instagram' => $this->extractOptions($data, 'instagramAffiliateUrls', $data['instagramAffiliateUrl'] ?? null),
-                    'zalo' => $this->extractOptions($data, 'zaloAffiliateUrls', $data['zaloAffiliateUrl'] ?? null),
+                    'facebook' => $this->extractOptions($data, 'facebookAffiliateUrls'),
+                    'instagram' => $this->extractOptions($data, 'instagramAffiliateUrls'),
+                    'zalo' => $this->extractOptions($data, 'zaloAffiliateUrls'),
+                    'youtube' => $this->extractYoutubeOption($data),
                 ],
             ];
         } catch (\Exception $e) {
@@ -69,11 +70,12 @@ class SalesOcService
     }
 
     /**
-     * Lấy toàn bộ {label, url} của 1 nền tảng. Nếu không có entry nào có label
-     * (không có mã giảm giá độc quyền), fallback về link affiliate chung của
-     * nền tảng đó (nếu có) để vẫn còn ít nhất 1 lựa chọn cho người dùng.
+     * Lấy toàn bộ {label, url} của 1 nền tảng. Entry có label rỗng nghĩa là
+     * salesoc.vn không có mã giảm giá độc quyền cho nền tảng đó (chỉ có link
+     * affiliate chung, không mã giảm giá thật) — bỏ qua, không hiện làm lựa
+     * chọn để tránh gây hiểu lầm là "có mã" khi bấm vào không mà giảm nào.
      */
-    private function extractOptions(array $data, string $key, ?string $fallbackUrl): array
+    private function extractOptions(array $data, string $key): array
     {
         $options = [];
 
@@ -85,11 +87,24 @@ class SalesOcService
             }
         }
 
-        if (empty($options) && $fallbackUrl) {
-            $options[] = ['label' => null, 'url' => $fallbackUrl];
+        return $options;
+    }
+
+    /**
+     * salesoc.vn không có field riêng cho YouTube — khi hasYoutubeVoucher=true,
+     * chính website của họ hiện nút "Mã YTB" dùng lại field `affiliateUrl` chung
+     * (xác nhận qua localStorage `convertHistory` của salesoc.vn: affiliateUrl và
+     * fullAffiliateUrl trùng khớp với link trên nút "Mã YTB" thật).
+     */
+    private function extractYoutubeOption(array $data): array
+    {
+        $url = $data['affiliateUrl'] ?? null;
+
+        if (! ($data['hasYoutubeVoucher'] ?? false) || ! $url) {
+            return [];
         }
 
-        return $options;
+        return [['label' => 'Mã YTB', 'url' => $url]];
     }
 
     private function extractLabels(array $data): array

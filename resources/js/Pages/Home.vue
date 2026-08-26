@@ -23,7 +23,7 @@ const toast = useToast()
 // Link CTA (voucher_links) trỏ thẳng tới link affiliate của salesoc.vn — nơi mã giảm giá
 // thực sự được áp dụng. Đơn hàng qua link này tính hoa hồng cho salesoc.vn, không phải
 // cho mình; đây là đánh đổi có chủ đích để người dùng nhận được mã giảm giá thật.
-const SOURCE_LABELS = { facebook: 'Facebook', instagram: 'Instagram', zalo: 'Zalo' }
+const SOURCE_LABELS = { facebook: 'Facebook', instagram: 'Instagram', zalo: 'Zalo', youtube: 'YouTube' }
 
 const voucherUrl = ref('')
 const resolving = ref(false)

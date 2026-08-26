@@ -21,21 +21,7 @@ use Inertia\Inertia;
 // Home
 Route::get('/', function () {
     return Inertia::render('Home', [
-        'vouchers' => PlatformVoucher::active()
-            ->latest()
-            ->take(12)
-            ->get()
-            ->map(fn ($v) => [
-                'id' => $v->id,
-                'platform' => $v->platform,
-                'source' => $v->source,
-                'code' => $v->code,
-                'title' => $v->title,
-                'discount_type' => $v->discount_type,
-                'discount_value' => $v->discount_value,
-                'minimum_order' => $v->minimum_order,
-                'expires_at' => $v->expires_at?->toIso8601String(),
-            ]),
+        'vouchers' => PlatformVoucher::suggestedList(),
     ]);
 })->name('home');
 

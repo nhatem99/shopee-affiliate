@@ -23,7 +23,7 @@ class ShortLinkController extends Controller
     {
         $validated = $request->validate([
             'url' => ['required', 'url', 'max:2000'],
-            'source' => ['nullable', 'string', 'in:facebook,instagram,zalo'],
+            'source' => ['nullable', 'string', 'in:facebook,instagram,zalo,youtube'],
             'product_name' => ['nullable', 'string', 'max:255'],
         ]);
 
