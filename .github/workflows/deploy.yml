@@ -1,0 +1,41 @@
+name: Deploy
+
+on:
+  push:
+    branches: [main]
+
+jobs:
+  deploy:
+    name: Deploy to VPS
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: SSH and deploy
+        uses: appleboy/ssh-action@v1.2.0
+        with:
+          host: ${{ secrets.VPS_HOST }}
+          username: ${{ secrets.VPS_USER }}
+          key: ${{ secrets.VPS_SSH_KEY }}
+          script: |
+            set -e
+            cd /var/www/tietkiemvi.com
+
+            git fetch origin main
+            git reset --hard origin/main
+
+            composer install --no-dev --optimize-autoloader --no-interaction
+
+            npm ci
+            npm run build
+
+            php8.4 artisan migrate --force
+            php8.4 artisan optimize:clear
+            php8.4 artisan optimize
+
+            chown -R www-data:www-data /var/www/tietkiemvi.com
+            chmod -R 775 storage bootstrap/cache
+
+            systemctl restart php8.4-fpm
+            php8.4 artisan queue:restart
+
+            echo "Deploy complete: $(git rev-parse --short HEAD)"
