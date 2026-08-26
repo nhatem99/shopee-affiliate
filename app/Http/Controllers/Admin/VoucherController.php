@@ -21,15 +21,15 @@ class VoucherController extends Controller
     public function store(Request $request): RedirectResponse
     {
         $data = $request->validate([
-            'platform'      => ['required', 'in:shopee,lazada,tiki,tiktok,all'],
-            'source'        => ['required', 'in:facebook,youtube,manual'],
-            'code'          => ['required', 'string', 'max:100'],
-            'title'         => ['nullable', 'string', 'max:200'],
+            'platform' => ['required', 'in:shopee,lazada,tiki,tiktok,all'],
+            'source' => ['required', 'in:facebook,youtube,manual'],
+            'code' => ['required', 'string', 'max:100'],
+            'title' => ['nullable', 'string', 'max:200'],
             'discount_type' => ['required', 'in:flat,percent,freeship'],
             'discount_value' => ['required', 'numeric', 'min:0'],
             'minimum_order' => ['nullable', 'numeric', 'min:0'],
-            'expires_at'    => ['nullable', 'date'],
-            'is_active'     => ['boolean'],
+            'expires_at' => ['nullable', 'date'],
+            'is_active' => ['boolean'],
         ]);
 
         PlatformVoucher::create($data);
@@ -40,15 +40,15 @@ class VoucherController extends Controller
     public function update(Request $request, PlatformVoucher $voucher): RedirectResponse
     {
         $data = $request->validate([
-            'platform'      => ['required', 'in:shopee,lazada,tiki,tiktok,all'],
-            'source'        => ['required', 'in:facebook,youtube,manual'],
-            'code'          => ['required', 'string', 'max:100'],
-            'title'         => ['nullable', 'string', 'max:200'],
+            'platform' => ['required', 'in:shopee,lazada,tiki,tiktok,all'],
+            'source' => ['required', 'in:facebook,youtube,manual'],
+            'code' => ['required', 'string', 'max:100'],
+            'title' => ['nullable', 'string', 'max:200'],
             'discount_type' => ['required', 'in:flat,percent,freeship'],
             'discount_value' => ['required', 'numeric', 'min:0'],
             'minimum_order' => ['nullable', 'numeric', 'min:0'],
-            'expires_at'    => ['nullable', 'date'],
-            'is_active'     => ['boolean'],
+            'expires_at' => ['nullable', 'date'],
+            'is_active' => ['boolean'],
         ]);
 
         $voucher->update($data);

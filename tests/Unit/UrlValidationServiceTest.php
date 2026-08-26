@@ -13,7 +13,7 @@ class UrlValidationServiceTest extends TestCase
     protected function setUp(): void
     {
         parent::setUp();
-        $this->service = new UrlValidationService();
+        $this->service = new UrlValidationService;
     }
 
     // ── Platform detection ────────────────────────────────────────────────────
@@ -92,7 +92,8 @@ class UrlValidationServiceTest extends TestCase
             'https://shopee.vn/ao-thun-i.123456789.987654321'
         );
 
-        $this->assertSame(['item_id' => '123456789', 'shop_id' => '987654321'], $ids);
+        // Định dạng URL Shopee thật: -i.{shop_id}.{item_id}
+        $this->assertSame(['shop_id' => '123456789', 'item_id' => '987654321'], $ids);
     }
 
     public function test_returns_empty_array_when_no_shopee_ids_in_url(): void
@@ -107,6 +108,6 @@ class UrlValidationServiceTest extends TestCase
             'https://shopee.vn/product-name-i.111.222?smtt=0.0.9'
         );
 
-        $this->assertSame(['item_id' => '111', 'shop_id' => '222'], $ids);
+        $this->assertSame(['shop_id' => '111', 'item_id' => '222'], $ids);
     }
 }

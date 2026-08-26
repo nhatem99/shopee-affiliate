@@ -21,6 +21,7 @@ abstract class TestCase extends BaseTestCase
         $this->setUpRoles();
         $user = User::factory()->create($attributes);
         $user->assignRole('user');
+
         return $user;
     }
 
@@ -29,6 +30,7 @@ abstract class TestCase extends BaseTestCase
         $this->setUpRoles();
         $user = User::factory()->create(array_merge(['role' => 'admin'], $attributes));
         $user->assignRole('admin');
+
         return $user;
     }
 }

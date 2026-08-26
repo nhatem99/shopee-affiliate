@@ -14,18 +14,18 @@ class AdminTest extends TestCase
     private function makeCommission(int $userId, string $status = 'pending'): Commission
     {
         $link = AffiliateLink::create([
-            'user_id'      => $userId,
+            'user_id' => $userId,
             'original_url' => 'https://shopee.vn/product',
-            'short_url'    => 'https://at.link/test',
-            'platform'     => 'shopee',
+            'short_url' => 'https://at.link/test',
+            'platform' => 'shopee',
             'product_name' => 'Test Product',
         ]);
 
         return Commission::create([
-            'user_id'          => $userId,
+            'user_id' => $userId,
             'affiliate_link_id' => $link->id,
-            'amount'           => '50000.00',
-            'status'           => $status,
+            'amount' => '50000.00',
+            'status' => $status,
         ]);
     }
 
@@ -73,7 +73,7 @@ class AdminTest extends TestCase
     public function test_dashboard_stats_reflect_database_state(): void
     {
         $admin = $this->createAdmin();
-        $user  = $this->createUser();
+        $user = $this->createUser();
 
         $this->makeCommission($user->id, 'pending');
 
@@ -106,7 +106,7 @@ class AdminTest extends TestCase
     public function test_admin_can_filter_orders_by_status(): void
     {
         $admin = $this->createAdmin();
-        $user  = $this->createUser();
+        $user = $this->createUser();
 
         $this->makeCommission($user->id, 'pending');
         $this->makeCommission($user->id, 'approved');
@@ -123,8 +123,8 @@ class AdminTest extends TestCase
 
     public function test_admin_can_approve_a_pending_commission(): void
     {
-        $admin      = $this->createAdmin();
-        $user       = $this->createUser();
+        $admin = $this->createAdmin();
+        $user = $this->createUser();
         $commission = $this->makeCommission($user->id, 'pending');
 
         $this->actingAs($admin)
@@ -132,15 +132,15 @@ class AdminTest extends TestCase
             ->assertRedirect();
 
         $this->assertDatabaseHas('commissions', [
-            'id'     => $commission->id,
+            'id' => $commission->id,
             'status' => 'approved',
         ]);
     }
 
     public function test_admin_can_mark_commission_as_paid(): void
     {
-        $admin      = $this->createAdmin();
-        $user       = $this->createUser();
+        $admin = $this->createAdmin();
+        $user = $this->createUser();
         $commission = $this->makeCommission($user->id, 'approved');
 
         $this->actingAs($admin)
@@ -148,15 +148,15 @@ class AdminTest extends TestCase
             ->assertRedirect();
 
         $this->assertDatabaseHas('commissions', [
-            'id'     => $commission->id,
+            'id' => $commission->id,
             'status' => 'paid',
         ]);
     }
 
     public function test_order_update_rejects_invalid_status(): void
     {
-        $admin      = $this->createAdmin();
-        $user       = $this->createUser();
+        $admin = $this->createAdmin();
+        $user = $this->createUser();
         $commission = $this->makeCommission($user->id);
 
         $this->actingAs($admin)
@@ -166,7 +166,7 @@ class AdminTest extends TestCase
 
     public function test_regular_user_cannot_update_order_status(): void
     {
-        $user       = $this->createUser();
+        $user = $this->createUser();
         $commission = $this->makeCommission($user->id);
 
         $this->actingAs($user)

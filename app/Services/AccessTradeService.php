@@ -21,15 +21,16 @@ class AccessTradeService
             ->where('is_active', true)
             ->first();
 
-        if (!$config) {
+        if (! $config) {
             Log::info('AccessTrade not configured, returning original URL');
+
             return $originalUrl;
         }
 
         try {
             $response = Http::withHeaders([
-                'Authorization' => 'Token ' . $config->app_secret,
-            ])->timeout(10)->post($config->endpoint . '/link_generate', [
+                'Authorization' => 'Token '.$config->app_secret,
+            ])->timeout(10)->post($config->endpoint.'/link_generate', [
                 'url' => $originalUrl,
             ]);
 
@@ -37,7 +38,7 @@ class AccessTradeService
                 return $response->json('data.url');
             }
         } catch (\Exception $e) {
-            Log::warning('AccessTrade link generation failed: ' . $e->getMessage());
+            Log::warning('AccessTrade link generation failed: '.$e->getMessage());
         }
 
         return $originalUrl;
@@ -51,8 +52,8 @@ class AccessTradeService
     public function testConnection(ApiConfig $config): bool
     {
         $response = Http::withHeaders([
-            'Authorization' => 'Token ' . $config->app_secret,
-        ])->timeout(10)->get($config->endpoint . '/publishers/me');
+            'Authorization' => 'Token '.$config->app_secret,
+        ])->timeout(10)->get($config->endpoint.'/publishers/me');
 
         return $response->successful();
     }

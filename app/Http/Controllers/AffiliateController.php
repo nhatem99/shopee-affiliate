@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Exceptions\AffiliateScanException;
 use App\Models\AffiliateLink;
 use App\Services\AffiliateScanOrchestrator;
+use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
 use Inertia\Response;
@@ -13,7 +14,7 @@ class AffiliateController extends Controller
 {
     public function __construct(private AffiliateScanOrchestrator $orchestrator) {}
 
-    public function scan(Request $request): Response|\Illuminate\Http\RedirectResponse
+    public function scan(Request $request): Response|RedirectResponse
     {
         $request->validate([
             'url' => ['required', 'url', 'max:2000'],

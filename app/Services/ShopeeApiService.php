@@ -20,13 +20,14 @@ class ShopeeApiService
         $partnerId = $config->app_id;
         $partnerKey = $config->app_secret;
         $base = "{$partnerId}{$path}{$timestamp}";
+
         return hash_hmac('sha256', $base, $partnerKey);
     }
 
     public function getProductInfo(string $itemId, string $shopId): array
     {
         $config = $this->getConfig();
-        if (!$config) {
+        if (! $config) {
             return $this->getMockProductInfo($itemId);
         }
 
@@ -35,7 +36,7 @@ class ShopeeApiService
         $sign = $this->buildSignature($path, $timestamp, $config);
 
         try {
-            $response = Http::timeout(10)->get($config->endpoint . $path, [
+            $response = Http::timeout(10)->get($config->endpoint.$path, [
                 'partner_id' => (int) $config->app_id,
                 'timestamp' => $timestamp,
                 'sign' => $sign,
@@ -45,6 +46,7 @@ class ShopeeApiService
 
             if ($response->successful()) {
                 $item = $response->json('response.item');
+
                 return [
                     'product_name' => $item['item_name'] ?? null,
                     'product_image' => $item['images'][0] ?? null,
@@ -56,7 +58,7 @@ class ShopeeApiService
                 ];
             }
         } catch (\Exception $e) {
-            Log::warning('Shopee API error: ' . $e->getMessage());
+            Log::warning('Shopee API error: '.$e->getMessage());
         }
 
         return $this->getMockProductInfo($itemId);
@@ -65,7 +67,7 @@ class ShopeeApiService
     public function getVouchers(string $shopId): array
     {
         $config = $this->getConfig();
-        if (!$config) {
+        if (! $config) {
             return $this->getMockVouchers();
         }
 
@@ -74,7 +76,7 @@ class ShopeeApiService
         $sign = $this->buildSignature($path, $timestamp, $config);
 
         try {
-            $response = Http::timeout(10)->get($config->endpoint . $path, [
+            $response = Http::timeout(10)->get($config->endpoint.$path, [
                 'partner_id' => (int) $config->app_id,
                 'timestamp' => $timestamp,
                 'sign' => $sign,
@@ -84,7 +86,8 @@ class ShopeeApiService
 
             if ($response->successful()) {
                 $vouchers = $response->json('response.voucher_list') ?? [];
-                return array_map(fn($v) => [
+
+                return array_map(fn ($v) => [
                     'code' => $v['voucher_code'],
                     'discount_type' => $v['discount_type'] === 2 ? 'percent' : 'flat',
                     'discount_value' => $v['discount_amount'] ?? $v['discount_percentage'] ?? 0,
@@ -95,7 +98,7 @@ class ShopeeApiService
                 ], $vouchers);
             }
         } catch (\Exception $e) {
-            Log::warning('Shopee voucher API error: ' . $e->getMessage());
+            Log::warning('Shopee voucher API error: '.$e->getMessage());
         }
 
         return $this->getMockVouchers();
@@ -107,7 +110,7 @@ class ShopeeApiService
         $timestamp = time();
         $sign = $this->buildSignature($path, $timestamp, $config);
 
-        $response = Http::timeout(10)->get($config->endpoint . $path, [
+        $response = Http::timeout(10)->get($config->endpoint.$path, [
             'partner_id' => (int) $config->app_id,
             'timestamp' => $timestamp,
             'sign' => $sign,

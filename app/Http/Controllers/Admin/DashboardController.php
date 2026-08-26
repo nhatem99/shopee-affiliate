@@ -51,7 +51,7 @@ class DashboardController extends Controller
                 ->latest()
                 ->limit(10)
                 ->get()
-                ->map(fn($c) => [
+                ->map(fn ($c) => [
                     'id' => $c->id,
                     'user' => $c->user?->name,
                     'product' => $c->affiliateLink?->product_name,

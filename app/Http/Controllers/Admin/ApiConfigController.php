@@ -17,7 +17,7 @@ class ApiConfigController extends Controller
     public function index(): Response
     {
         return Inertia::render('Admin/ApiConfig', [
-            'configs' => ApiConfig::all()->map(fn($c) => [
+            'configs' => ApiConfig::all()->map(fn ($c) => [
                 'id' => $c->id,
                 'name' => $c->name,
                 'endpoint' => $c->endpoint,

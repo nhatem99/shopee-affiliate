@@ -19,7 +19,7 @@ class OrderController extends Controller
             $query->where('status', $request->input('status'));
         }
 
-        $orders = $query->paginate(20)->through(fn($c) => [
+        $orders = $query->paginate(20)->through(fn ($c) => [
             'id' => $c->id,
             'user' => $c->user?->name,
             'product' => $c->affiliateLink?->product_name,

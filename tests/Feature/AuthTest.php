@@ -2,7 +2,6 @@
 
 namespace Tests\Feature;
 
-use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 
@@ -28,7 +27,7 @@ class AuthTest extends TestCase
         $user = $this->createUser(['password' => 'password123']);
 
         $this->post('/login', [
-            'email'    => $user->email,
+            'email' => $user->email,
             'password' => 'password123',
         ])->assertRedirect('/');
 
@@ -40,7 +39,7 @@ class AuthTest extends TestCase
         $user = $this->createUser();
 
         $this->post('/login', [
-            'email'    => $user->email,
+            'email' => $user->email,
             'password' => 'wrong-password',
         ])->assertSessionHasErrors('email');
 
@@ -64,9 +63,9 @@ class AuthTest extends TestCase
         $this->setUpRoles();
 
         $this->post('/register', [
-            'name'                  => 'Nguyen Van A',
-            'email'                 => 'test@example.com',
-            'password'              => 'password123',
+            'name' => 'Nguyen Van A',
+            'email' => 'test@example.com',
+            'password' => 'password123',
             'password_confirmation' => 'password123',
         ])->assertRedirect('/');
 
@@ -79,9 +78,9 @@ class AuthTest extends TestCase
         $existing = $this->createUser(['email' => 'taken@example.com']);
 
         $this->post('/register', [
-            'name'                  => 'Other User',
-            'email'                 => 'taken@example.com',
-            'password'              => 'password123',
+            'name' => 'Other User',
+            'email' => 'taken@example.com',
+            'password' => 'password123',
             'password_confirmation' => 'password123',
         ])->assertSessionHasErrors('email');
     }
@@ -91,9 +90,9 @@ class AuthTest extends TestCase
         $this->setUpRoles();
 
         $this->post('/register', [
-            'name'                  => 'Test User',
-            'email'                 => 'test@example.com',
-            'password'              => 'password123',
+            'name' => 'Test User',
+            'email' => 'test@example.com',
+            'password' => 'password123',
             'password_confirmation' => 'different',
         ])->assertSessionHasErrors('password');
     }
@@ -103,9 +102,9 @@ class AuthTest extends TestCase
         $this->setUpRoles();
 
         $this->post('/register', [
-            'name'                  => 'Test User',
-            'email'                 => 'test@example.com',
-            'password'              => 'short',
+            'name' => 'Test User',
+            'email' => 'test@example.com',
+            'password' => 'short',
             'password_confirmation' => 'short',
         ])->assertSessionHasErrors('password');
     }

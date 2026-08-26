@@ -24,7 +24,7 @@ class OtpController extends Controller
 
         $user = User::firstOrCreate(
             ['phone' => $phone],
-            ['name' => $phone, 'email' => $phone . '@otp.local', 'password' => '', 'role' => 'user']
+            ['name' => $phone, 'email' => $phone.'@otp.local', 'password' => '', 'role' => 'user']
         );
 
         $user->update([
@@ -47,11 +47,11 @@ class OtpController extends Controller
 
         $user = User::where('phone', $request->input('phone'))->first();
 
-        if (!$user || !$user->otp_expires_at || $user->otp_expires_at->isPast()) {
+        if (! $user || ! $user->otp_expires_at || $user->otp_expires_at->isPast()) {
             return back()->withErrors(['otp' => 'Mã OTP đã hết hạn. Vui lòng yêu cầu mã mới.']);
         }
 
-        if (!Hash::check($request->input('otp'), $user->otp)) {
+        if (! Hash::check($request->input('otp'), $user->otp)) {
             return back()->withErrors(['otp' => 'Mã OTP không đúng.']);
         }
 

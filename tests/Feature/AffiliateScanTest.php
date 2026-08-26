@@ -31,25 +31,25 @@ class AffiliateScanTest extends TestCase
     {
         return [
             'product' => [
-                'name'             => 'Áo thun Shopee',
-                'image'            => null,
-                'platform'         => 'shopee',
-                'original_price'   => 200000,
+                'name' => 'Áo thun Shopee',
+                'image' => null,
+                'platform' => 'shopee',
+                'original_price' => 200000,
                 'discounted_price' => 150000,
                 'discount_percent' => 25,
-                'rating'           => 4.8,
-                'sold_count'       => 1000,
+                'rating' => 4.8,
+                'sold_count' => 1000,
             ],
-            'vouchers'      => [],
+            'vouchers' => [],
             'affiliateLink' => 'https://at.link/abc123',
-            'cashback'      => 7500,
-            'savings'       => [
-                'original'         => 200000,
+            'cashback' => 7500,
+            'savings' => [
+                'original' => 200000,
                 'product_discount' => 50000,
                 'voucher_discount' => 0,
-                'final_price'      => 150000,
-                'total_saved'      => 50000,
-                'pct_saved'        => 25,
+                'final_price' => 150000,
+                'total_saved' => 50000,
+                'pct_saved' => 25,
             ],
         ];
     }
@@ -69,7 +69,7 @@ class AffiliateScanTest extends TestCase
 
     public function test_scan_rejects_url_exceeding_max_length(): void
     {
-        $this->post('/affiliate/scan', ['url' => 'https://shopee.vn/' . str_repeat('a', 2000)])
+        $this->post('/affiliate/scan', ['url' => 'https://shopee.vn/'.str_repeat('a', 2000)])
             ->assertSessionHasErrors('url');
     }
 
@@ -114,7 +114,7 @@ class AffiliateScanTest extends TestCase
         ]);
 
         $this->assertDatabaseHas('affiliate_links', [
-            'user_id'  => $user->id,
+            'user_id' => $user->id,
             'platform' => 'shopee',
         ]);
     }
@@ -161,22 +161,22 @@ class AffiliateScanTest extends TestCase
 
     public function test_history_only_shows_current_users_links(): void
     {
-        $user  = $this->createUser();
+        $user = $this->createUser();
         $other = $this->createUser();
 
         AffiliateLink::create([
-            'user_id'      => $other->id,
+            'user_id' => $other->id,
             'original_url' => 'https://shopee.vn/other',
-            'short_url'    => 'https://at.link/other',
-            'platform'     => 'shopee',
+            'short_url' => 'https://at.link/other',
+            'platform' => 'shopee',
             'product_name' => 'Other product',
         ]);
 
         AffiliateLink::create([
-            'user_id'      => $user->id,
+            'user_id' => $user->id,
             'original_url' => 'https://shopee.vn/mine',
-            'short_url'    => 'https://at.link/mine',
-            'platform'     => 'shopee',
+            'short_url' => 'https://at.link/mine',
+            'platform' => 'shopee',
             'product_name' => 'My product',
         ]);
 
