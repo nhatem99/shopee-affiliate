@@ -4,7 +4,11 @@ namespace Tests\Feature;
 
 use App\Exceptions\AffiliateScanException;
 use App\Models\AffiliateLink;
+use App\Services\AccessTradeService;
 use App\Services\AffiliateScanOrchestrator;
+use App\Services\ProductMetadataService;
+use App\Services\ShopeeApiService;
+use App\Services\UrlValidationService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Mockery;
 use Tests\TestCase;
@@ -25,6 +29,39 @@ class AffiliateScanTest extends TestCase
         $mock = Mockery::mock(AffiliateScanOrchestrator::class);
         $mock->shouldReceive('scan')->once()->andThrow(new AffiliateScanException($message));
         $this->app->instance(AffiliateScanOrchestrator::class, $mock);
+    }
+
+    // Mock chỉ các service PHỤ THUỘC BÊN NGOÀI (API Shopee/AccessTrade) thay vì mock
+    // nguyên AffiliateScanOrchestrator — vì việc lưu AffiliateLink vào DB nằm bên
+    // trong scan(), mock cả orchestrator sẽ bỏ qua luôn phần lưu DB cần test.
+    private function mockOrchestratorDependencies(): void
+    {
+        $urlValidator = Mockery::mock(UrlValidationService::class);
+        $urlValidator->shouldReceive('validate')->andReturn('shopee');
+        $urlValidator->shouldReceive('extractShopeeIds')->andReturn(['item_id' => '123456', 'shop_id' => '789']);
+        $this->app->instance(UrlValidationService::class, $urlValidator);
+
+        $productMetadata = Mockery::mock(ProductMetadataService::class);
+        $productMetadata->shouldReceive('fetch')->andReturn([
+            'product_name' => 'Áo thun Shopee',
+            'product_image' => null,
+            'original_price' => 200000,
+            'discounted_price' => 150000,
+            'discount_percent' => 25,
+            'sold_count' => 1000,
+            'rating' => 4.8,
+            'cashback_rate' => null,
+        ]);
+        $this->app->instance(ProductMetadataService::class, $productMetadata);
+
+        $accessTrade = Mockery::mock(AccessTradeService::class);
+        $accessTrade->shouldReceive('generateLink')->andReturn('https://at.link/abc123');
+        $accessTrade->shouldReceive('getCashbackRate')->andReturn(0.05);
+        $this->app->instance(AccessTradeService::class, $accessTrade);
+
+        $shopeeApi = Mockery::mock(ShopeeApiService::class);
+        $shopeeApi->shouldReceive('getVouchers')->andReturn([]);
+        $this->app->instance(ShopeeApiService::class, $shopeeApi);
     }
 
     private function fakeScanResult(): array
@@ -107,7 +144,7 @@ class AffiliateScanTest extends TestCase
     public function test_scan_stores_affiliate_link_in_database(): void
     {
         $user = $this->createUser();
-        $this->mockOrchestrator($this->fakeScanResult());
+        $this->mockOrchestratorDependencies();
 
         $this->actingAs($user)->post('/affiliate/scan', [
             'url' => 'https://shopee.vn/product-i.123456.789',
