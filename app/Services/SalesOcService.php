@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 
@@ -24,6 +25,17 @@ class SalesOcService
     private const MOBILE_USER_AGENT = 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_5 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.5 Mobile/15E148 Safari/604.1';
 
     public function fetchProductAndVoucherLabels(string $shopeeUrl): ?array
+    {
+        // Cache ngắn hạn — cùng 1 link được dán lại (test, hoặc nhiều người cùng xem 1 sản
+        // phẩm hot) thì trả ngay khỏi phải đợi round-trip tới salesoc.vn (thường 2-8s).
+        // 15 phút là đủ ngắn để không giữ mã đã hết lượt quá lâu (salesoc.vn cũng không
+        // báo trạng thái hết lượt của từng mã, nên độ mới ở đây vốn chỉ là best-effort).
+        return Cache::remember('salesoc:'.md5($shopeeUrl), now()->addMinutes(15), function () use ($shopeeUrl) {
+            return $this->fetch($shopeeUrl);
+        });
+    }
+
+    private function fetch(string $shopeeUrl): ?array
     {
         try {
             $response = Http::withHeaders([
