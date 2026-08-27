@@ -27,6 +27,7 @@ class TrackingService
 
         $agent = new Agent;
         $agent->setUserAgent($userAgent);
+        $traffic = $this->resolveTrafficSource($request);
 
         $activity = UserActivity::create([
             'user_id' => $request->user()?->id,
@@ -43,6 +44,7 @@ class TrackingService
             'browser' => $agent->browser() ?: null,
             'os_name' => $agent->platform() ?: null,
             'metadata' => $data['metadata'] ?? null,
+            ...$traffic,
         ]);
 
         if ($activity->ip_address) {
@@ -66,6 +68,47 @@ class TrackingService
         $agent->setUserAgent($userAgent);
 
         return $agent->isRobot();
+    }
+
+    /**
+     * Suy ra khách vào web từ đâu (Facebook, Zalo, Google tìm kiếm, gõ thẳng link...) dựa
+     * trên header Referer + tham số utm_* trên URL. Chỉ có ý nghĩa với event 'page_view' —
+     * các hành động sau đó (AJAX trong trang) referer sẽ trỏ về chính domain mình nên bị
+     * coi là "direct", đúng vì đó không phải lượt ghé thăm mới.
+     */
+    private function resolveTrafficSource(Request $request): array
+    {
+        $utmSource = $request->query('utm_source');
+        $referer = $request->header('referer');
+        $refererHost = null;
+
+        if ($referer) {
+            $host = parse_url($referer, PHP_URL_HOST);
+            // Bỏ qua nếu referer là chính domain mình (điều hướng nội bộ / gọi AJAX trong trang).
+            if ($host && strcasecmp($host, (string) $request->getHost()) !== 0) {
+                $refererHost = strtolower($host);
+            }
+        }
+
+        $label = match (true) {
+            filled($utmSource) => strtolower((string) $utmSource),
+            $refererHost === null => 'direct',
+            str_contains($refererHost, 'facebook.') || str_contains($refererHost, 'fb.') => 'facebook',
+            str_contains($refererHost, 'zalo.') => 'zalo',
+            str_contains($refererHost, 'google.') => 'google',
+            str_contains($refererHost, 'tiktok.') => 'tiktok',
+            str_contains($refererHost, 'youtube.') || str_contains($refererHost, 'youtu.be') => 'youtube',
+            str_contains($refererHost, 'instagram.') => 'instagram',
+            default => $refererHost,
+        };
+
+        return [
+            'traffic_source' => $label,
+            'referrer_host' => $refererHost,
+            'utm_source' => $utmSource ? (string) $utmSource : null,
+            'utm_medium' => $request->query('utm_medium') ? (string) $request->query('utm_medium') : null,
+            'utm_campaign' => $request->query('utm_campaign') ? (string) $request->query('utm_campaign') : null,
+        ];
     }
 
     private function resolveDeviceType(Agent $agent): string

@@ -39,6 +39,20 @@ const deviceLabels = {
     desktop: '💻 Desktop',
 }
 
+const trafficSourceLabels = {
+    direct: '🔗 Trực tiếp / Gõ link',
+    facebook: '📘 Facebook',
+    zalo: '💬 Zalo',
+    google: '🔍 Google',
+    tiktok: '🎵 TikTok',
+    youtube: '▶️ YouTube',
+    instagram: '📸 Instagram',
+}
+
+function trafficSourceLabel(key) {
+    return trafficSourceLabels[key] || `🌐 ${key}`
+}
+
 function filter(key, value) {
     router.get('/admin/activities', { ...props.filters, [key]: value }, { preserveState: true })
 }
@@ -54,7 +68,7 @@ function goPage(url) {
         <template #title>Theo dõi hoạt động người dùng</template>
 
         <!-- Summary cards (7 ngày gần nhất) -->
-        <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+        <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4 mb-6">
             <div class="bg-[var(--color-surface)] rounded-2xl border border-[var(--color-line)] p-4">
                 <p class="text-xs text-[var(--color-muted)] mb-1">Tổng sự kiện (7 ngày)</p>
                 <p class="text-2xl font-extrabold text-[var(--color-ink)]">{{ summary?.total ?? 0 }}</p>
@@ -86,6 +100,20 @@ function goPage(url) {
                     <span v-if="!Object.keys(summary?.top_countries || {}).length" class="text-[var(--color-muted)]">Chưa có dữ liệu</span>
                 </p>
             </div>
+            <div class="bg-[var(--color-surface)] rounded-2xl border border-[var(--color-line)] p-4">
+                <p class="text-xs text-[var(--color-muted)] mb-1">Khách vào web từ đâu</p>
+                <p class="text-sm text-[var(--color-ink)] space-y-0.5">
+                    <button
+                        v-for="(count, src) in summary?.top_traffic_sources" :key="src"
+                        @click="filter('traffic_source', src)"
+                        class="flex items-center justify-between w-full text-left hover:text-[var(--color-accent)] transition"
+                    >
+                        <span class="truncate">{{ trafficSourceLabel(src) }}</span>
+                        <b class="flex-none ml-2">{{ count }}</b>
+                    </button>
+                    <span v-if="!Object.keys(summary?.top_traffic_sources || {}).length" class="text-[var(--color-muted)]">Chưa có dữ liệu</span>
+                </p>
+            </div>
         </div>
 
         <!-- Filters -->
@@ -97,6 +125,10 @@ function goPage(url) {
                     :class="filters?.event_type === key ? 'bg-[var(--color-accent)] text-white' : 'bg-[var(--color-surface)] text-[var(--color-ink)] border border-[var(--color-line)] hover:border-[var(--color-accent)] hover:text-[var(--color-accent)]'"
                     class="px-4 py-2 rounded-xl text-sm font-semibold transition">
                     {{ label }}
+                </button>
+                <button v-if="filters?.traffic_source" @click="filter('traffic_source', '')"
+                    class="px-4 py-2 rounded-xl text-sm font-semibold bg-[var(--color-accent)] text-white flex items-center gap-1.5">
+                    Nguồn: {{ trafficSourceLabel(filters.traffic_source) }} ✕
                 </button>
             </div>
 
@@ -119,6 +151,7 @@ function goPage(url) {
                         <th class="px-4 py-3 font-semibold">Trình duyệt / OS</th>
                         <th class="px-4 py-3 font-semibold">IP</th>
                         <th class="px-4 py-3 font-semibold">Vị trí</th>
+                        <th class="px-4 py-3 font-semibold">Nguồn truy cập</th>
                     </tr>
                 </thead>
                 <tbody class="divide-y divide-[var(--color-line)]">
@@ -132,9 +165,10 @@ function goPage(url) {
                         <td class="px-4 py-3 text-[var(--color-ink)]/70 whitespace-nowrap">{{ [a.browser, a.os_name].filter(Boolean).join(' / ') || '—' }}</td>
                         <td class="px-4 py-3 text-[var(--color-muted)] whitespace-nowrap">{{ a.ip_address || '—' }}</td>
                         <td class="px-4 py-3 text-[var(--color-ink)]/70 whitespace-nowrap">{{ [a.city, a.country].filter(Boolean).join(', ') || '—' }}</td>
+                        <td class="px-4 py-3 text-[var(--color-ink)]/70 whitespace-nowrap">{{ a.traffic_source ? trafficSourceLabel(a.traffic_source) : '—' }}</td>
                     </tr>
                     <tr v-if="!activities?.data?.length">
-                        <td colspan="9" class="px-6 py-10 text-center text-[var(--color-muted)]">Chưa có hoạt động nào.</td>
+                        <td colspan="10" class="px-6 py-10 text-center text-[var(--color-muted)]">Chưa có hoạt động nào.</td>
                     </tr>
                 </tbody>
             </table>

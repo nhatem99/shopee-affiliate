@@ -28,6 +28,10 @@ class ActivityController extends Controller
             $query->where('device_type', $request->input('device_type'));
         }
 
+        if ($request->filled('traffic_source')) {
+            $query->where('traffic_source', $request->input('traffic_source'));
+        }
+
         $activities = $query->paginate(30)->through(fn (UserActivity $a) => [
             'id' => $a->id,
             'user' => $a->user?->name,
@@ -42,6 +46,8 @@ class ActivityController extends Controller
             'ip_address' => $a->ip_address,
             'country' => $a->country,
             'city' => $a->city,
+            'traffic_source' => $a->traffic_source,
+            'referrer_host' => $a->referrer_host,
             'created_at' => $a->created_at->toDateTimeString(),
         ])->withQueryString();
 
@@ -49,7 +55,7 @@ class ActivityController extends Controller
 
         return Inertia::render('Admin/Activities', [
             'activities' => $activities,
-            'filters' => $request->only(['event_type', 'platform', 'device_type']),
+            'filters' => $request->only(['event_type', 'platform', 'device_type', 'traffic_source']),
             'summary' => [
                 'total' => UserActivity::where('created_at', '>=', $recentWindow)->count(),
                 'by_device' => UserActivity::where('created_at', '>=', $recentWindow)
@@ -78,6 +84,16 @@ class ActivityController extends Controller
                     ->orderByDesc('total')
                     ->limit(5)
                     ->pluck('total', 'country'),
+                // Chỉ tính trên 'page_view' — đây mới là lượt GHÉ THĂM mới, các event khác
+                // (bấm mã, copy...) là hành động trong cùng lượt nên không tính là 1 nguồn mới.
+                'top_traffic_sources' => UserActivity::where('created_at', '>=', $recentWindow)
+                    ->where('event_type', 'page_view')
+                    ->whereNotNull('traffic_source')
+                    ->selectRaw('traffic_source, COUNT(*) as total')
+                    ->groupBy('traffic_source')
+                    ->orderByDesc('total')
+                    ->limit(6)
+                    ->pluck('total', 'traffic_source'),
             ],
         ]);
     }

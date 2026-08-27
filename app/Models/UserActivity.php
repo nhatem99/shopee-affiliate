@@ -11,6 +11,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
     'user_id', 'session_id', 'event_type', 'url', 'platform',
     'product_name', 'voucher_code', 'source', 'ip_address', 'user_agent',
     'device_type', 'browser', 'os_name', 'country', 'city', 'metadata',
+    'traffic_source', 'referrer_host', 'utm_source', 'utm_medium', 'utm_campaign',
 ])]
 class UserActivity extends Model
 {
