@@ -41,8 +41,11 @@ class AffiliateScanTest extends TestCase
         $urlValidator->shouldReceive('extractShopeeIds')->andReturn(['item_id' => '123456', 'shop_id' => '789']);
         $this->app->instance(UrlValidationService::class, $urlValidator);
 
+        // Các service giờ tham gia vào 1 Http::pool() chung (chạy song song) thay vì
+        // gọi tuần tự fetch()/generateLink()/getVouchers() — mock cặp register/parse.
         $productMetadata = Mockery::mock(ProductMetadataService::class);
-        $productMetadata->shouldReceive('fetch')->andReturn([
+        $productMetadata->shouldReceive('registerPoolRequests')->andReturn(false);
+        $productMetadata->shouldReceive('resolveFromPool')->andReturn([
             'product_name' => 'Áo thun Shopee',
             'product_image' => null,
             'original_price' => 200000,
@@ -55,12 +58,14 @@ class AffiliateScanTest extends TestCase
         $this->app->instance(ProductMetadataService::class, $productMetadata);
 
         $accessTrade = Mockery::mock(AccessTradeService::class);
-        $accessTrade->shouldReceive('generateLink')->andReturn('https://at.link/abc123');
+        $accessTrade->shouldReceive('registerPoolRequest')->andReturn(false);
+        $accessTrade->shouldReceive('parsePoolResponse')->andReturn('https://at.link/abc123');
         $accessTrade->shouldReceive('getCashbackRate')->andReturn(0.05);
         $this->app->instance(AccessTradeService::class, $accessTrade);
 
         $shopeeApi = Mockery::mock(ShopeeApiService::class);
-        $shopeeApi->shouldReceive('getVouchers')->andReturn([]);
+        $shopeeApi->shouldReceive('registerVouchersPoolRequest')->andReturn(false);
+        $shopeeApi->shouldReceive('parseVouchersPoolResponse')->andReturn([]);
         $this->app->instance(ShopeeApiService::class, $shopeeApi);
     }
 

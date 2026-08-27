@@ -7,6 +7,8 @@ use App\Models\Commission;
 use App\Models\PlatformVoucher;
 use App\Models\User;
 use App\Models\Voucher;
+use Illuminate\Http\Client\Pool;
+use Illuminate\Support\Facades\Http;
 
 class AffiliateScanOrchestrator
 {
@@ -21,15 +23,23 @@ class AffiliateScanOrchestrator
     {
         // 1. Validate URL and detect platform
         $platform = $this->urlValidator->validate($url);
+        $shopeeIds = $platform === 'shopee' ? $this->urlValidator->extractShopeeIds($url) : [];
 
-        // 2. Fetch product info
-        $productInfo = $this->fetchProductInfo($url, $platform);
+        // 2-4. Lấy thông tin sản phẩm, sinh affiliate link và lấy voucher SONG SONG —
+        // trước đây 3 việc này gọi API tuần tự (mỗi API timeout 8-10s) nên cộng dồn rất chậm.
+        $responses = Http::pool(function (Pool $pool) use ($url, $platform, $shopeeIds) {
+            $this->productMetadata->registerPoolRequests($pool, $url, $platform);
+            $this->accessTrade->registerPoolRequest($pool, $url);
+            if ($shopeeIds) {
+                $this->shopeeApi->registerVouchersPoolRequest($pool, $shopeeIds['shop_id']);
+            }
+        });
 
-        // 3. Generate affiliate link
-        $affiliateLink = $this->accessTrade->generateLink($url);
-
-        // 4. Get vouchers
-        $vouchers = $this->fetchVouchers($url, $platform);
+        $productInfo = $this->resolveProductInfo($url, $platform, $responses);
+        $affiliateLink = $this->accessTrade->parsePoolResponse($responses['accesstrade'] ?? null, $url);
+        $vouchers = $shopeeIds
+            ? $this->shopeeApi->parseVouchersPoolResponse($responses['vouchers'] ?? null)
+            : [];
 
         // 5. Calculate savings
         $original = (float) ($productInfo['original_price'] ?? 0);
@@ -108,10 +118,10 @@ class AffiliateScanOrchestrator
         ];
     }
 
-    private function fetchProductInfo(string $url, string $platform): array
+    private function resolveProductInfo(string $url, string $platform, array $responses): array
     {
-        // 1. Best-effort: đọc dữ liệu thật từ trang sản phẩm (JSON-LD / OG / API Tiki)
-        $meta = $this->productMetadata->fetch($url, $platform);
+        // 1. Best-effort: đọc dữ liệu thật từ trang sản phẩm (JSON-LD / OG / API Tiki), lấy từ pool ở trên
+        $meta = $this->productMetadata->resolveFromPool($responses, $url, $platform);
         if ($meta && ($meta['product_name'] || $meta['product_image'])) {
             return [
                 'product_name' => $meta['product_name'] ?? 'Sản phẩm',
@@ -143,17 +153,5 @@ class AffiliateScanOrchestrator
             'sold_count' => 0,
             'rating' => 0,
         ];
-    }
-
-    private function fetchVouchers(string $url, string $platform): array
-    {
-        if ($platform === 'shopee') {
-            $ids = $this->urlValidator->extractShopeeIds($url);
-            if ($ids) {
-                return $this->shopeeApi->getVouchers($ids['shop_id']);
-            }
-        }
-
-        return [];
     }
 }

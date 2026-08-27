@@ -3,6 +3,8 @@
 namespace App\Services;
 
 use App\Models\ApiConfig;
+use Illuminate\Http\Client\Pool;
+use Illuminate\Http\Client\Response;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 
@@ -64,41 +66,48 @@ class ShopeeApiService
         return $this->getMockProductInfo($itemId);
     }
 
-    public function getVouchers(string $shopId): array
+    /** Đăng ký request lấy voucher vào pool dùng chung của orchestrator (chạy song song với các API khác). */
+    public function registerVouchersPoolRequest(Pool $pool, string $shopId): bool
     {
         $config = $this->getConfig();
         if (! $config) {
-            return $this->getMockVouchers();
+            return false;
         }
 
         $path = '/api/v2/voucher/list';
         $timestamp = time();
         $sign = $this->buildSignature($path, $timestamp, $config);
 
-        try {
-            $response = Http::timeout(10)->get($config->endpoint.$path, [
-                'partner_id' => (int) $config->app_id,
-                'timestamp' => $timestamp,
-                'sign' => $sign,
-                'shop_id' => (int) $shopId,
-                'status' => 1,
-            ]);
+        $pool->as('vouchers')->timeout(10)->get($config->endpoint.$path, [
+            'partner_id' => (int) $config->app_id,
+            'timestamp' => $timestamp,
+            'sign' => $sign,
+            'shop_id' => (int) $shopId,
+            'status' => 1,
+        ]);
 
-            if ($response->successful()) {
-                $vouchers = $response->json('response.voucher_list') ?? [];
+        return true;
+    }
 
-                return array_map(fn ($v) => [
-                    'code' => $v['voucher_code'],
-                    'discount_type' => $v['discount_type'] === 2 ? 'percent' : 'flat',
-                    'discount_value' => $v['discount_amount'] ?? $v['discount_percentage'] ?? 0,
-                    'minimum_order' => $v['min_basket_price'] ?? 0,
-                    'expires_at' => $v['end_time'] ? date('Y-m-d H:i:s', $v['end_time']) : null,
-                    'is_freeship' => false,
-                    'source' => 'shopee',
-                ], $vouchers);
-            }
-        } catch (\Exception $e) {
-            Log::warning('Shopee voucher API error: '.$e->getMessage());
+    /** Đọc kết quả từ pool ở trên; trả về voucher mẫu nếu chưa cấu hình API hoặc gọi lỗi. */
+    public function parseVouchersPoolResponse(mixed $response): array
+    {
+        if ($response instanceof Response && $response->successful()) {
+            $vouchers = $response->json('response.voucher_list') ?? [];
+
+            return array_map(fn ($v) => [
+                'code' => $v['voucher_code'],
+                'discount_type' => $v['discount_type'] === 2 ? 'percent' : 'flat',
+                'discount_value' => $v['discount_amount'] ?? $v['discount_percentage'] ?? 0,
+                'minimum_order' => $v['min_basket_price'] ?? 0,
+                'expires_at' => $v['end_time'] ? date('Y-m-d H:i:s', $v['end_time']) : null,
+                'is_freeship' => false,
+                'source' => 'shopee',
+            ], $vouchers);
+        }
+
+        if ($response instanceof \Throwable) {
+            Log::warning('Shopee voucher API error: '.$response->getMessage());
         }
 
         return $this->getMockVouchers();

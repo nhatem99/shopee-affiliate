@@ -2,7 +2,8 @@
 
 namespace App\Services;
 
-use GuzzleHttp\TransferStats;
+use Illuminate\Http\Client\Pool;
+use Illuminate\Http\Client\Response;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
@@ -16,6 +17,9 @@ use Illuminate\Support\Facades\Log;
  *   4. Thẻ meta Open Graph / Twitter
  *
  * Trả về null nếu không lấy được gì — caller tự fallback.
+ *
+ * Các request ra ngoài được đăng ký vào 1 pool dùng chung với AccessTrade/Shopee voucher
+ * (xem AffiliateScanOrchestrator) để chạy song song thay vì cộng dồn thời gian chờ.
  */
 class ProductMetadataService
 {
@@ -26,57 +30,104 @@ class ProductMetadataService
         private ShopeeProductLookupService $shopeeLookup,
     ) {}
 
-    public function fetch(string $url, string $platform): ?array
+    /** Đăng ký các request có thể chạy song song; trả về false nếu đã có cache (khỏi gọi mạng thừa). */
+    public function registerPoolRequests(Pool $pool, string $url, string $platform): bool
     {
-        return Cache::remember('product_meta:'.md5($url), now()->addHours(6), function () use ($url, $platform) {
-            try {
-                return $this->resolve($url, $platform);
-            } catch (\Throwable $e) {
-                Log::warning('ProductMetadata fetch failed: '.$e->getMessage());
+        if (Cache::has($this->cacheKey($url))) {
+            return false;
+        }
 
-                return null;
-            }
-        });
-    }
-
-    private function resolve(string $url, string $platform): ?array
-    {
-        $finalUrl = $url;
-
-        $response = Http::withHeaders([
+        $pool->as('meta_page')->withHeaders([
             'User-Agent' => self::UA,
             'Accept' => 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
             'Accept-Language' => 'vi,en;q=0.9',
-        ])->withOptions([
-            'on_stats' => function (TransferStats $stats) use (&$finalUrl) {
-                if ($uri = $stats->getEffectiveUri()) {
-                    $finalUrl = (string) $uri;
-                }
-            },
         ])->connectTimeout(5)->timeout(8)->get($url);
 
-        // Tiki có API công khai rất ổn định — ưu tiên dùng id từ URL đã giải redirect
-        if ($platform === 'tiki') {
-            if ($data = $this->fromTikiApi($finalUrl)) {
-                return $data;
-            }
+        // Phần lớn link người dùng dán là link sản phẩm đầy đủ (đã chứa id), nên có thể
+        // trích id ngay từ URL gốc và gọi song song luôn, không cần đợi giải redirect trước.
+        if ($platform === 'tiki' && preg_match('/-p(\d+)\.html/i', $url, $m)) {
+            $pool->as('meta_tiki')->withHeaders(['User-Agent' => self::UA])
+                ->connectTimeout(5)->timeout(8)
+                ->get("https://tiki.vn/api/v2/products/{$m[1]}");
         }
 
-        // Shopee chặn gọi API thẳng từ server (anti-bot) — dùng proxy bên thứ 3
         if ($platform === 'shopee') {
-            $ids = $this->urlValidator->extractShopeeIds($finalUrl);
-            if ($ids && $data = $this->shopeeLookup->getByItemId($ids['item_id'])) {
-                return $data;
+            $ids = $this->urlValidator->extractShopeeIds($url);
+            if ($ids) {
+                $pool->as('meta_shopee')->timeout(10)
+                    ->get(ShopeeProductLookupService::BASE_URL, ['item_id' => $ids['item_id']]);
             }
         }
 
-        if (! $response->successful()) {
+        return true;
+    }
+
+    /** Ghép kết quả từ pool ở trên thành metadata sản phẩm, cache lại 6 giờ như trước. */
+    public function resolveFromPool(array $responses, string $url, string $platform): ?array
+    {
+        $cacheKey = $this->cacheKey($url);
+
+        if (Cache::has($cacheKey)) {
+            return Cache::get($cacheKey);
+        }
+
+        $data = $this->parsePoolResponses($responses, $url, $platform);
+        Cache::put($cacheKey, $data, now()->addHours(6));
+
+        return $data;
+    }
+
+    private function cacheKey(string $url): string
+    {
+        return 'product_meta:'.md5($url);
+    }
+
+    private function parsePoolResponses(array $responses, string $url, string $platform): ?array
+    {
+        try {
+            if (isset($responses['meta_tiki'])
+                && $responses['meta_tiki'] instanceof Response
+                && $responses['meta_tiki']->successful()
+                && ($data = $this->parseTikiResponse($responses['meta_tiki']))) {
+                return $data;
+            }
+
+            if (isset($responses['meta_shopee'])
+                && ($data = $this->shopeeLookup->parseResponse($responses['meta_shopee']))) {
+                return $data;
+            }
+
+            $page = $responses['meta_page'] ?? null;
+
+            // Link rút gọn: id chỉ lộ ra sau khi trang đã redirect xong nên chưa gọi song
+            // song được ở trên — tra cứu thêm 1 lần ở đây (hiếm gặp, chấp nhận chậm hơn).
+            if ($page instanceof Response && $platform === 'shopee' && ! isset($responses['meta_shopee'])) {
+                $finalUrl = $page->effectiveUri() ? (string) $page->effectiveUri() : $url;
+                $ids = $this->urlValidator->extractShopeeIds($finalUrl);
+                if ($ids && $data = $this->shopeeLookup->getByItemId($ids['item_id'])) {
+                    return $data;
+                }
+            }
+
+            if ($page instanceof Response && $platform === 'tiki' && ! isset($responses['meta_tiki'])) {
+                $finalUrl = $page->effectiveUri() ? (string) $page->effectiveUri() : $url;
+                if ($data = $this->fromTikiApi($finalUrl)) {
+                    return $data;
+                }
+            }
+
+            if (! $page instanceof Response || ! $page->successful()) {
+                return null;
+            }
+
+            $html = $page->body();
+
+            return $this->fromJsonLd($html) ?? $this->fromOpenGraph($html);
+        } catch (\Throwable $e) {
+            Log::warning('ProductMetadata fetch failed: '.$e->getMessage());
+
             return null;
         }
-
-        $html = $response->body();
-
-        return $this->fromJsonLd($html) ?? $this->fromOpenGraph($html);
     }
 
     private function fromTikiApi(string $url): ?array
@@ -94,6 +145,11 @@ class ProductMetadataService
             return null;
         }
 
+        return $this->parseTikiResponse($resp);
+    }
+
+    private function parseTikiResponse(Response $resp): array
+    {
         $j = $resp->json();
 
         return $this->normalize(
