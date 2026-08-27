@@ -3,6 +3,7 @@
 use App\Http\Middleware\AdminMiddleware;
 use App\Http\Middleware\EnsureCustomerAuthEnabled;
 use App\Http\Middleware\HandleInertiaRequests;
+use App\Http\Middleware\MaintenanceMode;
 use App\Http\Middleware\SecurityHeaders;
 use App\Services\TrackingService;
 use Illuminate\Foundation\Application;
@@ -21,6 +22,7 @@ return Application::configure(basePath: dirname(__DIR__))
     ->withMiddleware(function (Middleware $middleware): void {
         $middleware->web(append: [
             HandleInertiaRequests::class,
+            MaintenanceMode::class,
         ]);
         $middleware->append(SecurityHeaders::class);
         $middleware->alias([
