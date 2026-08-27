@@ -10,8 +10,10 @@ const current = computed(() => page.url)
 const items = computed(() => [
     ...(auth.isAdmin ? [] : [
         { href: '/', icon: '⌂', label: 'Trang chủ' },
-        { href: '/history', icon: '📋', label: 'Lịch sử' },
-        ...(auth.isLoggedIn ? [{ href: '/profile', icon: '👤', label: 'Tài khoản' }] : []),
+        ...(auth.isLoggedIn ? [
+            { href: '/history', icon: '📋', label: 'Lịch sử' },
+            { href: '/profile', icon: '👤', label: 'Tài khoản' },
+        ] : []),
     ]),
 ])
 </script>
