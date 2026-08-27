@@ -92,6 +92,7 @@ Route::middleware('auth')->group(function () {
 Route::middleware(['auth', 'auth.admin'])->prefix('admin')->name('admin.')->group(function () {
     Route::get('/dashboard', [DashboardController::class, 'index'])->name('dashboard');
     Route::get('/activities', [ActivityController::class, 'index'])->name('activities');
+    Route::post('/activities/prune-bots', [ActivityController::class, 'pruneBots'])->name('activities.prune-bots');
     Route::get('/orders', [OrderController::class, 'index'])->name('orders');
     Route::patch('/orders/{commission}', [OrderController::class, 'update'])->name('orders.update');
     Route::get('/api-config', [ApiConfigController::class, 'index'])->name('api-config');

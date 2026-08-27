@@ -4,6 +4,8 @@ namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
 use App\Models\UserActivity;
+use App\Services\TrackingService;
+use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
 use Inertia\Response;
@@ -78,5 +80,34 @@ class ActivityController extends Controller
                     ->pluck('total', 'country'),
             ],
         ]);
+    }
+
+    /**
+     * Dọn các bản ghi ghi trước khi có bộ lọc bot (2026-08-27) — hoặc lọt lưới do UA
+     * mới chưa nằm trong danh sách crawler. Đọc từng dòng vì tiêu chí nhận diện bot
+     * áp lên user_agent chứ không map thẳng sang SQL WHERE được.
+     */
+    public function pruneBots(): RedirectResponse
+    {
+        $deleted = 0;
+
+        UserActivity::whereNull('user_agent')
+            ->orWhere('user_agent', '')
+            ->select('id')
+            ->chunkById(500, function ($rows) use (&$deleted) {
+                $deleted += UserActivity::whereIn('id', $rows->pluck('id'))->delete();
+            });
+
+        UserActivity::whereNotNull('user_agent')
+            ->where('user_agent', '!=', '')
+            ->select('id', 'user_agent')
+            ->chunkById(500, function ($rows) use (&$deleted) {
+                $botIds = $rows->filter(fn (UserActivity $a) => TrackingService::isBot($a->user_agent))->pluck('id');
+                if ($botIds->isNotEmpty()) {
+                    $deleted += UserActivity::whereIn('id', $botIds)->delete();
+                }
+            });
+
+        return back()->with('success', "Đã xoá {$deleted} log bot.");
     }
 }

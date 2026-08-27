@@ -1,12 +1,29 @@
 <script setup>
+import { ref } from 'vue'
 import { Head, router } from '@inertiajs/vue3'
 import AdminLayout from '@/Layouts/AdminLayout.vue'
+import { useToast } from '@/composables/useToast'
 
 const props = defineProps({
     activities: Object,
     filters: Object,
     summary: Object,
 })
+
+const toast = useToast()
+const pruning = ref(false)
+
+function pruneBots() {
+    if (!confirm('Xoá toàn bộ log của bot/crawler (Facebook, Google...) khỏi lịch sử? Không ảnh hưởng log của người dùng thật.')) return
+
+    pruning.value = true
+    router.post('/admin/activities/prune-bots', {}, {
+        preserveScroll: true,
+        onSuccess: () => toast.success('Đã dọn xong log bot.'),
+        onError: () => toast.error('Không dọn được, vui lòng thử lại.'),
+        onFinish: () => { pruning.value = false },
+    })
+}
 
 const eventLabels = {
     page_view: 'Xem trang',
@@ -72,13 +89,20 @@ function goPage(url) {
         </div>
 
         <!-- Filters -->
-        <div class="flex flex-wrap gap-2 mb-6">
-            <button @click="filter('event_type', '')" :class="!filters?.event_type ? 'bg-[var(--color-accent)] text-white' : 'bg-[var(--color-surface)] text-[var(--color-ink)] border border-[var(--color-line)] hover:border-[var(--color-accent)] hover:text-[var(--color-accent)]'"
-                class="px-4 py-2 rounded-xl text-sm font-semibold transition">Tất cả sự kiện</button>
-            <button v-for="(label, key) in eventLabels" :key="key" @click="filter('event_type', key)"
-                :class="filters?.event_type === key ? 'bg-[var(--color-accent)] text-white' : 'bg-[var(--color-surface)] text-[var(--color-ink)] border border-[var(--color-line)] hover:border-[var(--color-accent)] hover:text-[var(--color-accent)]'"
-                class="px-4 py-2 rounded-xl text-sm font-semibold transition">
-                {{ label }}
+        <div class="flex flex-wrap items-center justify-between gap-2 mb-6">
+            <div class="flex flex-wrap gap-2">
+                <button @click="filter('event_type', '')" :class="!filters?.event_type ? 'bg-[var(--color-accent)] text-white' : 'bg-[var(--color-surface)] text-[var(--color-ink)] border border-[var(--color-line)] hover:border-[var(--color-accent)] hover:text-[var(--color-accent)]'"
+                    class="px-4 py-2 rounded-xl text-sm font-semibold transition">Tất cả sự kiện</button>
+                <button v-for="(label, key) in eventLabels" :key="key" @click="filter('event_type', key)"
+                    :class="filters?.event_type === key ? 'bg-[var(--color-accent)] text-white' : 'bg-[var(--color-surface)] text-[var(--color-ink)] border border-[var(--color-line)] hover:border-[var(--color-accent)] hover:text-[var(--color-accent)]'"
+                    class="px-4 py-2 rounded-xl text-sm font-semibold transition">
+                    {{ label }}
+                </button>
+            </div>
+
+            <button @click="pruneBots" :disabled="pruning"
+                class="px-4 py-2 rounded-xl text-sm font-semibold bg-red-500/10 text-red-400 border border-red-500/30 hover:bg-red-500/20 transition disabled:opacity-60">
+                {{ pruning ? 'Đang dọn...' : '🤖 Xoá log bot' }}
             </button>
         </div>
 

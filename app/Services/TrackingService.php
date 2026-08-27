@@ -15,10 +15,17 @@ use Jenssegers\Agent\Agent;
  */
 class TrackingService
 {
-    public function log(string $eventType, Request $request, array $data = []): UserActivity
+    public function log(string $eventType, Request $request, array $data = []): ?UserActivity
     {
-        $agent = new Agent;
         $userAgent = (string) $request->userAgent();
+
+        // Bỏ qua bot/crawler (Facebook link-preview, Google, script không gửi UA...) —
+        // không ghi vào thống kê để admin theo dõi đúng hành vi người dùng thật.
+        if (self::isBot($userAgent)) {
+            return null;
+        }
+
+        $agent = new Agent;
         $agent->setUserAgent($userAgent);
 
         $activity = UserActivity::create([
@@ -43,6 +50,22 @@ class TrackingService
         }
 
         return $activity;
+    }
+
+    /**
+     * Dùng chung cho việc ghi log (bỏ qua bot) và dọn dữ liệu bot cũ trong bảng
+     * (Admin > Theo dõi > Xoá log bot) — cùng một tiêu chí nhận diện.
+     */
+    public static function isBot(?string $userAgent): bool
+    {
+        if (! $userAgent) {
+            return true;
+        }
+
+        $agent = new Agent;
+        $agent->setUserAgent($userAgent);
+
+        return $agent->isRobot();
     }
 
     private function resolveDeviceType(Agent $agent): string
