@@ -12,7 +12,7 @@ use Spatie\Permission\Traits\HasRoles;
 
 // 'role' cố tình không nằm trong danh sách này — chỉ được gán qua forceFill() ở nơi đáng
 // tin cậy (seeder), tránh khả năng leo quyền nếu sau này có code update($request->all()).
-#[Fillable(['name', 'email', 'password', 'phone', 'wallet_balance', 'otp', 'otp_expires_at'])]
+#[Fillable(['name', 'email', 'password', 'phone', 'google_id', 'wallet_balance', 'otp', 'otp_expires_at'])]
 #[Hidden(['password', 'remember_token', 'otp'])]
 class User extends Authenticatable
 {

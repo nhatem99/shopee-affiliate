@@ -35,6 +35,12 @@ return [
         ],
     ],
 
+    'google' => [
+        'client_id' => env('GOOGLE_CLIENT_ID'),
+        'client_secret' => env('GOOGLE_CLIENT_SECRET'),
+        'redirect' => env('GOOGLE_REDIRECT_URI'),
+    ],
+
     'zalo' => [
         'oa_token' => env('ZALO_OA_TOKEN'),
         // app_id/secret_key dùng để xác thực chữ ký webhook (X-ZEvent-Signature) —

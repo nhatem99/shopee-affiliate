@@ -8,6 +8,7 @@ use App\Http\Controllers\Admin\SettingsController;
 use App\Http\Controllers\Admin\VoucherController;
 use App\Http\Controllers\Admin\WithdrawalController as AdminWithdrawalController;
 use App\Http\Controllers\AffiliateController;
+use App\Http\Controllers\Auth\GoogleController;
 use App\Http\Controllers\Auth\LoginController;
 use App\Http\Controllers\Auth\OtpController;
 use App\Http\Controllers\Auth\RegisterController;
@@ -45,6 +46,8 @@ Route::middleware('guest')->group(function () {
         Route::post('/register', [RegisterController::class, 'store'])->middleware('throttle:register');
         Route::post('/auth/otp/send', [OtpController::class, 'send'])->middleware('throttle:otp-send')->name('otp.send');
         Route::post('/auth/otp/verify', [OtpController::class, 'verify'])->middleware('throttle:otp-verify')->name('otp.verify');
+        Route::get('/auth/google/redirect', [GoogleController::class, 'redirect'])->name('google.redirect');
+        Route::get('/auth/google/callback', [GoogleController::class, 'callback'])->name('google.callback');
     });
 });
 
