@@ -28,7 +28,9 @@ abstract class TestCase extends BaseTestCase
     protected function createAdmin(array $attributes = []): User
     {
         $this->setUpRoles();
-        $user = User::factory()->create(array_merge(['role' => 'admin'], $attributes));
+        $user = User::factory()->create($attributes);
+        // 'role' không nằm trong $fillable của User — gán trực tiếp qua forceFill.
+        $user->forceFill(['role' => 'admin'])->save();
         $user->assignRole('admin');
 
         return $user;

@@ -15,11 +15,13 @@ class AdminUserSeeder extends Seeder
             [
                 'name' => 'Admin',
                 'password' => Hash::make('Minhnhat1'),
-                'role' => 'admin',
                 'email_verified_at' => now(),
             ]
         );
 
+        // 'role' không nằm trong $fillable của User — gán trực tiếp ở đây, nơi duy nhất
+        // được phép tạo tài khoản admin.
+        $admin->forceFill(['role' => 'admin'])->save();
         $admin->assignRole('admin');
     }
 }

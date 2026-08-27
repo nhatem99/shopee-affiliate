@@ -5,6 +5,7 @@ namespace App\Services;
 use App\Jobs\ResolveActivityLocation;
 use App\Models\UserActivity;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Log;
 use Jenssegers\Agent\Agent;
 
 /**
@@ -50,6 +51,45 @@ class TrackingService
         if ($activity->ip_address) {
             ResolveActivityLocation::dispatch($activity->id, $activity->ip_address);
         }
+
+        return $activity;
+    }
+
+    /**
+     * Ghi lại sự kiện liên quan bảo mật (đăng nhập sai, OTP sai, bị chặn admin, bị rate-limit...)
+     * để admin theo dõi dấu hiệu tấn công trong /admin/activities. KHÔNG áp bộ lọc bot của
+     * log() — chính traffic không có User-Agent/giả UA mới là thứ cần thấy ở đây, lọc nó đi
+     * sẽ che mất chứng cứ của một cuộc tấn công tự động. Ghi thêm ra log file (kênh daily)
+     * để có thể grep nhanh khi điều tra mà không cần vào DB.
+     */
+    public function logSecurityEvent(string $eventType, Request $request, array $data = []): UserActivity
+    {
+        $userAgent = (string) $request->userAgent();
+        $agent = new Agent;
+        $agent->setUserAgent($userAgent);
+
+        $activity = UserActivity::create([
+            'user_id' => $request->user()?->id,
+            'session_id' => $request->hasSession() ? $request->session()->getId() : null,
+            'event_type' => $eventType,
+            'source' => $data['source'] ?? null,
+            'ip_address' => $request->ip(),
+            'user_agent' => $userAgent ?: null,
+            'device_type' => $userAgent ? $this->resolveDeviceType($agent) : null,
+            'browser' => $userAgent ? ($agent->browser() ?: null) : null,
+            'os_name' => $userAgent ? ($agent->platform() ?: null) : null,
+            'metadata' => $data['metadata'] ?? null,
+        ]);
+
+        if ($activity->ip_address) {
+            ResolveActivityLocation::dispatch($activity->id, $activity->ip_address);
+        }
+
+        Log::channel('daily')->warning("Security event: {$eventType}", [
+            'ip' => $request->ip(),
+            'path' => $request->path(),
+            'metadata' => $data['metadata'] ?? null,
+        ]);
 
         return $activity;
     }

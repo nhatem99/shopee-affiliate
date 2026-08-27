@@ -31,6 +31,19 @@ const eventLabels = {
     voucher_select: 'Chọn/lấy mã',
     voucher_copy: 'Copy mã',
     short_link_click: 'Click link rút gọn',
+    login_failed: '🔒 Đăng nhập sai',
+    login_success: '✅ Đăng nhập thành công',
+    otp_verify_failed: '🔒 OTP sai',
+    admin_access_denied: '🚫 Bị chặn vào Admin',
+    rate_limited: '⛔ Bị chặn (rate limit)',
+}
+
+const securityEventLabels = {
+    login_failed: 'Đăng nhập sai',
+    login_success: 'Đăng nhập thành công',
+    otp_verify_failed: 'OTP sai',
+    admin_access_denied: 'Bị chặn vào Admin',
+    rate_limited: 'Bị chặn (rate limit)',
 }
 
 const deviceLabels = {
@@ -66,6 +79,20 @@ function goPage(url) {
     <Head title="Admin — Theo dõi người dùng" />
     <AdminLayout>
         <template #title>Theo dõi hoạt động người dùng</template>
+
+        <!-- Sự kiện bảo mật (7 ngày gần nhất) -->
+        <div class="bg-red-500/5 rounded-2xl border border-red-500/30 p-4 mb-6">
+            <p class="text-xs font-semibold text-red-400 mb-2">🛡️ Sự kiện bảo mật (7 ngày gần nhất)</p>
+            <div class="flex flex-wrap gap-x-6 gap-y-1 text-sm">
+                <button
+                    v-for="(label, key) in securityEventLabels" :key="key"
+                    @click="filter('event_type', key)"
+                    class="text-[var(--color-ink)]/80 hover:text-[var(--color-accent)] transition"
+                >
+                    {{ label }}: <b>{{ summary?.security_events?.[key] ?? 0 }}</b>
+                </button>
+            </div>
+        </div>
 
         <!-- Summary cards (7 ngày gần nhất) -->
         <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4 mb-6">

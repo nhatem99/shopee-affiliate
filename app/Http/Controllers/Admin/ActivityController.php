@@ -94,6 +94,16 @@ class ActivityController extends Controller
                     ->orderByDesc('total')
                     ->limit(6)
                     ->pluck('total', 'traffic_source'),
+                // Đếm các dấu hiệu tấn công (brute-force login/OTP, cố vào admin trái phép,
+                // bị chặn bởi rate-limit) để admin thấy ngay khi vào trang theo dõi.
+                'security_events' => UserActivity::where('created_at', '>=', $recentWindow)
+                    ->whereIn('event_type', [
+                        'login_failed', 'login_success', 'otp_verify_failed',
+                        'admin_access_denied', 'rate_limited',
+                    ])
+                    ->selectRaw('event_type, COUNT(*) as total')
+                    ->groupBy('event_type')
+                    ->pluck('total', 'event_type'),
             ],
         ]);
     }

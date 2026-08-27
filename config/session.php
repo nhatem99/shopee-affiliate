@@ -169,7 +169,11 @@ return [
     |
     */
 
-    'secure' => env('SESSION_SECURE_COOKIE'),
+    // Production luôn ép Secure cookie (chỉ gửi qua HTTPS) kể cả khi quên set env;
+    // local vẫn chạy bình thường qua http vì mặc định false ở đó.
+    // Dùng thẳng env('APP_ENV') thay vì app()->environment() vì file config này được nạp
+    // quá sớm trong vòng đời bootstrap — binding 'env' của container chưa sẵn sàng.
+    'secure' => env('SESSION_SECURE_COOKIE', env('APP_ENV') === 'production'),
 
     /*
     |--------------------------------------------------------------------------

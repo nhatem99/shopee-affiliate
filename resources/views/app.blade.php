@@ -4,7 +4,7 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <meta name="csrf-token" content="{{ csrf_token() }}">
-    <script>
+    <script nonce="{{ request()->attributes->get('csp_nonce') }}">
         // Đặt theme trước khi render để tránh nhấp nháy (FOUC).
         // Mặc định là tối (giống salesoc.vn) trừ khi người dùng đã tự chọn "light".
         (function () {

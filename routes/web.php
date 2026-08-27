@@ -37,14 +37,14 @@ Route::middleware('guest')->group(function () {
     // /login KHÔNG bị tắt bởi Admin > Cài đặt — đây là lối vào duy nhất của admin,
     // tắt nó thì admin tự khoá luôn chính mình. Cài đặt chỉ ẩn link khỏi menu công khai.
     Route::get('/login', [LoginController::class, 'show'])->name('login');
-    Route::post('/login', [LoginController::class, 'store']);
+    Route::post('/login', [LoginController::class, 'store'])->middleware('throttle:login');
 
     // Đăng ký + OTP là lối tạo tài khoản KHÁCH mới — cái này tắt được.
     Route::middleware('customer.auth.enabled')->group(function () {
         Route::get('/register', [RegisterController::class, 'show'])->name('register');
-        Route::post('/register', [RegisterController::class, 'store']);
-        Route::post('/auth/otp/send', [OtpController::class, 'send'])->name('otp.send');
-        Route::post('/auth/otp/verify', [OtpController::class, 'verify'])->name('otp.verify');
+        Route::post('/register', [RegisterController::class, 'store'])->middleware('throttle:register');
+        Route::post('/auth/otp/send', [OtpController::class, 'send'])->middleware('throttle:otp-send')->name('otp.send');
+        Route::post('/auth/otp/verify', [OtpController::class, 'verify'])->middleware('throttle:otp-verify')->name('otp.verify');
     });
 });
 
@@ -85,7 +85,7 @@ Route::middleware('auth')->group(function () {
     Route::get('/profile', [ProfileController::class, 'show'])->name('profile');
     Route::patch('/profile', [ProfileController::class, 'updateProfile'])->name('profile.update');
     Route::post('/profile/payout', [ProfileController::class, 'storePayoutAccount'])->name('profile.payout');
-    Route::post('/withdrawals', [WithdrawalController::class, 'store'])->name('withdrawals.store');
+    Route::post('/withdrawals', [WithdrawalController::class, 'store'])->middleware('throttle:withdrawals')->name('withdrawals.store');
 });
 
 // Admin routes

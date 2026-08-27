@@ -10,7 +10,9 @@ use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
 use Spatie\Permission\Traits\HasRoles;
 
-#[Fillable(['name', 'email', 'password', 'phone', 'role', 'wallet_balance', 'otp', 'otp_expires_at'])]
+// 'role' cố tình không nằm trong danh sách này — chỉ được gán qua forceFill() ở nơi đáng
+// tin cậy (seeder), tránh khả năng leo quyền nếu sau này có code update($request->all()).
+#[Fillable(['name', 'email', 'password', 'phone', 'wallet_balance', 'otp', 'otp_expires_at'])]
 #[Hidden(['password', 'remember_token', 'otp'])]
 class User extends Authenticatable
 {
