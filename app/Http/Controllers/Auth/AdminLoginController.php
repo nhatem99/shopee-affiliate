@@ -11,13 +11,13 @@ use Illuminate\Validation\ValidationException;
 use Inertia\Inertia;
 use Inertia\Response;
 
-class LoginController extends Controller
+class AdminLoginController extends Controller
 {
     public function __construct(private TrackingService $tracking) {}
 
     public function show(): Response
     {
-        return Inertia::render('Auth/Login');
+        return Inertia::render('Auth/AdminLogin');
     }
 
     public function store(Request $request): RedirectResponse
@@ -28,7 +28,7 @@ class LoginController extends Controller
         ]);
 
         if (! Auth::attempt($credentials, $request->boolean('remember'))) {
-            $this->tracking->logSecurityEvent('login_failed', $request, [
+            $this->tracking->logSecurityEvent('admin_login_failed', $request, [
                 'metadata' => ['email' => $credentials['email']],
             ]);
 
@@ -37,28 +37,23 @@ class LoginController extends Controller
             ]);
         }
 
-        if (Auth::user()->isAdmin()) {
+        if (! Auth::user()->isAdmin()) {
+            $this->tracking->logSecurityEvent('admin_login_denied', $request, [
+                'metadata' => ['email' => $credentials['email']],
+            ]);
+
             Auth::logout();
             $request->session()->invalidate();
             $request->session()->regenerateToken();
 
             throw ValidationException::withMessages([
-                'email' => 'Tài khoản quản trị vui lòng đăng nhập tại /admin/login.',
+                'email' => 'Tài khoản này không có quyền quản trị.',
             ]);
         }
 
         $request->session()->regenerate();
         $this->tracking->logSecurityEvent('login_success', $request);
 
-        return redirect()->intended(route('home'));
-    }
-
-    public function destroy(Request $request): RedirectResponse
-    {
-        Auth::logout();
-        $request->session()->invalidate();
-        $request->session()->regenerateToken();
-
-        return redirect()->route('home');
+        return redirect()->intended(route('admin.dashboard'));
     }
 }

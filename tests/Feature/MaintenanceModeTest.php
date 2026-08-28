@@ -33,13 +33,22 @@ class MaintenanceModeTest extends TestCase
         $this->get('/blog')->assertStatus(503);
     }
 
-    public function test_login_page_stays_accessible_during_maintenance(): void
+    public function test_login_page_is_blocked_during_maintenance(): void
     {
         Setting::set('maintenance_mode', '1');
 
         $this->get('/login')
+            ->assertStatus(503)
+            ->assertInertia(fn ($page) => $page->component('Maintenance'));
+    }
+
+    public function test_admin_login_page_stays_accessible_during_maintenance(): void
+    {
+        Setting::set('maintenance_mode', '1');
+
+        $this->get('/admin/login')
             ->assertOk()
-            ->assertInertia(fn ($page) => $page->component('Auth/Login'));
+            ->assertInertia(fn ($page) => $page->component('Auth/AdminLogin'));
     }
 
     public function test_admin_dashboard_stays_accessible_during_maintenance(): void

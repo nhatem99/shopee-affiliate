@@ -8,6 +8,7 @@ use App\Http\Controllers\Admin\SettingsController;
 use App\Http\Controllers\Admin\VoucherController;
 use App\Http\Controllers\Admin\WithdrawalController as AdminWithdrawalController;
 use App\Http\Controllers\AffiliateController;
+use App\Http\Controllers\Auth\AdminLoginController;
 use App\Http\Controllers\Auth\GoogleController;
 use App\Http\Controllers\Auth\LoginController;
 use App\Http\Controllers\Auth\OtpController;
@@ -35,10 +36,15 @@ Route::get('/', function (Request $request, TrackingService $tracking) {
 
 // Auth (guests only)
 Route::middleware('guest')->group(function () {
-    // /login KHÔNG bị tắt bởi Admin > Cài đặt — đây là lối vào duy nhất của admin,
-    // tắt nó thì admin tự khoá luôn chính mình. Cài đặt chỉ ẩn link khỏi menu công khai.
+    // /login là lối vào cho KHÁCH; tài khoản admin bị chặn ở đây và phải dùng /admin/login riêng.
+    // Khi bật "Chế độ bảo trì", /login cũng bị chặn như mọi trang khác của khách.
     Route::get('/login', [LoginController::class, 'show'])->name('login');
     Route::post('/login', [LoginController::class, 'store'])->middleware('throttle:login');
+
+    // /admin/login là lối vào riêng, duy nhất của admin — tách khỏi /login của khách để
+    // admin luôn tự vào được (kể cả khi bật "Chế độ bảo trì") và không lộ ra menu công khai.
+    Route::get('/admin/login', [AdminLoginController::class, 'show'])->name('admin.login');
+    Route::post('/admin/login', [AdminLoginController::class, 'store'])->middleware('throttle:login')->name('admin.login.store');
 
     // Đăng ký + OTP là lối tạo tài khoản KHÁCH mới — cái này tắt được.
     Route::middleware('customer.auth.enabled')->group(function () {

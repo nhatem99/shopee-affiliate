@@ -51,6 +51,49 @@ class AuthTest extends TestCase
         $this->post('/login', [])->assertSessionHasErrors(['email', 'password']);
     }
 
+    public function test_admin_cannot_login_via_customer_login_page(): void
+    {
+        $admin = $this->createAdmin(['password' => 'password123']);
+
+        $this->post('/login', [
+            'email' => $admin->email,
+            'password' => 'password123',
+        ])->assertSessionHasErrors('email');
+
+        $this->assertGuest();
+    }
+
+    // ── Admin login ──────────────────────────────────────────────────────────
+
+    public function test_admin_login_page_is_accessible_to_guests(): void
+    {
+        $this->get('/admin/login')->assertOk();
+    }
+
+    public function test_admin_can_login_via_admin_login_page(): void
+    {
+        $admin = $this->createAdmin(['password' => 'password123']);
+
+        $this->post('/admin/login', [
+            'email' => $admin->email,
+            'password' => 'password123',
+        ])->assertRedirect(route('admin.dashboard'));
+
+        $this->assertAuthenticatedAs($admin);
+    }
+
+    public function test_regular_user_cannot_login_via_admin_login_page(): void
+    {
+        $user = $this->createUser(['password' => 'password123']);
+
+        $this->post('/admin/login', [
+            'email' => $user->email,
+            'password' => 'password123',
+        ])->assertSessionHasErrors('email');
+
+        $this->assertGuest();
+    }
+
     // ── Register ─────────────────────────────────────────────────────────────
 
     public function test_register_page_is_accessible_to_guests(): void

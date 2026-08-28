@@ -11,8 +11,9 @@ use Symfony\Component\HttpFoundation\Response;
 class MaintenanceMode
 {
     /**
-     * Chặn toàn bộ trang cho khách khi admin bật "Chế độ bảo trì" — /login và khu vực
-     * admin vẫn mở để admin luôn tự tắt lại được, không bị khoá luôn chính mình.
+     * Chặn toàn bộ trang cho khách khi admin bật "Chế độ bảo trì" — kể cả /login của khách.
+     * Chỉ /admin/login và khu vực admin (admin.*) vẫn mở để admin luôn tự vào tắt lại được,
+     * không bị khoá luôn chính mình. /logout cũng mở để ai đang đăng nhập vẫn thoát ra được.
      *
      * @param  Closure(Request): (Response)  $next
      */
@@ -22,7 +23,7 @@ class MaintenanceMode
             return $next($request);
         }
 
-        if ($request->routeIs('login', 'logout', 'admin.*')) {
+        if ($request->routeIs('logout', 'admin.*')) {
             return $next($request);
         }
 
