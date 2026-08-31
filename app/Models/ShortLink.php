@@ -11,6 +11,7 @@ class ShortLink extends Model
         'target_url',
         'source',
         'product_name',
+        'product_image',
         'clicks',
     ];
 

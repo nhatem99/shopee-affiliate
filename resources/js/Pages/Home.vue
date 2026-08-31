@@ -136,6 +136,7 @@ async function openVoucherLink(entry, productName = null) {
             url: entry.url,
             source: entry.source,
             product_name: productName ?? props.voucherResult?.product?.product_name ?? null,
+            product_image: props.voucherResult?.product?.product_image ?? null,
             voucher_label: entry.label ?? null,
         })
         if (newTab) {
@@ -165,6 +166,7 @@ async function copyVoucherLink(entry) {
             url: entry.url,
             source: entry.source,
             product_name: props.voucherResult?.product?.product_name ?? null,
+            product_image: props.voucherResult?.product?.product_image ?? null,
             voucher_label: entry.label ?? null,
         })
         await navigator.clipboard.writeText(data.short_url)

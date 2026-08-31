@@ -10,6 +10,7 @@ use App\Services\UrlValidationService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Http\Response;
 use Illuminate\Support\Facades\Log;
 
 class ShortLinkController extends Controller
@@ -27,6 +28,7 @@ class ShortLinkController extends Controller
             'url' => ['required', 'url', 'max:2000'],
             'source' => ['nullable', 'string', 'in:facebook,instagram,zalo,youtube'],
             'product_name' => ['nullable', 'string', 'max:255'],
+            'product_image' => ['nullable', 'url', 'max:2000'],
             'voucher_label' => ['nullable', 'string', 'max:100'],
         ]);
 
@@ -48,6 +50,7 @@ class ShortLinkController extends Controller
             $targetUrl,
             $validated['source'] ?? null,
             $validated['product_name'] ?? null,
+            $validated['product_image'] ?? null,
         );
 
         Log::info('ShortLinkController: đã tạo short-link', [
@@ -68,19 +71,31 @@ class ShortLinkController extends Controller
         ]);
     }
 
-    public function redirect(Request $request, string $code): RedirectResponse
+    public function redirect(Request $request, string $code): RedirectResponse|Response
     {
-        $targetUrl = $this->shortLinks->resolveAndTrack($code);
+        $link = $this->shortLinks->find($code);
 
-        abort_if($targetUrl === null, 404);
+        abort_if($link === null, 404);
+
+        // Facebook/Zalo/Telegram... không hiển thị preview bằng link mình gửi — bot của họ tự
+        // ghé thăm target_url (Shopee), đọc thẻ og:url CANONICAL (không có mmp_pid/mã giảm giá)
+        // của Shopee rồi lấy chính URL đó thay cho link gốc khi hiển thị/redirect cho người dùng
+        // cuối, khiến affiliate ID + mã giảm giá bị "bóc" mất trước khi người dùng kịp bấm.
+        // => Với bot: trả HTML có og:url tự trỏ về chính /go/{code} (không đi theo target_url)
+        // để bot không "thấy" được URL sạch của Shopee. Với người dùng thật: 302 như cũ.
+        if (TrackingService::isBot($request->userAgent())) {
+            return response()->view('short-link-preview', ['link' => $link]);
+        }
+
+        $this->shortLinks->trackClick($link);
 
         Log::info('ShortLinkController: redirect thật khi bấm link', [
             'code' => $code,
-            'target_url' => $targetUrl,
+            'target_url' => $link->target_url,
         ]);
 
-        $this->tracking->log('short_link_click', $request, ['url' => $targetUrl]);
+        $this->tracking->log('short_link_click', $request, ['url' => $link->target_url]);
 
-        return redirect()->away($targetUrl, 302);
+        return redirect()->away($link->target_url, 302);
     }
 }

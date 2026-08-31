@@ -7,7 +7,7 @@ use Illuminate\Support\Str;
 
 class ShortLinkService
 {
-    public function create(string $targetUrl, ?string $source = null, ?string $productName = null): ShortLink
+    public function create(string $targetUrl, ?string $source = null, ?string $productName = null, ?string $productImage = null): ShortLink
     {
         do {
             $code = Str::random(7);
@@ -18,19 +18,17 @@ class ShortLinkService
             'target_url' => $targetUrl,
             'source' => $source,
             'product_name' => $productName,
+            'product_image' => $productImage,
         ]);
     }
 
-    public function resolveAndTrack(string $code): ?string
+    public function find(string $code): ?ShortLink
     {
-        $link = ShortLink::where('code', $code)->first();
+        return ShortLink::where('code', $code)->first();
+    }
 
-        if (! $link) {
-            return null;
-        }
-
+    public function trackClick(ShortLink $link): void
+    {
         $link->increment('clicks');
-
-        return $link->target_url;
     }
 }
