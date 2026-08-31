@@ -152,6 +152,30 @@ async function openVoucherLink(entry, productName = null) {
     }
 }
 
+const copyingKey = ref(null)
+
+// Lấy short-link /go/{code} (cùng link được dùng khi bấm mở) rồi copy vào clipboard —
+// để người dùng dán thẳng lên Facebook/Zalo mà không cần tự mở link ra rồi copy từ URL bar.
+async function copyVoucherLink(entry) {
+    if (!entry?.url || copyingKey.value) return
+
+    copyingKey.value = entry.key
+    try {
+        const { data } = await axios.post('/voucher/shorten', {
+            url: entry.url,
+            source: entry.source,
+            product_name: props.voucherResult?.product?.product_name ?? null,
+            voucher_label: entry.label ?? null,
+        })
+        await navigator.clipboard.writeText(data.short_url)
+        toast.success('Đã sao chép link!')
+    } catch (e) {
+        toast.error('Không thể sao chép link, vui lòng thử lại.')
+    } finally {
+        copyingKey.value = null
+    }
+}
+
 function vnd(n) {
     return '₫' + Number(n || 0).toLocaleString('vi-VN')
 }
@@ -259,18 +283,29 @@ const openFaq = ref(null)
                                 v-if="i === 0"
                                 class="absolute -top-2.5 left-3 z-10 bg-[#facc15] text-[#1c0a00] text-[10px] font-extrabold px-2.5 py-0.5 rounded-full shadow-md"
                             >Đề xuất</span>
-                            <button
-                                @click="openVoucherLink(entry)"
-                                :disabled="shorteningKey === entry.key"
-                                class="w-full font-semibold px-4 py-3 rounded-xl transition-all text-sm flex items-center justify-between gap-2 disabled:opacity-60"
-                                :class="[SOURCE_STYLES[entry.source] || 'bg-[var(--color-peach-soft)] hover:bg-[var(--color-peach)] text-[var(--color-ink)]', i === 0 && 'animate-pulse-ring']"
-                            >
-                                <span class="flex items-center gap-2 min-w-0">
-                                    <span v-html="SOURCE_ICON_SVG[entry.source] || SOURCE_ICON_SVG.default" class="flex-none [&>svg]:w-4 [&>svg]:h-4"></span>
-                                    <span class="truncate">{{ shorteningKey === entry.key ? 'Đang chuyển hướng...' : entry.label }}</span>
-                                </span>
-                                <span class="flex-none">→</span>
-                            </button>
+                            <div class="flex items-stretch gap-1.5">
+                                <button
+                                    @click="openVoucherLink(entry)"
+                                    :disabled="shorteningKey === entry.key"
+                                    class="flex-1 min-w-0 font-semibold px-4 py-3 rounded-xl transition-all text-sm flex items-center justify-between gap-2 disabled:opacity-60"
+                                    :class="[SOURCE_STYLES[entry.source] || 'bg-[var(--color-peach-soft)] hover:bg-[var(--color-peach)] text-[var(--color-ink)]', i === 0 && 'animate-pulse-ring']"
+                                >
+                                    <span class="flex items-center gap-2 min-w-0">
+                                        <span v-html="SOURCE_ICON_SVG[entry.source] || SOURCE_ICON_SVG.default" class="flex-none [&>svg]:w-4 [&>svg]:h-4"></span>
+                                        <span class="truncate">{{ shorteningKey === entry.key ? 'Đang chuyển hướng...' : entry.label }}</span>
+                                    </span>
+                                    <span class="flex-none">→</span>
+                                </button>
+                                <button
+                                    @click="copyVoucherLink(entry)"
+                                    :disabled="copyingKey === entry.key"
+                                    title="Sao chép link để dán lên Facebook/Zalo"
+                                    class="flex-none w-11 rounded-xl flex items-center justify-center transition-all bg-[var(--color-peach-soft)] hover:bg-[var(--color-peach)] text-[var(--color-ink)] disabled:opacity-60"
+                                >
+                                    <svg v-if="copyingKey !== entry.key" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="w-4 h-4"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+                                    <svg v-else viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="w-4 h-4 animate-spin"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg>
+                                </button>
+                            </div>
                         </div>
                     </div>
                     <p v-else class="text-sm text-[var(--color-muted)] mb-4">Chưa lấy được link voucher cho sản phẩm này — có thể do lỗi kết nối tạm thời, thử dán lại link nhé.</p>
