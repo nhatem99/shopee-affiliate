@@ -273,7 +273,7 @@ const openFaq = ref(null)
                             </button>
                         </div>
                     </div>
-                    <p v-else class="text-sm text-[var(--color-muted)] mb-4">Không tìm thấy link voucher cho sản phẩm này.</p>
+                    <p v-else class="text-sm text-[var(--color-muted)] mb-4">Chưa lấy được link voucher cho sản phẩm này — có thể do lỗi kết nối tạm thời, thử dán lại link nhé.</p>
 
                     <div class="flex items-start gap-2 bg-[var(--color-peach-soft)] border border-[var(--color-accent)]/25 rounded-xl px-3 py-2.5">
                         <span class="text-sm leading-none">⚠️</span>

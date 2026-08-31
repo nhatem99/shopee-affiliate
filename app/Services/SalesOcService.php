@@ -24,6 +24,10 @@ class SalesOcService
     // Giả lập request từ mobile — salesoc.vn trả về dữ liệu ổn định hơn khi gọi từ UA mobile.
     private const MOBILE_USER_AGENT = 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_5 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.5 Mobile/15E148 Safari/604.1';
 
+    // salesoc.vn kiểm tra Origin/Referer phía server và trả 403 ORIGIN_NOT_ALLOWED nếu request
+    // không tự nhận là đến từ chính salesoc.vn — cần set 2 header này để API cho qua.
+    private const SPOOFED_ORIGIN = 'https://salesoc.vn';
+
     public function fetchProductAndVoucherLabels(string $shopeeUrl): ?array
     {
         // Cache ngắn hạn — cùng 1 link được dán lại (test, hoặc nhiều người cùng xem 1 sản
@@ -42,7 +46,9 @@ class SalesOcService
                 'Accept' => 'application/json',
                 'Content-Type' => 'application/json',
                 'User-Agent' => self::MOBILE_USER_AGENT,
-            ])->timeout(10)->post(self::ENDPOINT, [
+                'Origin' => self::SPOOFED_ORIGIN,
+                'Referer' => self::SPOOFED_ORIGIN.'/',
+            ])->timeout(10)->retry(2, 300)->post(self::ENDPOINT, [
                 'url' => $shopeeUrl,
             ]);
 
