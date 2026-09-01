@@ -1,0 +1,27 @@
+name: Diagnose
+
+on:
+  workflow_dispatch:
+
+jobs:
+  diagnose:
+    name: Check server state
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: SSH and inspect
+        uses: appleboy/ssh-action@v1.2.0
+        with:
+          host: ${{ secrets.VPS_HOST }}
+          username: ${{ secrets.VPS_USER }}
+          key: ${{ secrets.VPS_SSH_KEY }}
+          script: |
+            cd /var/www/tietkiemvi.com
+            echo "--- git commit ---"
+            git log -1 --format="%H %s"
+            echo "--- SalesOcService.php on disk (spoof header present?) ---"
+            grep -n "SPOOFED_ORIGIN\|Origin.*salesoc" app/Services/SalesOcService.php || echo "NOT FOUND"
+            echo "--- recent salesoc log lines ---"
+            tail -n 200 storage/logs/laravel.log | grep -i "salesoc\|ORIGIN_NOT_ALLOWED" || echo "no matching log lines"
+            echo "--- php-fpm status ---"
+            systemctl is-active php8.4-fpm
