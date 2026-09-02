@@ -42,3 +42,7 @@ jobs:
               --max-time 15
             echo "--- server IP cua chinh no (de doi chieu co bi salesoc chan theo IP khong) ---"
             curl -s https://api.ipify.org --max-time 10
+            echo
+            echo "--- nginx config: cach xu ly X-Forwarded-For (append hay overwrite?) ---"
+            grep -rn "X-Forwarded-For" /etc/nginx/sites-enabled/ 2>/dev/null || echo "khong tim thay trong sites-enabled"
+            grep -rn "X-Forwarded-For" /etc/nginx/nginx.conf /etc/nginx/conf.d/ 2>/dev/null || echo "khong tim thay trong nginx.conf/conf.d"

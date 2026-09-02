@@ -29,9 +29,10 @@ return Application::configure(basePath: dirname(__DIR__))
             'auth.admin' => AdminMiddleware::class,
             'customer.auth.enabled' => EnsureCustomerAuthEnabled::class,
         ]);
-        // Nginx/Apache đứng trước app trên VPS — tin cậy proxy nội bộ để lấy đúng
-        // IP thật của khách (quan trọng cho rate limiting và tracking theo IP).
-        $middleware->trustProxies(at: '*', headers: Request::HEADER_X_FORWARDED_FOR
+        // Chỉ tin cậy Nginx chạy trên CHÍNH VPS này (proxy tới php-fpm qua localhost) —
+        // trước đây dùng at: '*' (tin mọi nguồn) khiến bất kỳ ai cũng tự đặt được header
+        // X-Forwarded-For để giả IP (ảnh hưởng rate limiting + tracking theo IP sai lệch).
+        $middleware->trustProxies(at: ['127.0.0.1', '::1'], headers: Request::HEADER_X_FORWARDED_FOR
             | Request::HEADER_X_FORWARDED_HOST
             | Request::HEADER_X_FORWARDED_PORT
             | Request::HEADER_X_FORWARDED_PROTO);
