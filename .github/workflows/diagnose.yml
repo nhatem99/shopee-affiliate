@@ -43,6 +43,7 @@ jobs:
             echo "--- server IP cua chinh no (de doi chieu co bi salesoc chan theo IP khong) ---"
             curl -s https://api.ipify.org --max-time 10
             echo
-            echo "--- nginx config: cach xu ly X-Forwarded-For (append hay overwrite?) ---"
-            grep -rn "X-Forwarded-For" /etc/nginx/sites-enabled/ 2>/dev/null || echo "khong tim thay trong sites-enabled"
-            grep -rn "X-Forwarded-For" /etc/nginx/nginx.conf /etc/nginx/conf.d/ 2>/dev/null || echo "khong tim thay trong nginx.conf/conf.d"
+            echo "--- nginx: co dong ghi de HTTP_X_FORWARDED_FOR cho fastcgi khong? ---"
+            grep -rniE "X-Forwarded-For|X_FORWARDED_FOR|fastcgi_param|proxy_set_header" /etc/nginx/sites-enabled/ 2>/dev/null || echo "khong tim thay trong sites-enabled"
+            echo "--- toan bo server block cua tietkiemvi.com de doi chieu ---"
+            find /etc/nginx/sites-enabled/ -iname "*tietkiem*" -exec cat {} \; 2>/dev/null || echo "khong tim thay file config rieng"
