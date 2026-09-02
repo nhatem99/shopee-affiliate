@@ -25,3 +25,12 @@ jobs:
             tail -n 200 storage/logs/laravel.log | grep -i "salesoc\|ORIGIN_NOT_ALLOWED" || echo "no matching log lines"
             echo "--- php-fpm status ---"
             systemctl is-active php8.4-fpm
+            echo "--- live curl tu chinh server nay toi salesoc.vn (co gia Origin/Referer) ---"
+            curl -s -w "\nHTTP_CODE:%{http_code}\n" -X POST "https://salesoc.vn/api/convert-with-shelf" \
+              -H "Accept: application/json" -H "Content-Type: application/json" \
+              -H "Origin: https://salesoc.vn" -H "Referer: https://salesoc.vn/" \
+              -H "User-Agent: Mozilla/5.0 (iPhone; CPU iPhone OS 17_5 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.5 Mobile/15E148 Safari/604.1" \
+              -d '{"url":"https://shopee.vn/-CLUBLU-M%C3%A1y-%E1%BA%A2nh-Mini-K%E1%BB%B9-Thu%E1%BA%ADt-S%E1%BB%91-Digital-Camera-HD-Ho%E1%BA%A1t-H%C3%ACnh-D%E1%BB%85-Th%C6%B0%C6%A1ng-C%C3%B3-Th%E1%BB%83-Ph%C3%B9-H%E1%BB%A3p-V%E1%BB%9Bi-Tr%E1%BA%BB-Em-i.1096140180.22987662374"}' \
+              --max-time 15
+            echo "--- server IP cua chinh no (de doi chieu co bi salesoc chan theo IP khong) ---"
+            curl -s https://api.ipify.org --max-time 10
