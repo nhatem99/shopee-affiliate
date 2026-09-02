@@ -11,6 +11,7 @@ import { useToast } from '@/composables/useToast'
 const props = defineProps({
     vouchers: { type: Array, default: () => [] },
     voucherResult: { type: Object, default: null },
+    canUseVoucherTool: { type: Boolean, default: true },
 })
 
 const toast = useToast()
@@ -215,7 +216,7 @@ const openFaq = ref(null)
         <!-- Công cụ chính: hiện ngay khi vào trang, không cần mô tả dài trước đó -->
         <section id="voucher-tool" class="px-4 pt-6 pb-4">
             <div class="max-w-3xl mx-auto">
-                <div class="rounded-3xl p-6 md:p-8 bg-gradient-to-br from-[var(--color-peach)] via-[var(--color-peach-soft)] to-[var(--color-green-soft)] border border-[var(--color-line)]">
+                <div v-if="canUseVoucherTool" class="rounded-3xl p-6 md:p-8 bg-gradient-to-br from-[var(--color-peach)] via-[var(--color-peach-soft)] to-[var(--color-green-soft)] border border-[var(--color-line)]">
                     <h1 class="text-xl md:text-2xl font-extrabold text-[var(--color-ink)] mb-1">
                         Dán link sản phẩm Shopee để lấy mã giảm giá
                     </h1>
@@ -254,8 +255,15 @@ const openFaq = ref(null)
                     <p v-if="voucherError" class="text-red-500 text-sm mt-2">{{ voucherError }}</p>
                 </div>
 
+                <!-- Máy tính (không phải admin): ẩn khung tìm mã, chỉ hiện thông báo dùng điện thoại -->
+                <div v-else class="rounded-3xl p-6 md:p-8 bg-gradient-to-br from-[var(--color-peach)] via-[var(--color-peach-soft)] to-[var(--color-green-soft)] border border-[var(--color-line)] text-center">
+                    <p class="text-2xl mb-2">📱</p>
+                    <p class="font-semibold text-[var(--color-ink)]">Chức năng lấy mã chỉ dùng được trên điện thoại.</p>
+                    <p class="text-sm text-[var(--color-muted)] mt-1">Vui lòng mở tietkiemvi.com bằng trình duyệt trên điện thoại.</p>
+                </div>
+
                 <!-- Kết quả -->
-                <div v-if="voucherResult" ref="voucherResultEl" class="mt-4 card-glass rounded-2xl p-5 scroll-mt-24">
+                <div v-if="canUseVoucherTool && voucherResult" ref="voucherResultEl" class="mt-4 card-glass rounded-2xl p-5 scroll-mt-24">
                     <div v-if="voucherResult.product" class="flex gap-4 items-start mb-5">
                         <div class="w-16 h-16 rounded-xl bg-[var(--color-peach-soft)] flex-none overflow-hidden">
                             <img v-if="voucherResult.product.product_image" :src="voucherResult.product.product_image" :alt="voucherResult.product.product_name" class="w-full h-full object-cover" />

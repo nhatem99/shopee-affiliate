@@ -31,6 +31,9 @@ Route::get('/', function (Request $request, TrackingService $tracking) {
 
     return Inertia::render('Home', [
         'vouchers' => PlatformVoucher::suggestedList(),
+        // Công cụ lấy mã chỉ dùng được trên điện thoại — admin luôn xem/test được từ máy tính.
+        'canUseVoucherTool' => TrackingService::isMobile($request->userAgent())
+            || ($request->user()?->isAdmin() ?? false),
     ]);
 })->name('home');
 

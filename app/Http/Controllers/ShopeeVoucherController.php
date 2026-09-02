@@ -24,6 +24,15 @@ class ShopeeVoucherController extends Controller
 
     public function resolve(Request $request): Response|RedirectResponse
     {
+        // Công cụ chỉ dành cho khách trên điện thoại (bấm link Facebook/Zalo) — admin luôn qua
+        // được để test từ máy tính. Chặn ở đây để không ai gọi thẳng endpoint này bỏ qua giao
+        // diện (ẩn khung tìm mã ở Home.vue chỉ là UI, không phải bảo mật thật).
+        if (! TrackingService::isMobile($request->userAgent()) && ! ($request->user()?->isAdmin() ?? false)) {
+            return back()->withErrors([
+                'voucher_url' => 'Chức năng lấy mã chỉ dùng được trên điện thoại. Vui lòng mở tietkiemvi.com bằng trình duyệt trên điện thoại.',
+            ]);
+        }
+
         $request->validate([
             'url' => ['required', 'url', 'max:2000'],
         ]);

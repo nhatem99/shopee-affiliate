@@ -111,6 +111,23 @@ class TrackingService
     }
 
     /**
+     * Công cụ lấy mã chỉ dành cho khách dùng điện thoại (bấm link Facebook/Zalo trên di động) —
+     * dùng chung tiêu chí này để vừa ẩn/hiện giao diện, vừa chặn ở backend (admin luôn được qua,
+     * xem ShopeeVoucherController::resolve).
+     */
+    public static function isMobile(?string $userAgent): bool
+    {
+        if (! $userAgent) {
+            return false;
+        }
+
+        $agent = new Agent;
+        $agent->setUserAgent($userAgent);
+
+        return $agent->isMobile() || $agent->isTablet();
+    }
+
+    /**
      * Suy ra khách vào web từ đâu (Facebook, Zalo, Google tìm kiếm, gõ thẳng link...) dựa
      * trên header Referer + tham số utm_* trên URL. Chỉ có ý nghĩa với event 'page_view' —
      * các hành động sau đó (AJAX trong trang) referer sẽ trỏ về chính domain mình nên bị
