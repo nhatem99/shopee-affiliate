@@ -83,7 +83,7 @@ class SalesOcService
                 // (không chỉ mã % cao nhất) để người dùng thử link khác nếu link đầu đã hết lượt.
                 'voucher_links' => [
                     'facebook' => $this->extractOptions($data, 'facebookAffiliateUrls'),
-                    'instagram' => $this->extractOptions($data, 'instagramAffiliateUrls'),
+                    'instagram' => $this->extractInstagramOption($data),
                     'zalo' => $this->extractOptions($data, 'zaloAffiliateUrls'),
                     'youtube' => $this->extractYoutubeOption($data),
                 ],
@@ -114,6 +114,23 @@ class SalesOcService
         }
 
         return $options;
+    }
+
+    /**
+     * Khác Facebook, entry Instagram của salesoc.vn không bao giờ có `label` (luôn
+     * là chuỗi rỗng) dù link vẫn dùng được — trang salesoc.vn tự hiện nút "Mã IG"
+     * bất kể label rỗng. Vì vậy không thể dùng extractOptions() (loại bỏ label rỗng)
+     * cho Instagram, phải hard-code label như cách làm với YouTube bên dưới.
+     */
+    private function extractInstagramOption(array $data): array
+    {
+        foreach ($data['instagramAffiliateUrls'] ?? [] as $entry) {
+            if ($url = $entry['url'] ?? null) {
+                return [['label' => 'Mã IG', 'url' => $url]];
+            }
+        }
+
+        return [];
     }
 
     /**
