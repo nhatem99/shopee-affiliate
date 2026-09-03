@@ -106,32 +106,10 @@ class ShortLinkController extends Controller
 
         $this->tracking->log('short_link_click', $request, ['url' => $link->target_url]);
 
-        $destination = TrackingService::isAndroid($request->userAgent())
-            ? $this->toAndroidAppIntent($link->target_url)
-            : $link->target_url;
-
-        return redirect()->away($destination, 302);
-    }
-
-    /**
-     * Bọc URL đích bằng cú pháp intent:// của Chrome/Android để ép mở thẳng app Shopee (nếu đã
-     * cài) thay vì mở trang web — hoạt động cả khi bấm từ trong webview app Facebook/Zalo. Chỉ
-     * áp dụng khi đích cuối cùng thật sự là shopee.vn (sau khi AffiliateLinkRewriterService đã
-     * theo dõi hết chuỗi redirect salesoc.vn/s.afp.ad); nếu không, giữ nguyên URL gốc.
-     * S.browser_fallback_url đảm bảo Chrome quay lại đúng URL web này nếu máy chưa cài app.
-     */
-    private function toAndroidAppIntent(string $url): string
-    {
-        $parts = parse_url($url);
-        $host = strtolower($parts['host'] ?? '');
-
-        if ($host !== 'shopee.vn' && ! str_ends_with($host, '.shopee.vn')) {
-            return $url;
-        }
-
-        $path = ($parts['path'] ?? '/').(isset($parts['query']) ? '?'.$parts['query'] : '');
-
-        return 'intent://'.$host.$path
-            .'#Intent;scheme=https;package=com.shopee.vn;S.browser_fallback_url='.urlencode($url).';end';
+        // Đã tắt tạm bọc intent:// (mở thẳng app Shopee trên Android) — gây lỗi 502 thật trên
+        // production ngay sau khi bấm link. Nguyên nhân đang được điều tra (nghi do hạ tầng
+        // proxy/CDN phía trước xử lý Location header khác với local); quay lại redirect thẳng
+        // như trước cho tới khi tìm ra và kiểm chứng được cách làm đúng.
+        return redirect()->away($link->target_url, 302);
     }
 }
