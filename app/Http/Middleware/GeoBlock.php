@@ -3,6 +3,7 @@
 namespace App\Http\Middleware;
 
 use App\Services\GeoIpService;
+use App\Services\TrackingService;
 use Closure;
 use Illuminate\Http\Request;
 use Symfony\Component\HttpFoundation\Response;
@@ -24,6 +25,14 @@ class GeoBlock
         // nên GeoIpService trả null — coi như không xác định được thì KHÔNG chặn (fail-open),
         // tránh chặn nhầm hàng loạt nếu ip-api.com bị lỗi/hết quota.
         if ($request->routeIs('admin.login', 'admin.login.store')) {
+            return $next($request);
+        }
+
+        // Bot xem trước link (Facebook, Zalo, Google...) chạy từ server đặt ở nước ngoài —
+        // chặn theo quốc gia sẽ làm hỏng preview khi khách dán link /go/{code} lên Facebook
+        // (bot của FB bị 403 "Forbidden" dù chính khách đang ở VN/JP). Bot không phải khách
+        // truy cập thật nên không cần áp luật chặn quốc gia cho nó.
+        if (TrackingService::isBot($request->userAgent())) {
             return $next($request);
         }
 
