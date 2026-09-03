@@ -6,6 +6,7 @@ use App\Http\Controllers\Admin\BlockedIpController;
 use App\Http\Controllers\Admin\DashboardController;
 use App\Http\Controllers\Admin\OrderController;
 use App\Http\Controllers\Admin\SettingsController;
+use App\Http\Controllers\Admin\VoucherButtonConfigController;
 use App\Http\Controllers\Admin\VoucherController;
 use App\Http\Controllers\Admin\WithdrawalController as AdminWithdrawalController;
 use App\Http\Controllers\AffiliateController;
@@ -21,6 +22,7 @@ use App\Http\Controllers\ShortLinkController;
 use App\Http\Controllers\TrackingController;
 use App\Http\Controllers\WithdrawalController;
 use App\Models\PlatformVoucher;
+use App\Models\VoucherButtonConfig;
 use App\Services\TrackingService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
@@ -35,6 +37,8 @@ Route::get('/', function (Request $request, TrackingService $tracking) {
         // Công cụ lấy mã chỉ dùng được trên điện thoại — admin luôn xem/test được từ máy tính.
         'canUseVoucherTool' => TrackingService::isMobile($request->userAgent())
             || ($request->user()?->isAdmin() ?? false),
+        // Admin-editable display config: sort order, label override, featured source.
+        'voucherButtonConfig' => VoucherButtonConfig::orderBy('sort_order')->get(['source', 'label', 'sort_order', 'is_featured']),
     ]);
 })->name('home');
 
@@ -122,4 +126,6 @@ Route::middleware(['auth', 'auth.admin'])->prefix('admin')->name('admin.')->grou
     Route::get('/blocked-ips', [BlockedIpController::class, 'index'])->name('blocked-ips');
     Route::post('/blocked-ips', [BlockedIpController::class, 'store'])->name('blocked-ips.store');
     Route::delete('/blocked-ips/{blockedIp}', [BlockedIpController::class, 'destroy'])->name('blocked-ips.destroy');
+    Route::get('/voucher-buttons', [VoucherButtonConfigController::class, 'index'])->name('voucher-buttons');
+    Route::patch('/voucher-buttons/{voucherButtonConfig}', [VoucherButtonConfigController::class, 'update'])->name('voucher-buttons.update');
 });
