@@ -4,12 +4,15 @@ namespace App\Http\Controllers;
 
 use App\Exceptions\AffiliateScanException;
 use App\Models\PlatformVoucher;
+use App\Models\VoucherButtonConfig;
 use App\Services\SalesOcService;
 use App\Services\ShopeeLinkResolverService;
 use App\Services\TrackingService;
 use App\Services\UrlValidationService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Str;
 use Inertia\Inertia;
 use Inertia\Response;
 
@@ -54,7 +57,7 @@ class ShopeeVoucherController extends Controller
         $salesOcData = $this->salesOc->fetchProductAndVoucherLabels($canonicalUrl);
 
         $voucherLabels = $salesOcData['voucher_labels'] ?? [];
-        $voucherLinks = $salesOcData['voucher_links'] ?? [];
+        $voucherLinks = $this->maskVoucherLinks($salesOcData['voucher_links'] ?? []);
         unset($salesOcData['voucher_labels'], $salesOcData['voucher_links']);
 
         $product = $salesOcData ?? ($ids
@@ -76,6 +79,30 @@ class ShopeeVoucherController extends Controller
                 // Link CTA chính — thuộc affiliate account của salesoc.vn (đổi lấy mã giảm giá thật).
                 'voucher_links' => $voucherLinks,
             ],
+            // Admin-editable display config: sort order, label override, featured source.
+            'voucherButtonConfig' => VoucherButtonConfig::orderBy('sort_order')->get(['source', 'label', 'sort_order', 'is_featured']),
         ]);
+    }
+
+    /**
+     * Thay URL affiliate thật (salesoc.vn/s.afp.ad) bằng token mờ trước khi trả về frontend —
+     * URL thật chỉ được giải mã lại phía server (xem ShortLinkController::store()) khi người
+     * dùng thực sự bấm chọn, để không lộ URL affiliate gốc ngay trong response /voucher/resolve
+     * (xem được qua tab Network/Inertia devtools dù chưa bấm link nào).
+     */
+    private function maskVoucherLinks(array $voucherLinks): array
+    {
+        foreach ($voucherLinks as $source => $options) {
+            foreach ($options as $i => $option) {
+                $ref = Str::random(32);
+                // TTL dài (7 ngày) để nút "mua lại" trong lịch sử chuyển đổi (lưu ở localStorage,
+                // xem Home.vue) còn dùng được sau vài ngày — mã có thể hết lượt trước đó, nhưng
+                // đó vốn là giới hạn có sẵn (salesoc.vn không báo trạng thái còn/hết lượt).
+                Cache::put("voucher_ref:{$ref}", $option['url'], now()->addDays(7));
+                $voucherLinks[$source][$i] = ['label' => $option['label'], 'ref' => $ref];
+            }
+        }
+
+        return $voucherLinks;
     }
 }

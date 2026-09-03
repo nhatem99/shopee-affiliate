@@ -12,6 +12,9 @@ const props = defineProps({
     vouchers: { type: Array, default: () => [] },
     voucherResult: { type: Object, default: null },
     canUseVoucherTool: { type: Boolean, default: true },
+    // Admin-editable button display config (array ordered by sort_order from server).
+    // Each element: { source, label, sort_order, is_featured }.
+    voucherButtonConfig: { type: Array, default: () => [] },
 })
 
 const toast = useToast()
@@ -86,9 +89,10 @@ function resolveVoucher() {
                         product_name: result.product?.product_name || null,
                         product_image: result.product?.product_image || null,
                         created_at: new Date().toISOString(),
-                        // Lưu lại các nút mã (nguồn/label/url) để "mua lại" sau này chỉ cần bấm nút,
-                        // không cần hiện đường dẫn thô cho khách.
-                        links: voucherLinkEntries.value.map(({ source, url, label }) => ({ source, url, label })),
+                        // Lưu lại các nút mã (nguồn/label/ref) để "mua lại" sau này chỉ cần bấm nút,
+                        // không cần hiện đường dẫn thô cho khách. ref là token mờ do server phát
+                        // ra (xem ShopeeVoucherController::maskVoucherLinks) — sống 7 ngày trong cache.
+                        links: voucherLinkEntries.value.map(({ source, ref, label }) => ({ source, ref, label })),
                     },
                     ...history.value,
                 ].slice(0, 5)
@@ -104,28 +108,82 @@ function resolveVoucher() {
     })
 }
 
+// Build a source-keyed lookup from the admin config array for O(1) access.
+// Falls back gracefully when voucherButtonConfig is empty (e.g. migration not yet run).
+const buttonConfigBySource = computed(() => {
+    const map = {}
+    for (const cfg of props.voucherButtonConfig) {
+        map[cfg.source] = cfg
+    }
+    return map
+})
+
+// Hardcoded fallback order matches the current SalesOcService fetch() insertion order.
+const FALLBACK_ORDER = { facebook: 0, instagram: 1, zalo: 2, youtube: 3 }
+
 // salesoc.vn không trả trạng thái còn/hết lượt của từng mã, nên hiển thị TẤT CẢ lựa chọn
 // mỗi nền tảng (không chỉ mã % cao nhất) — bấm thử lần lượt nếu mã đầu đã hết lượt.
 const voucherLinkEntries = computed(() => {
     const links = props.voucherResult?.voucher_links || {}
-    const entries = []
+    const cfgMap = buttonConfigBySource.value
+
+    // Group entries by source, preserving each source's internal sub-order from the API.
+    const grouped = {}
     for (const [source, options] of Object.entries(links)) {
-        (options || []).forEach((opt, i) => {
-            entries.push({
+        const cfg = cfgMap[source]
+        grouped[source] = (options || []).map((opt, i) => {
+            // Admin label-override: when set, it replaces ALL labels for this source —
+            // including real per-product API labels (e.g. "Mã FB 22%"). This is intentional
+            // to give admins full control. Null/empty = use API label or SOURCE_LABELS fallback.
+            const label = cfg?.label || opt.label || SOURCE_LABELS[source]
+            return {
                 key: `${source}-${i}`,
                 source,
-                url: opt.url,
-                label: opt.label || SOURCE_LABELS[source],
-            })
+                ref: opt.ref,
+                label,
+            }
         })
     }
+
+    // Sort source groups by admin sort_order (fallback to hardcoded FALLBACK_ORDER).
+    const sortedSources = Object.keys(grouped).sort((a, b) => {
+        const orderA = cfgMap[a]?.sort_order ?? FALLBACK_ORDER[a] ?? 99
+        const orderB = cfgMap[b]?.sort_order ?? FALLBACK_ORDER[b] ?? 99
+        return orderA - orderB
+    })
+
+    // Flatten groups in sorted order; each group's sub-order is unchanged.
+    const entries = []
+    for (const source of sortedSources) {
+        entries.push(...grouped[source])
+    }
     return entries
+})
+
+// Determine which entry (if any) should carry the "Đề xuất" badge + animate-pulse-ring.
+// We pick the first entry (lowest final render index) that belongs to the featured source.
+// When no source is marked featured (e.g. config not seeded yet), fall back to index 0
+// so nothing visually breaks in environments without the migration.
+const featuredEntryKey = computed(() => {
+    const cfgMap = buttonConfigBySource.value
+    const featuredCfg = props.voucherButtonConfig
+        .filter(c => c.is_featured)
+        .sort((a, b) => (a.sort_order ?? 99) - (b.sort_order ?? 99))[0]
+
+    if (!featuredCfg) {
+        // Fallback: treat the very first entry as featured (preserves pre-migration behaviour).
+        return voucherLinkEntries.value[0]?.key ?? null
+    }
+
+    // Find the first entry in the final sorted list that belongs to the featured source.
+    const first = voucherLinkEntries.value.find(e => e.source === featuredCfg.source)
+    return first?.key ?? voucherLinkEntries.value[0]?.key ?? null
 })
 
 const shorteningKey = ref(null)
 
 async function openVoucherLink(entry, productName = null) {
-    if (!entry?.url || shorteningKey.value) return
+    if (!entry?.ref || shorteningKey.value) return
 
     shorteningKey.value = entry.key
     // Mở tab trắng NGAY trong lúc click (đồng bộ) để trình duyệt không chặn popup —
@@ -134,7 +192,7 @@ async function openVoucherLink(entry, productName = null) {
 
     try {
         const { data } = await axios.post('/voucher/shorten', {
-            url: entry.url,
+            ref: entry.ref,
             source: entry.source,
             product_name: productName ?? props.voucherResult?.product?.product_name ?? null,
             product_image: props.voucherResult?.product?.product_image ?? null,
@@ -159,12 +217,12 @@ const copyingKey = ref(null)
 // Lấy short-link /go/{code} (cùng link được dùng khi bấm mở) rồi copy vào clipboard —
 // để người dùng dán thẳng lên Facebook/Zalo mà không cần tự mở link ra rồi copy từ URL bar.
 async function copyVoucherLink(entry) {
-    if (!entry?.url || copyingKey.value) return
+    if (!entry?.ref || copyingKey.value) return
 
     copyingKey.value = entry.key
     try {
         const { data } = await axios.post('/voucher/shorten', {
-            url: entry.url,
+            ref: entry.ref,
             source: entry.source,
             product_name: props.voucherResult?.product?.product_name ?? null,
             product_image: props.voucherResult?.product?.product_image ?? null,
@@ -288,9 +346,9 @@ const openFaq = ref(null)
                     </div>
 
                     <div v-if="voucherLinkEntries.length" class="grid grid-cols-1 sm:grid-cols-2 gap-2 mb-4 mt-3">
-                        <div v-for="(entry, i) in voucherLinkEntries" :key="entry.key" class="relative">
+                        <div v-for="entry in voucherLinkEntries" :key="entry.key" class="relative">
                             <span
-                                v-if="i === 0"
+                                v-if="entry.key === featuredEntryKey"
                                 class="absolute -top-2.5 left-3 z-10 bg-[#facc15] text-[#1c0a00] text-[10px] font-extrabold px-2.5 py-0.5 rounded-full shadow-md"
                             >Đề xuất</span>
                             <div class="flex items-stretch gap-1.5">
@@ -298,7 +356,7 @@ const openFaq = ref(null)
                                     @click="openVoucherLink(entry)"
                                     :disabled="shorteningKey === entry.key"
                                     class="flex-1 min-w-0 font-semibold px-4 py-3 rounded-xl transition-all text-sm flex items-center justify-between gap-2 disabled:opacity-60"
-                                    :class="[SOURCE_STYLES[entry.source] || 'bg-[var(--color-peach-soft)] hover:bg-[var(--color-peach)] text-[var(--color-ink)]', i === 0 && 'animate-pulse-ring']"
+                                    :class="[SOURCE_STYLES[entry.source] || 'bg-[var(--color-peach-soft)] hover:bg-[var(--color-peach)] text-[var(--color-ink)]', entry.key === featuredEntryKey && 'animate-pulse-ring']"
                                 >
                                     <span class="flex items-center gap-2 min-w-0">
                                         <span v-html="SOURCE_ICON_SVG[entry.source] || SOURCE_ICON_SVG.default" class="flex-none [&>svg]:w-4 [&>svg]:h-4"></span>
@@ -347,7 +405,7 @@ const openFaq = ref(null)
                                 <button
                                     v-for="link in h.links"
                                     :key="`hist-${hi}-${link.source}`"
-                                    @click="openVoucherLink({ key: `hist-${hi}-${link.source}`, source: link.source, url: link.url }, h.product_name)"
+                                    @click="openVoucherLink({ key: `hist-${hi}-${link.source}`, source: link.source, ref: link.ref }, h.product_name)"
                                     :disabled="shorteningKey === `hist-${hi}-${link.source}`"
                                     class="font-semibold px-3 py-2 rounded-lg transition-all text-xs flex items-center gap-1.5 disabled:opacity-60"
                                     :class="SOURCE_STYLES[link.source] || 'bg-[var(--color-peach-soft)] hover:bg-[var(--color-peach)] text-[var(--color-ink)]'"

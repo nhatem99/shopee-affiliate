@@ -128,6 +128,25 @@ class TrackingService
     }
 
     /**
+     * Android hay không — dùng để quyết định có bọc link đích bằng intent:// (mở thẳng app
+     * Shopee nếu đã cài, xem ShortLinkController::redirect()) hay không. iOS không cần xử lý
+     * riêng: Universal Links của Safari tự mở app khi điều hướng top-level tới link shopee.vn
+     * thật (không qua JS), miễn app đã cài — cách của Android (Chrome) không tự động chắc chắn
+     * bằng nên cần intent:// để ép mở app, kể cả khi bấm từ trong webview app Facebook/Zalo.
+     */
+    public static function isAndroid(?string $userAgent): bool
+    {
+        if (! $userAgent) {
+            return false;
+        }
+
+        $agent = new Agent;
+        $agent->setUserAgent($userAgent);
+
+        return $agent->isAndroidOS();
+    }
+
+    /**
      * Suy ra khách vào web từ đâu (Facebook, Zalo, Google tìm kiếm, gõ thẳng link...) dựa
      * trên header Referer + tham số utm_* trên URL. Chỉ có ý nghĩa với event 'page_view' —
      * các hành động sau đó (AJAX trong trang) referer sẽ trỏ về chính domain mình nên bị
