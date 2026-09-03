@@ -54,4 +54,12 @@ return [
         'mmp_pid' => env('SHOPEE_MMP_PID', 'an_17332410386'),
     ],
 
+    'salesoc' => [
+        // salesoc.vn chặn thẳng theo IP của server (403 từ nginx, không phải app) — cấu hình
+        // 1 outbound proxy ở đây để gọi salesoc.vn qua IP khác thay vì IP thật của VPS.
+        // Định dạng: http://user:pass@host:port hoặc http://host:port nếu proxy không cần auth.
+        // Để trống (null) thì gọi trực tiếp như bình thường, không qua proxy.
+        'proxy' => env('SALESOC_PROXY_URL'),
+    ],
+
 ];

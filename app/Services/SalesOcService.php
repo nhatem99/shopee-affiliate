@@ -42,13 +42,21 @@ class SalesOcService
     private function fetch(string $shopeeUrl): ?array
     {
         try {
-            $response = Http::withHeaders([
+            $request = Http::withHeaders([
                 'Accept' => 'application/json',
                 'Content-Type' => 'application/json',
                 'User-Agent' => self::MOBILE_USER_AGENT,
                 'Origin' => self::SPOOFED_ORIGIN,
                 'Referer' => self::SPOOFED_ORIGIN.'/',
-            ])->timeout(10)->retry(2, 300)->post(self::ENDPOINT, [
+            ])->timeout(10)->retry(2, 300);
+
+            // salesoc.vn chặn theo IP thật của VPS (403 ngay ở nginx của họ, trước khi tới app) —
+            // nếu có cấu hình proxy thì đi qua đó để họ thấy IP proxy thay vì IP server.
+            if ($proxy = config('services.salesoc.proxy')) {
+                $request = $request->withOptions(['proxy' => $proxy]);
+            }
+
+            $response = $request->post(self::ENDPOINT, [
                 'url' => $shopeeUrl,
             ]);
 
