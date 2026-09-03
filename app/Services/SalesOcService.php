@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use Illuminate\Http\Client\Response;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
@@ -42,23 +43,15 @@ class SalesOcService
     private function fetch(string $shopeeUrl): ?array
     {
         try {
-            $request = Http::withHeaders([
-                'Accept' => 'application/json',
-                'Content-Type' => 'application/json',
-                'User-Agent' => self::MOBILE_USER_AGENT,
-                'Origin' => self::SPOOFED_ORIGIN,
-                'Referer' => self::SPOOFED_ORIGIN.'/',
-            ])->timeout(10)->retry(2, 300);
-
-            // salesoc.vn chặn theo IP thật của VPS (403 ngay ở nginx của họ, trước khi tới app) —
-            // nếu có cấu hình proxy thì đi qua đó để họ thấy IP proxy thay vì IP server.
-            if ($proxy = config('services.salesoc.proxy')) {
-                $request = $request->withOptions(['proxy' => $proxy]);
-            }
-
-            $response = $request->post(self::ENDPOINT, [
-                'url' => $shopeeUrl,
-            ]);
+            $response = ($relayUrl = config('services.salesoc.relay_url'))
+                // Relay (Cloudflare Worker, xem deploy/cloudflare-worker/salesoc-relay.js) gọi hộ
+                // salesoc.vn từ 1 IP không bị chặn — ưu tiên hơn 'proxy' bên dưới khi cả 2 cùng set.
+                ? Http::withHeaders([
+                    'Accept' => 'application/json',
+                    'Content-Type' => 'application/json',
+                    'X-Relay-Secret' => config('services.salesoc.relay_secret'),
+                ])->timeout(10)->retry(2, 300)->post($relayUrl, ['url' => $shopeeUrl])
+                : $this->fetchDirect($shopeeUrl);
 
             if (! $response->successful() || ! $response->json('success')) {
                 return null;
@@ -93,6 +86,25 @@ class SalesOcService
 
             return null;
         }
+    }
+
+    private function fetchDirect(string $shopeeUrl): Response
+    {
+        $request = Http::withHeaders([
+            'Accept' => 'application/json',
+            'Content-Type' => 'application/json',
+            'User-Agent' => self::MOBILE_USER_AGENT,
+            'Origin' => self::SPOOFED_ORIGIN,
+            'Referer' => self::SPOOFED_ORIGIN.'/',
+        ])->timeout(10)->retry(2, 300);
+
+        // salesoc.vn chặn theo IP thật của VPS (403 ngay ở nginx của họ, trước khi tới app) —
+        // nếu có cấu hình proxy thì đi qua đó để họ thấy IP proxy thay vì IP server.
+        if ($proxy = config('services.salesoc.proxy')) {
+            $request = $request->withOptions(['proxy' => $proxy]);
+        }
+
+        return $request->post(self::ENDPOINT, ['url' => $shopeeUrl]);
     }
 
     /**

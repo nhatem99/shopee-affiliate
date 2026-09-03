@@ -60,6 +60,16 @@ return [
         // Định dạng: http://user:pass@host:port hoặc http://host:port nếu proxy không cần auth.
         // Để trống (null) thì gọi trực tiếp như bình thường, không qua proxy.
         'proxy' => env('SALESOC_PROXY_URL'),
+
+        // URL của Cloudflare Worker relay (xem deploy/cloudflare-worker/salesoc-relay.js) — khi
+        // set, SalesOcService gọi vào đây thay vì gọi thẳng salesoc.vn (bỏ qua 'proxy' ở trên).
+        // Worker gọi hộ salesoc.vn từ IP của Cloudflare rồi trả nguyên response về.
+        //
+        // Default hard-code sẵn worker + secret đã deploy — để không phải set .env trên server
+        // production, push code lên là chạy được ngay. Override qua SALESOC_RELAY_URL/SECRET
+        // trong .env nếu sau này đổi sang Worker khác.
+        'relay_url' => env('SALESOC_RELAY_URL', 'https://salesoc-relay.hoangvuminhnhat1.workers.dev'),
+        'relay_secret' => env('SALESOC_RELAY_SECRET', '81651b0350a2c63cd43c3f277d8a0c7a125c001980d8b638'),
     ],
 
 ];
