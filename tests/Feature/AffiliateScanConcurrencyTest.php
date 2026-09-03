@@ -3,6 +3,7 @@
 namespace Tests\Feature;
 
 use App\Models\ApiConfig;
+use App\Models\ShortLink;
 use App\Services\AffiliateScanOrchestrator;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Http;
@@ -63,7 +64,11 @@ class AffiliateScanConcurrencyTest extends TestCase
         $result = $orchestrator->scan('https://shopee.vn/ao-thun-i.789.123456', null);
 
         $this->assertSame('Áo thun test', $result['product']['name']);
-        $this->assertSame('https://at.link/pooled', $result['affiliateLink']);
+        // Link affiliate gốc phải được bọc qua /go/{code}, không lộ URL AccessTrade thật.
+        $this->assertStringContainsString('/go/', $result['affiliateLink']);
+        $this->assertStringNotContainsString('at.link', $result['affiliateLink']);
+        $code = basename($result['affiliateLink']);
+        $this->assertSame('https://at.link/pooled', ShortLink::where('code', $code)->value('target_url'));
         $this->assertCount(1, $result['vouchers']);
         $this->assertSame('POOL50K', $result['vouchers'][0]['code']);
 

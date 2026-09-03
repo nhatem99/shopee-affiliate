@@ -17,6 +17,7 @@ class AffiliateScanOrchestrator
         private ShopeeApiService $shopeeApi,
         private AccessTradeService $accessTrade,
         private ProductMetadataService $productMetadata,
+        private ShortLinkService $shortLinks,
     ) {}
 
     public function scan(string $url, ?User $user): array
@@ -36,7 +37,15 @@ class AffiliateScanOrchestrator
         });
 
         $productInfo = $this->resolveProductInfo($url, $platform, $responses);
-        $affiliateLink = $this->accessTrade->parsePoolResponse($responses['accesstrade'] ?? null, $url);
+        $rawAffiliateLink = $this->accessTrade->parsePoolResponse($responses['accesstrade'] ?? null, $url);
+        // Bọc link affiliate gốc qua /go/{code} để không lộ URL AccessTrade/Shopee thật ra frontend.
+        $shortLink = $this->shortLinks->create(
+            $rawAffiliateLink,
+            'scan',
+            $productInfo['product_name'] ?? null,
+            $productInfo['product_image'] ?? null,
+        );
+        $affiliateLink = url('/go/'.$shortLink->code);
         $vouchers = $shopeeIds
             ? $this->shopeeApi->parseVouchersPoolResponse($responses['vouchers'] ?? null)
             : [];
