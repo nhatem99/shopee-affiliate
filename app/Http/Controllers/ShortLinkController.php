@@ -192,9 +192,9 @@ class ShortLinkController extends Controller
      * Trên mobile, mở thẳng bằng permalink_url dạng /{actor_id}/posts/{post_id}?comment_id=...
      * hay bị OS/app Facebook xử lý dở: có lúc app mở ra nhưng không tới đúng bài/comment (chỉ về
      * trang chủ), có lúc lại đòi đăng nhập lại dù đã đăng nhập trong app (trình duyệt mobile là
-     * 1 phiên đăng nhập khác với app). Dùng scheme fb://story?story_fbid=..&id=..&comment_id=..
-     * (id = Page ID thật, không phải actor_id lạ trong permalink_url) để mở thẳng vào đúng
-     * story/comment bằng chính phiên đăng nhập của app, không qua trình duyệt/login-wall.
+     * 1 phiên đăng nhập khác với app). Dùng scheme fb://permalink.php?story_fbid=..&id=..&
+     * comment_id=.. (id = Page ID thật, không phải actor_id lạ trong permalink_url) để mở thẳng
+     * vào đúng story/comment bằng chính phiên đăng nhập của app, không qua trình duyệt/login-wall.
      * Chỉ áp dụng cho mobile — desktop không có app Facebook để bắt scheme này, giữ nguyên
      * permalink_url gốc (đã xác nhận hoạt động đúng trên desktop).
      */
@@ -213,7 +213,7 @@ class ShortLinkController extends Controller
             return $permalink;
         }
 
-        return 'fb://story?'.http_build_query([
+        return 'fb://permalink.php?'.http_build_query([
             'story_fbid' => $storyFbid,
             'id' => $pageId,
             'comment_id' => $commentId,
