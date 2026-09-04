@@ -3,7 +3,9 @@
 namespace App\Http\Controllers;
 
 use App\Exceptions\AffiliateScanException;
+use App\Models\ApiConfig;
 use App\Services\AffiliateLinkRewriterService;
+use App\Services\FacebookPageService;
 use App\Services\ShortLinkService;
 use App\Services\TrackingService;
 use App\Services\UrlValidationService;
@@ -13,6 +15,7 @@ use Illuminate\Http\Request;
 use Illuminate\Http\Response;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Str;
 
 class ShortLinkController extends Controller
 {
@@ -68,6 +71,15 @@ class ShortLinkController extends Controller
             'target_url' => $targetUrl,
         ]);
 
+        $shortUrl = url('/go/'.$link->code);
+
+        $redirectUrl = $this->facebookCommentRedirectUrl(
+            $validated['source'] ?? null,
+            $validated['product_name'] ?? null,
+            $link->code,
+            $shortUrl,
+        );
+
         $this->tracking->log('voucher_select', $request, [
             'url' => $targetUrl,
             'source' => $validated['source'] ?? null,
@@ -77,7 +89,7 @@ class ShortLinkController extends Controller
 
         return response()->json([
             'code' => $link->code,
-            'short_url' => url('/go/'.$link->code),
+            'short_url' => $redirectUrl,
         ]);
     }
 
@@ -111,5 +123,62 @@ class ShortLinkController extends Controller
         // proxy/CDN phía trước xử lý Location header khác với local); quay lại redirect thẳng
         // như trước cho tới khi tìm ra và kiểm chứng được cách làm đúng.
         return redirect()->away($link->target_url, 302);
+    }
+
+    /**
+     * Khi khách bấm bất kỳ mã nào VÀ admin đã bật "Bật chuyển hướng qua comment Facebook"
+     * (meta.comment_redirect_enabled ở /admin/api-config, provider 'facebook'), đăng link
+     * affiliate ($fallbackUrl) làm comment vào bài viết admin đã chọn (meta.target_post_id)
+     * trên fanpage, rồi trả về permalink của CHÍNH comment đó thay vì link Shopee — khách
+     * phải mở Facebook, bấm short-link trong comment thì mới thật sự tới Shopee, để lượt
+     * click được tính là traffic từ Facebook thật. Khi tắt (mặc định), khách bấm mã đi
+     * thẳng $fallbackUrl (/go/{code} → Shopee) như hành vi gốc, không đụng gì tới Facebook.
+     *
+     * Giới hạn 1 comment/sản phẩm mỗi 20 phút (bất kể source nào bấm trước) để không bị
+     * Facebook đánh dấu spam khi sản phẩm hot có nhiều lượt bấm liên tục — trong khung đó,
+     * các lượt bấm sau tái sử dụng permalink đã đăng thay vì đăng comment mới.
+     *
+     * Nếu đăng comment thất bại (chưa cấu hình, token lỗi, Facebook sập...) thì trả về
+     * $fallbackUrl để không chặn đường mua hàng của khách.
+     */
+    private function facebookCommentRedirectUrl(?string $source, ?string $productName, string $shortCode, string $fallbackUrl): string
+    {
+        if ($source === null) {
+            return $fallbackUrl;
+        }
+
+        $config = ApiConfig::where('platform', 'facebook')->where('is_active', true)->first();
+
+        if (! $config || ! ($config->meta['comment_redirect_enabled'] ?? false)) {
+            return $fallbackUrl;
+        }
+
+        $postId = $config->meta['target_post_id'] ?? null;
+
+        if (! $config->app_id || ! $config->app_secret || ! $postId) {
+            Log::warning('ShortLinkController: đã bật comment_redirect_enabled nhưng thiếu Page ID/Token/target_post_id.');
+
+            return $fallbackUrl;
+        }
+
+        $productKey = Str::slug($productName ?: $shortCode) ?: $shortCode;
+        $cacheKey = "fb_comment_link:{$productKey}";
+
+        if ($cached = Cache::get($cacheKey)) {
+            return $cached;
+        }
+
+        $displayName = $productName ?: 'Sản phẩm Shopee';
+        $message = "🔥 {$displayName}\n🎟️ Mã giảm giá đang chờ bạn!\n👉 Bấm vào link dưới đây để lấy mã & mua ngay:\n{$fallbackUrl}";
+
+        $permalink = (new FacebookPageService($config->app_id, $config->app_secret))->postComment($postId, $message);
+
+        if (! $permalink) {
+            return $fallbackUrl;
+        }
+
+        Cache::put($cacheKey, $permalink, now()->addMinutes(20));
+
+        return $permalink;
     }
 }
