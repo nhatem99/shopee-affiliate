@@ -10,10 +10,18 @@ const auth = useAuthStore()
 const page = usePage()
 const current = computed(() => page.url)
 const customerAuthEnabled = computed(() => page.props.settings?.customerAuthEnabled ?? true)
+// Server chỉ bật cờ này cho admin — khách đang bảo trì thì không tới được layout này.
+const maintenanceMode = computed(() => page.props.settings?.maintenanceMode ?? false)
 </script>
 
 <template>
     <div class="min-h-screen bg-[var(--color-bg)]">
+        <!-- Nhắc admin: bạn đang xem trang khách trong lúc khách chỉ thấy trang bảo trì -->
+        <div v-if="maintenanceMode" class="bg-amber-500 text-[#1c0a00] text-xs md:text-sm font-semibold px-4 py-2 flex flex-wrap items-center justify-center gap-x-2 gap-y-1 text-center">
+            <span>🔧 Đang bật chế độ bảo trì — khách chỉ thấy trang bảo trì, bạn đang xem với quyền admin.</span>
+            <Link href="/admin/settings" class="underline underline-offset-2 hover:opacity-80">Tắt bảo trì</Link>
+        </div>
+
         <!-- Header -->
         <header class="sticky top-0 z-50 bg-[var(--color-surface)]/80 backdrop-blur-md border-b border-[var(--color-line)] dark:shadow-[0_4px_24px_rgba(0,0,0,0.45)]">
             <div class="max-w-6xl mx-auto px-4 h-16 flex items-center justify-between">

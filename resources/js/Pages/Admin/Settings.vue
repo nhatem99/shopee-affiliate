@@ -101,6 +101,8 @@ function toggleMaintenance() {
                             Khi bật, toàn bộ trang cho khách (trang chủ, blog, quét link, lịch sử, tài khoản...) hiện
                             thông báo "đang bảo trì" thay vì nội dung thật. Trang <span class="font-mono text-xs">/login</span>
                             và khu vực admin vẫn vào được bình thường để bạn tự tắt lại khi xong.
+                            <strong class="text-[var(--color-ink)]">Tài khoản admin vẫn dùng được đầy đủ trang khách</strong>
+                            (dán link, tìm mã, bấm thử link) để kiểm tra chức năng trong lúc khách bị chặn.
                         </p>
                     </div>
 
@@ -123,7 +125,7 @@ function toggleMaintenance() {
                 <div class="mt-4 pt-4 border-t border-[var(--color-line)] flex items-center gap-2 text-sm">
                     <span class="w-2 h-2 rounded-full flex-none" :class="maintenanceMode ? 'bg-amber-500' : 'bg-[var(--color-muted)]'"></span>
                     <span class="text-[var(--color-ink)] font-medium">
-                        {{ maintenanceMode ? 'Đang bảo trì — khách không vào được trang.' : 'Đang tắt — trang hoạt động bình thường.' }}
+                        {{ maintenanceMode ? 'Đang bảo trì — khách không vào được trang, admin vẫn dùng bình thường.' : 'Đang tắt — trang hoạt động bình thường.' }}
                     </span>
                 </div>
             </div>

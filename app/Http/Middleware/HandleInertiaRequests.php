@@ -32,6 +32,11 @@ class HandleInertiaRequests extends Middleware
             ],
             'settings' => [
                 'customerAuthEnabled' => Setting::getBool('customer_auth_enabled', true),
+                // Chỉ admin cần cờ này: admin duyệt trang khách y như bình thường khi đang bảo
+                // trì (xem MaintenanceMode) nên rất dễ quên là khách vẫn đang bị chặn — AppLayout
+                // dựa vào đây để hiện thanh nhắc.
+                'maintenanceMode' => ($request->user()?->isAdmin() ?? false)
+                    && Setting::getBool('maintenance_mode', false),
             ],
         ]);
     }
