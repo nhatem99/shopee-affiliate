@@ -36,15 +36,30 @@ const MOBILE_USER_AGENT =
 // salesoc.vn kiểm tra Origin/Referer phía server, thiếu là 403 ORIGIN_NOT_ALLOWED.
 const SPOOFED_ORIGIN = 'https://salesoc.vn'
 
-Deno.serve(async (request: Request): Promise<Response> => {
-  if (request.method !== 'POST') {
-    return new Response('Method Not Allowed', { status: 405 })
-  }
+// Dịch vụ echo IP — trả về đúng địa chỉ mà bên ngoài nhìn thấy khi relay gọi ra.
+const IP_ECHO_ENDPOINT = 'https://api.ipify.org?format=json'
 
+Deno.serve(async (request: Request): Promise<Response> => {
   const secret = Deno.env.get('RELAY_SECRET')
 
   if (!secret || request.headers.get('X-Relay-Secret') !== secret) {
     return new Response('Forbidden', { status: 403 })
+  }
+
+  // GET /ip — IP egress hiện tại của relay. Gọi vài lần liên tiếp là biết Deno đi ra bằng
+  // một IP cố định hay xoay trong một dải; và khi salesoc chặn tiếp thì so IP trước/sau để
+  // biết họ chặn theo IP hay theo dấu hiệu khác. Vẫn yêu cầu secret như mọi endpoint khác.
+  if (request.method === 'GET' && new URL(request.url).pathname === '/ip') {
+    const echo = await fetch(IP_ECHO_ENDPOINT)
+
+    return new Response(await echo.text(), {
+      status: echo.status,
+      headers: { 'Content-Type': 'application/json' },
+    })
+  }
+
+  if (request.method !== 'POST') {
+    return new Response('Method Not Allowed', { status: 405 })
   }
 
   let body: { url?: string }
