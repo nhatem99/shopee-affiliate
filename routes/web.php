@@ -4,6 +4,7 @@ use App\Http\Controllers\Admin\ActivityController;
 use App\Http\Controllers\Admin\ApiConfigController;
 use App\Http\Controllers\Admin\BlockedIpController;
 use App\Http\Controllers\Admin\DashboardController;
+use App\Http\Controllers\Admin\LogController;
 use App\Http\Controllers\Admin\OrderController;
 use App\Http\Controllers\Admin\SettingsController;
 use App\Http\Controllers\Admin\VoucherButtonConfigController;
@@ -126,6 +127,8 @@ Route::middleware(['auth', 'auth.admin'])->prefix('admin')->name('admin.')->grou
     Route::get('/blocked-ips', [BlockedIpController::class, 'index'])->name('blocked-ips');
     Route::post('/blocked-ips', [BlockedIpController::class, 'store'])->name('blocked-ips.store');
     Route::delete('/blocked-ips/{blockedIp}', [BlockedIpController::class, 'destroy'])->name('blocked-ips.destroy');
+    // Xem log lỗi production ngay trên web thay vì phải SSH lên server đọc storage/logs.
+    Route::get('/logs', [LogController::class, 'index'])->name('logs');
     Route::get('/voucher-buttons', [VoucherButtonConfigController::class, 'index'])->name('voucher-buttons');
     Route::patch('/voucher-buttons/{voucherButtonConfig}', [VoucherButtonConfigController::class, 'update'])->name('voucher-buttons.update');
 });

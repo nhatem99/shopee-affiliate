@@ -6,6 +6,7 @@ use Illuminate\Http\Client\Response;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Str;
 
 /**
  * Đọc thông tin sản phẩm + link voucher (Facebook/Instagram/Zalo) từ salesoc.vn.
@@ -54,11 +55,36 @@ class SalesOcService
                 : $this->fetchDirect($shopeeUrl);
 
             if (! $response->successful() || ! $response->json('success')) {
+                // Trước đây nhánh này return null lặng lẽ — không có gì để tra khi người dùng
+                // báo "không lấy được mã". Log lại status + trích đoạn body để phân biệt được
+                // 3 trường hợp: relay chặn (403), salesoc chặn, hay salesoc trả success=false.
+                Log::error('SalesOcService: salesoc.vn trả về kết quả không dùng được', [
+                    'via' => $relayUrl ? 'relay' : 'direct',
+                    'status' => $response->status(),
+                    'shopee_url' => $shopeeUrl,
+                    'body' => Str::limit($response->body(), 500),
+                ]);
+
                 return null;
             }
 
             $data = $response->json();
             $price = $this->parsePrice($data['price'] ?? null);
+            $voucherLinks = [
+                'facebook' => $this->extractOptions($data, 'facebookAffiliateUrls'),
+                'instagram' => $this->extractInstagramOption($data),
+                'zalo' => $this->extractOptions($data, 'zaloAffiliateUrls'),
+                'youtube' => $this->extractYoutubeOption($data),
+            ];
+
+            // salesoc trả về OK nhưng không nền tảng nào có link dùng được — người dùng thấy
+            // "Chưa lấy được link voucher" y hệt lúc API lỗi, nên phải phân biệt được trong log.
+            if (array_filter($voucherLinks) === []) {
+                Log::warning('SalesOcService: salesoc.vn OK nhưng không có link voucher nào', [
+                    'shopee_url' => $shopeeUrl,
+                    'body' => Str::limit($response->body(), 500),
+                ]);
+            }
 
             return [
                 // Cùng shape với ShopeeLinkResolverService::fetchProductInfo() để
@@ -74,15 +100,13 @@ class SalesOcService
                 // Link áp mã giảm giá thật (CTA chính) — thuộc affiliate account của salesoc.vn.
                 // API không trả trạng thái còn/hết lượt của từng mã, nên trả TẤT CẢ lựa chọn
                 // (không chỉ mã % cao nhất) để người dùng thử link khác nếu link đầu đã hết lượt.
-                'voucher_links' => [
-                    'facebook' => $this->extractOptions($data, 'facebookAffiliateUrls'),
-                    'instagram' => $this->extractInstagramOption($data),
-                    'zalo' => $this->extractOptions($data, 'zaloAffiliateUrls'),
-                    'youtube' => $this->extractYoutubeOption($data),
-                ],
+                'voucher_links' => $voucherLinks,
             ];
         } catch (\Exception $e) {
-            Log::warning('SalesOcService fetch failed: '.$e->getMessage());
+            Log::error('SalesOcService fetch failed: '.$e->getMessage(), [
+                'via' => config('services.salesoc.relay_url') ? 'relay' : 'direct',
+                'shopee_url' => $shopeeUrl,
+            ]);
 
             return null;
         }
