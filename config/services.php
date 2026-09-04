@@ -61,13 +61,13 @@ return [
         // Để trống (null) thì gọi trực tiếp như bình thường, không qua proxy.
         'proxy' => env('SALESOC_PROXY_URL'),
 
-        // URL của Cloudflare Worker relay (xem deploy/cloudflare-worker/salesoc-relay.js) — khi
-        // set, SalesOcService gọi vào đây thay vì gọi thẳng salesoc.vn (bỏ qua 'proxy' ở trên).
-        // Worker gọi hộ salesoc.vn từ IP của Cloudflare rồi trả nguyên response về.
+        // URL của relay gọi hộ salesoc.vn từ một IP khác rồi trả nguyên response về.
+        // SalesOcService thử relay trước, hỏng thì tự rơi xuống proxy/direct.
         //
-        // Default hard-code sẵn worker + secret đã deploy — để không phải set .env trên server
-        // production, push code lên là chạy được ngay. Override qua SALESOC_RELAY_URL/SECRET
-        // trong .env nếu sau này đổi sang Worker khác.
+        // CẢNH BÁO: default hard-code dưới đây là Cloudflare Worker cũ và ĐÃ BỊ salesoc.vn chặn
+        // (403 từ nginx của họ, xác nhận trong log production 2026-09-04) — Cloudflare tự chèn
+        // header CF-Worker vào subrequest nên mọi Worker đều bị nhận diện. Deploy relay mới theo
+        // deploy/deno-relay/main.ts rồi set SALESOC_RELAY_URL/SECRET trong .env để thay thế.
         'relay_url' => env('SALESOC_RELAY_URL', 'https://salesoc-relay.hoangvuminhnhat1.workers.dev'),
         'relay_secret' => env('SALESOC_RELAY_SECRET', '81651b0350a2c63cd43c3f277d8a0c7a125c001980d8b638'),
     ],

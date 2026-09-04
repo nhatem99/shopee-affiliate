@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use Illuminate\Http\Client\PendingRequest;
 use Illuminate\Http\Client\Response;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Http;
@@ -30,6 +31,8 @@ class SalesOcService
     // không tự nhận là đến từ chính salesoc.vn — cần set 2 header này để API cho qua.
     private const SPOOFED_ORIGIN = 'https://salesoc.vn';
 
+    private const TIMEOUT = 10;
+
     public function fetchProductAndVoucherLabels(string $shopeeUrl): ?array
     {
         // Cache ngắn hạn — cùng 1 link được dán lại (test, hoặc nhiều người cùng xem 1 sản
@@ -43,92 +46,174 @@ class SalesOcService
 
     private function fetch(string $shopeeUrl): ?array
     {
-        try {
-            $response = ($relayUrl = config('services.salesoc.relay_url'))
-                // Relay (Cloudflare Worker, xem deploy/cloudflare-worker/salesoc-relay.js) gọi hộ
-                // salesoc.vn từ 1 IP không bị chặn — ưu tiên hơn 'proxy' bên dưới khi cả 2 cùng set.
-                ? Http::withHeaders([
-                    'Accept' => 'application/json',
-                    'Content-Type' => 'application/json',
-                    'X-Relay-Secret' => config('services.salesoc.relay_secret'),
-                ])->timeout(10)->retry(2, 300)->post($relayUrl, ['url' => $shopeeUrl])
-                : $this->fetchDirect($shopeeUrl);
+        $response = $this->fetchViaAnyRoute($shopeeUrl);
 
-            if (! $response->successful() || ! $response->json('success')) {
-                // Trước đây nhánh này return null lặng lẽ — không có gì để tra khi người dùng
-                // báo "không lấy được mã". Log lại status + trích đoạn body để phân biệt được
-                // 3 trường hợp: relay chặn (403), salesoc chặn, hay salesoc trả success=false.
-                Log::error('SalesOcService: salesoc.vn trả về kết quả không dùng được', [
-                    'via' => $relayUrl ? 'relay' : 'direct',
-                    'status' => $response->status(),
-                    'shopee_url' => $shopeeUrl,
-                    'body' => Str::limit($response->body(), 500),
-                ]);
-
-                return null;
-            }
-
-            $data = $response->json();
-            $price = $this->parsePrice($data['price'] ?? null);
-            $voucherLinks = [
-                'facebook' => $this->extractOptions($data, 'facebookAffiliateUrls'),
-                'instagram' => $this->extractInstagramOption($data),
-                'zalo' => $this->extractOptions($data, 'zaloAffiliateUrls'),
-                'youtube' => $this->extractYoutubeOption($data),
-            ];
-
-            // salesoc trả về OK nhưng không nền tảng nào có link dùng được — người dùng thấy
-            // "Chưa lấy được link voucher" y hệt lúc API lỗi, nên phải phân biệt được trong log.
-            if (array_filter($voucherLinks) === []) {
-                Log::warning('SalesOcService: salesoc.vn OK nhưng không có link voucher nào', [
-                    'shopee_url' => $shopeeUrl,
-                    'body' => Str::limit($response->body(), 500),
-                ]);
-            }
-
-            return [
-                // Cùng shape với ShopeeLinkResolverService::fetchProductInfo() để
-                // dùng thay thế được cho nhau ở phía controller/frontend.
-                'product_name' => $data['productName'] ?? null,
-                'product_image' => $data['imageUrl'] ?? null,
-                'original_price' => $price,
-                'discounted_price' => $price,
-                'discount_percent' => 0,
-                'sold_count' => 0,
-                'rating' => 0,
-                'voucher_labels' => $this->extractLabels($data),
-                // Link áp mã giảm giá thật (CTA chính) — thuộc affiliate account của salesoc.vn.
-                // API không trả trạng thái còn/hết lượt của từng mã, nên trả TẤT CẢ lựa chọn
-                // (không chỉ mã % cao nhất) để người dùng thử link khác nếu link đầu đã hết lượt.
-                'voucher_links' => $voucherLinks,
-            ];
-        } catch (\Exception $e) {
-            Log::error('SalesOcService fetch failed: '.$e->getMessage(), [
-                'via' => config('services.salesoc.relay_url') ? 'relay' : 'direct',
-                'shopee_url' => $shopeeUrl,
-            ]);
-
+        if ($response === null) {
             return null;
         }
+
+        $data = $response->json();
+        $price = $this->parsePrice($data['price'] ?? null);
+        $voucherLinks = [
+            'facebook' => $this->extractOptions($data, 'facebookAffiliateUrls'),
+            'instagram' => $this->extractInstagramOption($data),
+            'zalo' => $this->extractOptions($data, 'zaloAffiliateUrls'),
+            'youtube' => $this->extractYoutubeOption($data),
+        ];
+
+        // salesoc trả về OK nhưng không nền tảng nào có link dùng được — người dùng thấy
+        // "Chưa lấy được link voucher" y hệt lúc API lỗi, nên phải phân biệt được trong log.
+        if (array_filter($voucherLinks) === []) {
+            Log::warning('SalesOcService: salesoc.vn OK nhưng không có link voucher nào', [
+                'shopee_url' => $shopeeUrl,
+                'body' => Str::limit($response->body(), 500),
+            ]);
+        }
+
+        return [
+            // Cùng shape với ShopeeLinkResolverService::fetchProductInfo() để
+            // dùng thay thế được cho nhau ở phía controller/frontend.
+            'product_name' => $data['productName'] ?? null,
+            'product_image' => $data['imageUrl'] ?? null,
+            'original_price' => $price,
+            'discounted_price' => $price,
+            'discount_percent' => 0,
+            'sold_count' => 0,
+            'rating' => 0,
+            'voucher_labels' => $this->extractLabels($data),
+            // Link áp mã giảm giá thật (CTA chính) — thuộc affiliate account của salesoc.vn.
+            // API không trả trạng thái còn/hết lượt của từng mã, nên trả TẤT CẢ lựa chọn
+            // (không chỉ mã % cao nhất) để người dùng thử link khác nếu link đầu đã hết lượt.
+            'voucher_links' => $voucherLinks,
+        ];
     }
 
-    private function fetchDirect(string $shopeeUrl): Response
+    /**
+     * Thử lần lượt từng đường ra tới salesoc.vn, lấy đường đầu tiên trả về dữ liệu dùng được.
+     *
+     * salesoc.vn chặn theo nguồn gọi ở tầng nginx (403 trước khi vào app của họ) và đã chặn
+     * lần lượt: IP thật của VPS, rồi tới Cloudflare Worker relay. Đi một đường duy nhất nghĩa
+     * là mỗi lần họ chặn thêm một nguồn là tính năng chết hẳn — nên thử hết các đường đang có.
+     */
+    private function fetchViaAnyRoute(string $shopeeUrl): ?Response
     {
-        $request = Http::withHeaders([
+        $routes = $this->routes($shopeeUrl);
+        $first = array_key_first($routes);
+
+        foreach ($routes as $name => $call) {
+            try {
+                $response = $call();
+            } catch (\Exception $e) {
+                Log::error("SalesOcService: đường '{$name}' lỗi kết nối: ".$e->getMessage(), [
+                    'shopee_url' => $shopeeUrl,
+                ]);
+
+                continue;
+            }
+
+            if ($response->successful() && $response->json('success')) {
+                if ($name !== $first) {
+                    // Đường ưu tiên đã hỏng nhưng tính năng vẫn sống nhờ đường dự phòng —
+                    // đáng biết để đi sửa đường chính trước khi nó kéo theo cả đường còn lại.
+                    Log::warning("SalesOcService: phải dùng đường dự phòng '{$name}'", [
+                        'shopee_url' => $shopeeUrl,
+                    ]);
+                }
+
+                return $response;
+            }
+
+            Log::error("SalesOcService: đường '{$name}' bị từ chối", [
+                'status' => $response->status(),
+                'shopee_url' => $shopeeUrl,
+                'body' => Str::limit($response->body(), 300),
+            ]);
+        }
+
+        return null;
+    }
+
+    /**
+     * Các đường ra tới salesoc.vn theo thứ tự ưu tiên. Relay đứng đầu vì IP thật của VPS là
+     * thứ bị chặn đầu tiên; 'direct' luôn đứng cuối và luôn có mặt (ở local dev thì đây là
+     * đường duy nhất, và cũng là đường tự hồi phục nếu salesoc bỏ chặn IP server).
+     *
+     * @return array<string, callable(): Response>
+     */
+    private function routes(string $shopeeUrl): array
+    {
+        $routes = [];
+
+        // Relay: một dịch vụ ngoài gọi hộ salesoc.vn từ IP khác rồi trả nguyên response về.
+        // Xem deploy/deno-relay/main.ts (khuyến nghị) hoặc deploy/cloudflare-worker/salesoc-relay.js.
+        if ($relayUrl = config('services.salesoc.relay_url')) {
+            $routes['relay'] = fn () => Http::withHeaders([
+                'Accept' => 'application/json',
+                'Content-Type' => 'application/json',
+                'X-Relay-Secret' => config('services.salesoc.relay_secret'),
+            ])->timeout(self::TIMEOUT)->post($relayUrl, ['url' => $shopeeUrl]);
+        }
+
+        if ($proxy = config('services.salesoc.proxy')) {
+            $routes['proxy'] = fn () => $this->directRequest()
+                ->withOptions(['proxy' => $proxy])
+                ->post(self::ENDPOINT, ['url' => $shopeeUrl]);
+        }
+
+        $routes['direct'] = fn () => $this->directRequest()->post(self::ENDPOINT, ['url' => $shopeeUrl]);
+
+        return $routes;
+    }
+
+    private function directRequest(): PendingRequest
+    {
+        return Http::withHeaders([
             'Accept' => 'application/json',
             'Content-Type' => 'application/json',
             'User-Agent' => self::MOBILE_USER_AGENT,
             'Origin' => self::SPOOFED_ORIGIN,
             'Referer' => self::SPOOFED_ORIGIN.'/',
-        ])->timeout(10)->retry(2, 300);
+        ])->timeout(self::TIMEOUT);
+    }
 
-        // salesoc.vn chặn theo IP thật của VPS (403 ngay ở nginx của họ, trước khi tới app) —
-        // nếu có cấu hình proxy thì đi qua đó để họ thấy IP proxy thay vì IP server.
-        if ($proxy = config('services.salesoc.proxy')) {
-            $request = $request->withOptions(['proxy' => $proxy]);
+    /**
+     * Bắn thử TẤT CẢ các đường ra và trả kết quả từng đường — dùng cho `php artisan salesoc:check`,
+     * để khi salesoc chặn thêm nguồn mới thì biết ngay đường nào còn sống mà không phải đoán.
+     *
+     * @return list<array{route: string, ok: bool, status: int|null, duration_ms: int, detail: string}>
+     */
+    public function diagnose(string $shopeeUrl): array
+    {
+        $results = [];
+
+        foreach ($this->routes($shopeeUrl) as $name => $call) {
+            $startedAt = microtime(true);
+
+            try {
+                $response = $call();
+                $ok = $response->successful() && (bool) $response->json('success');
+
+                $results[] = [
+                    'route' => $name,
+                    'ok' => $ok,
+                    'status' => $response->status(),
+                    'duration_ms' => (int) ((microtime(true) - $startedAt) * 1000),
+                    'detail' => $ok
+                        ? 'Có '.count($this->extractLabels($response->json() ?? [])).' mã giảm giá'
+                        : Str::limit(preg_replace('/\s+/', ' ', $response->body()), 200),
+                ];
+            } catch (\Exception $e) {
+                $results[] = [
+                    'route' => $name,
+                    'ok' => false,
+                    'status' => null,
+                    'duration_ms' => (int) ((microtime(true) - $startedAt) * 1000),
+                    'detail' => $e->getMessage(),
+                ];
+            }
         }
 
-        return $request->post(self::ENDPOINT, ['url' => $shopeeUrl]);
+        return $results;
     }
 
     /**
