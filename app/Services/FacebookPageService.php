@@ -34,7 +34,10 @@ class FacebookPageService
     }
 
     /**
-     * Đăng comment rồi trả về permalink trỏ thẳng tới comment đó (null nếu thất bại).
+     * Đăng comment rồi trả về ['permalink_url' => ..., 'comment_id' => ...] (null nếu thất bại).
+     * comment_id trả về là phần số riêng của comment (không kèm tiền tố post_id) — dùng để
+     * ghép URL dạng story.php/fb://story ở ShortLinkController, chính xác hơn permalink_url
+     * dạng /{actor_id}/posts/{post_id} với app Facebook trên 1 số thiết bị.
      *
      * Xin luôn `permalink_url` ngay trong response của lệnh POST (Graph API hỗ trợ `fields`
      * trên các endpoint tạo object) để tránh phải gọi thêm 1 request GET riêng — bước GET
@@ -43,7 +46,7 @@ class FacebookPageService
      * Nếu vì lý do gì đó vẫn không có permalink_url trong response, thử gọi GET riêng 1 lần;
      * nếu vẫn không có, dùng link dự phòng theo comment id thay vì bỏ cuộc hoàn toàn.
      */
-    public function postComment(string $postId, string $message): ?string
+    public function postComment(string $postId, string $message): ?array
     {
         try {
             $response = Http::asForm()->timeout(15)->post(
@@ -66,13 +69,18 @@ class FacebookPageService
                 return null;
             }
 
-            $commentId = $response->json('id');
+            $fullCommentId = $response->json('id');
+            $commentId = $fullCommentId ? (explode('_', $fullCommentId, 2)[1] ?? $fullCommentId) : null;
 
-            if ($permalink = $response->json('permalink_url')) {
-                return $permalink;
+            $permalink = $response->json('permalink_url')
+                ?? $this->fetchPermalink($fullCommentId)
+                ?? ($fullCommentId ? "https://www.facebook.com/{$fullCommentId}" : null);
+
+            if (! $permalink) {
+                return null;
             }
 
-            return $this->fetchPermalink($commentId) ?? ($commentId ? "https://www.facebook.com/{$commentId}" : null);
+            return ['permalink_url' => $permalink, 'comment_id' => $commentId];
         } catch (\Exception $e) {
             Log::warning('FacebookPageService: lỗi khi đăng comment: '.$e->getMessage(), [
                 'page_id' => $this->pageId,
