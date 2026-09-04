@@ -72,6 +72,11 @@ return [
         // 2026-09-04): Cloudflare tự chèn header CF-Worker vào mọi subrequest nên một rule nginx
         // là chặn được hết Worker, bất kể IP. Nếu Deno Deploy cũng bị chặn thì đổi sang nền tảng
         // khác (Vercel/Netlify Edge) — code relay là Web standard, port gần như nguyên vẹn.
+        // Khai báo được NHIỀU relay, ngăn cách bằng dấu phẩy, theo thứ tự ưu tiên:
+        //   'https://a.deno.net,https://b.vercel.app'
+        // Mỗi relay chỉ có một IP egress cố định nên một cái là một điểm chết — dựng thêm relay
+        // ở nhà cung cấp khác là cách rẻ nhất để salesoc không giết được cả tính năng bằng một
+        // lệnh chặn. Tất cả relay dùng chung SALESOC_RELAY_SECRET bên dưới.
         'relay_url' => env('SALESOC_RELAY_URL', 'https://shopee-affiliate.nhatem99.deno.net'),
         'relay_secret' => env('SALESOC_RELAY_SECRET', 'f58d832ed4b4077f7512eb9bdc964c3a9ff46c906c3920fb'),
     ],

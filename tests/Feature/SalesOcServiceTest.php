@@ -110,7 +110,7 @@ class SalesOcServiceTest extends TestCase
 
         $results = app(SalesOcService::class)->diagnose(self::SHOPEE_URL);
 
-        $this->assertSame(['relay', 'direct'], array_column($results, 'route'));
+        $this->assertSame(['relay:relay.test', 'direct'], array_column($results, 'route'));
         $this->assertFalse($results[0]['ok']);
         $this->assertSame(403, $results[0]['status']);
         $this->assertTrue($results[1]['ok']);
@@ -124,7 +124,29 @@ class SalesOcServiceTest extends TestCase
         Http::fake(['*' => Http::response('Forbidden', 403)]);
 
         $this->assertSame(
-            ['relay', 'proxy', 'direct'],
+            ['relay:relay.test', 'proxy', 'direct'],
+            array_column(app(SalesOcService::class)->diagnose(self::SHOPEE_URL), 'route'),
+        );
+    }
+
+    public function test_several_relays_are_tried_in_the_order_they_are_configured(): void
+    {
+        config(['services.salesoc.relay_url' => 'https://a.test/relay, https://b.test/relay']);
+
+        Http::fake([
+            'https://a.test/*' => Http::response('<html>403 Forbidden</html>', 403),
+            'https://b.test/*' => Http::response($this->salesOcPayload()),
+            'https://salesoc.vn/*' => Http::response('không nên gọi tới đây', 500),
+        ]);
+
+        $result = app(SalesOcService::class)->fetchProductAndVoucherLabels(self::SHOPEE_URL);
+
+        // Relay đầu chết, relay thứ hai gánh — không đụng tới direct (IP server vốn đã bị chặn).
+        $this->assertSame('Áo Hoodie Zip Feeling Cinder', $result['product_name']);
+        Http::assertSentCount(2);
+
+        $this->assertSame(
+            ['relay:a.test', 'relay:b.test', 'direct'],
             array_column(app(SalesOcService::class)->diagnose(self::SHOPEE_URL), 'route'),
         );
     }

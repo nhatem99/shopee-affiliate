@@ -1,0 +1,8 @@
+# Chỉ deploy function, không có site tĩnh nào để build.
+# Base directory phải đặt là deploy/netlify-relay trong giao diện Netlify — file này nằm trong
+# base đó nên các đường dẫn dưới đây là tương đối so với chính nó.
+
+[build]
+  command = ""
+  publish = "public"
+  functions = "netlify/functions"

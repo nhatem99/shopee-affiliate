@@ -144,10 +144,15 @@ class SalesOcService
     {
         $routes = [];
 
-        // Relay: một dịch vụ ngoài gọi hộ salesoc.vn từ IP khác rồi trả nguyên response về.
+        // Relay: dịch vụ ngoài gọi hộ salesoc.vn từ IP khác rồi trả nguyên response về.
         // Xem deploy/deno-relay/main.ts (khuyến nghị) hoặc deploy/cloudflare-worker/salesoc-relay.js.
-        if ($relayUrl = config('services.salesoc.relay_url')) {
-            $routes['relay'] = fn () => Http::withHeaders([
+        //
+        // Mỗi relay đi ra bằng ĐÚNG MỘT IP cố định (đo được: app Deno luôn ra từ 144.202.54.204),
+        // nên một relay = một điểm chết. Khai báo nhiều relay ở nhiều nhà cung cấp khác nhau
+        // (Deno/Vercel/Netlify/Cloud Run...) thì salesoc phải chặn lần lượt từng cái mới giết
+        // được tính năng, và log sẽ báo ngay từ cái đầu tiên chết.
+        foreach ($this->relayUrls() as $relayUrl) {
+            $routes['relay:'.(parse_url($relayUrl, PHP_URL_HOST) ?: $relayUrl)] = fn () => Http::withHeaders([
                 'Accept' => 'application/json',
                 'Content-Type' => 'application/json',
                 'X-Relay-Secret' => config('services.salesoc.relay_secret'),
@@ -163,6 +168,19 @@ class SalesOcService
         $routes['direct'] = fn () => $this->directRequest()->post(self::ENDPOINT, ['url' => $shopeeUrl]);
 
         return $routes;
+    }
+
+    /**
+     * Danh sách relay, khai báo trong config dưới dạng chuỗi ngăn cách bằng dấu phẩy.
+     * Thứ tự trong chuỗi là thứ tự ưu tiên khi gọi.
+     *
+     * @return list<string>
+     */
+    private function relayUrls(): array
+    {
+        $raw = (string) config('services.salesoc.relay_url');
+
+        return array_values(array_filter(array_map('trim', explode(',', $raw))));
     }
 
     private function directRequest(): PendingRequest

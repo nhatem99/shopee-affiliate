@@ -46,10 +46,10 @@ Deno.serve(async (request: Request): Promise<Response> => {
     return new Response('Forbidden', { status: 403 })
   }
 
-  // GET /ip — IP egress hiện tại của relay. Gọi vài lần liên tiếp là biết Deno đi ra bằng
-  // một IP cố định hay xoay trong một dải; và khi salesoc chặn tiếp thì so IP trước/sau để
-  // biết họ chặn theo IP hay theo dấu hiệu khác. Vẫn yêu cầu secret như mọi endpoint khác.
-  if (request.method === 'GET' && new URL(request.url).pathname === '/ip') {
+  // GET — trả IP egress hiện tại của relay. Quy ước chung cho mọi relay (Deno/Vercel/Netlify)
+  // để chỉ cần nhớ một cách gọi. Dùng để biết relay đi ra bằng IP nào, và khi salesoc chặn tiếp
+  // thì so IP trước/sau để biết họ chặn theo IP hay theo dấu hiệu khác.
+  if (request.method === 'GET') {
     const echo = await fetch(IP_ECHO_ENDPOINT)
 
     return new Response(await echo.text(), {
