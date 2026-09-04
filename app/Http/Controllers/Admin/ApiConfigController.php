@@ -86,6 +86,40 @@ class ApiConfigController extends Controller
         }
     }
 
+    /**
+     * Trang chẩn đoán TẠM THỜI: app Facebook trên điện thoại không mở đúng comment khi bấm
+     * link, mà scheme fb:// thì không dán thẳng vào thanh địa chỉ được (trình duyệt hiểu thành
+     * tìm kiếm) — cần bấm từ một trang web thật. Trang này liệt kê mọi định dạng ứng viên để
+     * thử nhanh trên máy thật, tìm ra định dạng nào app thực sự route đúng. Xoá sau khi chốt.
+     */
+    public function facebookDeeplinkTest(Request $request): \Illuminate\View\View
+    {
+        $config = ApiConfig::where('platform', 'facebook')->where('is_active', true)->firstOrFail();
+
+        $commentFullId = $request->query('comment_id');
+
+        abort_if(! $commentFullId || ! str_contains($commentFullId, '_'), 400, 'Thiếu ?comment_id={post_id}_{comment_id}');
+
+        [$postId, $commentId] = explode('_', $commentFullId, 2);
+        [$pageId] = explode('_', $config->meta['target_post_id'] ?? '', 2);
+
+        $storyPhp = "https://www.facebook.com/story.php?story_fbid={$postId}&id={$pageId}&comment_id={$commentId}";
+        $permalink = "https://www.facebook.com/{$pageId}/posts/{$postId}?comment_id={$commentId}";
+        $query = http_build_query(['story_fbid' => $postId, 'id' => $pageId, 'comment_id' => $commentId]);
+
+        return view('fb-deeplink-test', [
+            'commentFullId' => $commentFullId,
+            'candidates' => [
+                ['label' => 'fb://permalink.php (đang dùng)', 'url' => "fb://permalink.php?{$query}"],
+                ['label' => 'fb://story', 'url' => "fb://story?{$query}"],
+                ['label' => 'fb://facewebmodal bọc story.php', 'url' => 'fb://facewebmodal/f?href='.urlencode($storyPhp)],
+                ['label' => 'fb://facewebmodal bọc permalink', 'url' => 'fb://facewebmodal/f?href='.urlencode($permalink)],
+                ['label' => 'Web: story.php', 'url' => $storyPhp],
+                ['label' => 'Web: permalink thường', 'url' => $permalink],
+            ],
+        ]);
+    }
+
     public function facebookPosts(ApiConfig $config): JsonResponse
     {
         if ($config->platform !== 'facebook') {

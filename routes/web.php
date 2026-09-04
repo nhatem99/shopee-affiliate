@@ -117,6 +117,8 @@ Route::middleware(['auth', 'auth.admin'])->prefix('admin')->name('admin.')->grou
     Route::post('/api-config', [ApiConfigController::class, 'store'])->name('api-config.store');
     Route::post('/api-config/{config}/test', [ApiConfigController::class, 'test'])->name('api-config.test');
     Route::get('/api-config/{config}/facebook-posts', [ApiConfigController::class, 'facebookPosts'])->name('api-config.facebook-posts');
+    // Tạm thời: trang bấm thử các định dạng deep-link Facebook trên máy thật. Xoá sau khi chốt.
+    Route::get('/fb-deeplink-test', [ApiConfigController::class, 'facebookDeeplinkTest'])->name('fb-deeplink-test');
     Route::get('/vouchers', [VoucherController::class, 'index'])->name('vouchers');
     Route::post('/vouchers', [VoucherController::class, 'store'])->name('vouchers.store');
     Route::patch('/vouchers/{voucher}', [VoucherController::class, 'update'])->name('vouchers.update');
