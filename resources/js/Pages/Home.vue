@@ -189,6 +189,10 @@ async function openVoucherLink(entry, productName = null) {
     // Mở tab trắng NGAY trong lúc click (đồng bộ) để trình duyệt không chặn popup —
     // nếu đợi axios xong mới gọi window.open() thì đã mất "user gesture", dễ bị chặn.
     const newTab = window.open('', '_blank')
+    // Ghi tạm 1 trang loading vào tab đó — bước tạo link có thể mất vài giây (theo dõi
+    // redirect chuỗi + có thể đăng comment Facebook), tab trắng trơn trong lúc chờ dễ khiến
+    // khách tưởng bị treo rồi đóng tab/bấm lại.
+    newTab?.document.write('<!DOCTYPE html><html lang="vi"><head><meta charset="utf-8"><title>Đang tạo liên kết...</title><style>body{display:flex;align-items:center;justify-content:center;height:100vh;margin:0;font-family:system-ui,sans-serif;color:#666;background:#fafafa}</style></head><body>Đang tạo liên kết, vui lòng đợi giây lát...</body></html>')
 
     try {
         const { data } = await axios.post('/voucher/shorten', {
