@@ -69,10 +69,12 @@ class FacebookPageService
             $commentId = $response->json('id');
 
             if ($permalink = $response->json('permalink_url')) {
-                return $permalink;
+                return $this->toMobileUrl($permalink);
             }
 
-            return $this->fetchPermalink($commentId) ?? ($commentId ? "https://www.facebook.com/{$commentId}" : null);
+            $fallback = $this->fetchPermalink($commentId) ?? ($commentId ? "https://www.facebook.com/{$commentId}" : null);
+
+            return $this->toMobileUrl($fallback);
         } catch (\Exception $e) {
             Log::warning('FacebookPageService: lỗi khi đăng comment: '.$e->getMessage(), [
                 'page_id' => $this->pageId,
@@ -114,6 +116,21 @@ class FacebookPageService
 
             return [];
         }
+    }
+
+    /**
+     * Đổi www.facebook.com -> m.facebook.com — bản mobile web ít bị app Facebook "cướp" quyền
+     * mở link hơn (Universal Link/App Link deep-vào-đúng-comment của app rất hay không ổn định,
+     * nhiều khi chỉ mở app ra trang chủ chứ không tới đúng bài/comment). m. vẫn tự cuộn đúng
+     * tới comment khi mở bằng trình duyệt.
+     */
+    private function toMobileUrl(?string $url): ?string
+    {
+        if (! $url) {
+            return null;
+        }
+
+        return preg_replace('#^https://www\.facebook\.com/#', 'https://m.facebook.com/', $url);
     }
 
     private function fetchPermalink(?string $commentId): ?string
