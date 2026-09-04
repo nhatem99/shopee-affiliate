@@ -46,7 +46,7 @@ class FacebookPageService
     public function postComment(string $postId, string $message): ?string
     {
         try {
-            $response = Http::asForm()->timeout(8)->post(
+            $response = Http::asForm()->timeout(15)->post(
                 'https://graph.facebook.com/'.self::GRAPH_VERSION."/{$postId}/comments",
                 [
                     'message' => $message,
@@ -123,7 +123,7 @@ class FacebookPageService
         }
 
         try {
-            $response = Http::timeout(8)->get(
+            $response = Http::timeout(15)->get(
                 'https://graph.facebook.com/'.self::GRAPH_VERSION."/{$commentId}",
                 ['fields' => 'permalink_url', 'access_token' => $this->token]
             );
