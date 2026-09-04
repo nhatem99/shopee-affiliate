@@ -89,6 +89,17 @@ function save(form) {
                 Để trống = giữ nhãn mặc định / nhãn thật từ API.
             </p>
 
+            <!-- Empty state — the table has no rows (defaults never seeded). Without this
+                 the page renders as a blank panel with no hint of what went wrong. -->
+            <div
+                v-if="!forms.length"
+                class="bg-[var(--color-surface)] rounded-2xl border border-[var(--color-line)] p-5 text-sm text-[var(--color-muted)]"
+            >
+                Chưa có cấu hình nút nào. Chạy
+                <code class="font-mono text-[var(--color-ink)]">php artisan db:seed --class=VoucherButtonConfigSeeder</code>
+                để tạo 4 nguồn mặc định (Facebook, Instagram, Zalo, YouTube).
+            </div>
+
             <div
                 v-for="form in forms"
                 :key="form.id"

@@ -19,8 +19,10 @@ class VoucherButtonConfigSeeder extends Seeder
             ['source' => 'youtube',   'label' => null, 'sort_order' => 3, 'is_featured' => false],
         ];
 
+        // firstOrCreate, not updateOrCreate: re-running the seeder on an existing
+        // install must not wipe labels/order the admin already customised.
         foreach ($defaults as $row) {
-            VoucherButtonConfig::updateOrCreate(
+            VoucherButtonConfig::firstOrCreate(
                 ['source' => $row['source']],
                 $row,
             );
