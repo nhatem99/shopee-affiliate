@@ -78,6 +78,7 @@ class ShortLinkController extends Controller
             $validated['product_name'] ?? null,
             $link->code,
             $shortUrl,
+            $request->userAgent(),
         );
 
         $this->tracking->log('voucher_select', $request, [
@@ -143,7 +144,7 @@ class ShortLinkController extends Controller
      * Nếu đăng comment thất bại (chưa cấu hình, token lỗi, Facebook sập...) thì trả về
      * $fallbackUrl để không chặn đường mua hàng của khách.
      */
-    private function facebookCommentRedirectUrl(?string $source, ?string $productName, string $shortCode, string $fallbackUrl): string
+    private function facebookCommentRedirectUrl(?string $source, ?string $productName, string $shortCode, string $fallbackUrl, ?string $userAgent): string
     {
         if ($source === null) {
             return $fallbackUrl;
@@ -170,7 +171,7 @@ class ShortLinkController extends Controller
         $cacheKey = "fb_comment_link:{$source}:{$productKey}";
 
         if ($cached = Cache::get($cacheKey)) {
-            return $cached;
+            return $this->toFacebookAppLink($cached, $userAgent);
         }
 
         $displayName = $productName ?: 'Sản phẩm Shopee';
@@ -184,6 +185,24 @@ class ShortLinkController extends Controller
 
         Cache::put($cacheKey, $permalink, now()->addMinutes(20));
 
-        return $permalink;
+        return $this->toFacebookAppLink($permalink, $userAgent);
+    }
+
+    /**
+     * Trên mobile, mở thẳng bằng URL https://facebook.com/... hay bị OS/trình duyệt xử lý dở:
+     * có lúc app Facebook mở ra nhưng không tới đúng bài/comment (chỉ về trang chủ), có lúc lại
+     * đòi đăng nhập lại dù đã đăng nhập trong app (trình duyệt mobile là 1 phiên đăng nhập khác
+     * với app). Dùng thẳng scheme fb://facewebmodal/f?href=... để mở NGAY trong app Facebook
+     * (nếu đã cài) bằng chính phiên đăng nhập của app, không qua trình duyệt/login-wall nữa.
+     * Chỉ áp dụng cho mobile — desktop không có app Facebook để bắt scheme này, giữ nguyên
+     * link https:// gốc (đã xác nhận hoạt động đúng trên desktop).
+     */
+    private function toFacebookAppLink(string $permalink, ?string $userAgent): string
+    {
+        if (! TrackingService::isMobile($userAgent)) {
+            return $permalink;
+        }
+
+        return 'fb://facewebmodal/f?href='.urlencode($permalink);
     }
 }
