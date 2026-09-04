@@ -78,7 +78,6 @@ class ShortLinkController extends Controller
             $validated['product_name'] ?? null,
             $link->code,
             $shortUrl,
-            $request->userAgent(),
         );
 
         $this->tracking->log('voucher_select', $request, [
@@ -144,7 +143,7 @@ class ShortLinkController extends Controller
      * Nếu đăng comment thất bại (chưa cấu hình, token lỗi, Facebook sập...) thì trả về
      * $fallbackUrl để không chặn đường mua hàng của khách.
      */
-    private function facebookCommentRedirectUrl(?string $source, ?string $productName, string $shortCode, string $fallbackUrl, ?string $userAgent): string
+    private function facebookCommentRedirectUrl(?string $source, ?string $productName, string $shortCode, string $fallbackUrl): string
     {
         if ($source === null) {
             return $fallbackUrl;
@@ -171,7 +170,7 @@ class ShortLinkController extends Controller
         $cacheKey = "fb_comment_link:{$source}:{$productKey}";
 
         if ($cached = Cache::get($cacheKey)) {
-            return $this->toFacebookAppLink($cached, $postId, $userAgent);
+            return $this->commentUrl($cached, $postId);
         }
 
         $displayName = $productName ?: 'Sản phẩm Shopee';
@@ -185,35 +184,31 @@ class ShortLinkController extends Controller
 
         Cache::put($cacheKey, $posted, now()->addMinutes(20));
 
-        return $this->toFacebookAppLink($posted, $postId, $userAgent);
+        return $this->commentUrl($posted, $postId);
     }
 
     /**
-     * Trên mobile, mở thẳng bằng permalink_url dạng /{actor_id}/posts/{post_id}?comment_id=...
-     * hay bị OS/app Facebook xử lý dở: có lúc app mở ra nhưng không tới đúng bài/comment (chỉ về
-     * trang chủ), có lúc lại đòi đăng nhập lại dù đã đăng nhập trong app (trình duyệt mobile là
-     * 1 phiên đăng nhập khác với app). Dùng scheme fb://permalink.php?story_fbid=..&id=..&
-     * comment_id=.. (id = Page ID thật, không phải actor_id lạ trong permalink_url) để mở thẳng
-     * vào đúng story/comment bằng chính phiên đăng nhập của app, không qua trình duyệt/login-wall.
-     * Chỉ áp dụng cho mobile — desktop không có app Facebook để bắt scheme này, giữ nguyên
-     * permalink_url gốc (đã xác nhận hoạt động đúng trên desktop).
+     * Ghép URL story.php trỏ tới đúng comment, thay cho permalink_url dạng
+     * /{actor_id}/posts/{post_id} mà Graph API trả về.
+     *
+     * Đã test trên máy thật: mọi biến thể scheme fb:// (permalink.php, story, facewebmodal)
+     * đều KHÔNG mở đúng comment — app Facebook chỉ mở ra trang chủ hoặc báo nội dung không
+     * hiển thị. Riêng URL web thường thì chạy đúng, nên bỏ hẳn hướng custom scheme (cũng không
+     * còn cần phân biệt mobile/desktop nữa). Dùng story.php vì nó ghép từ đúng Page ID trong
+     * cấu hình, không phụ thuộc actor_id lạ mà permalink_url hay trả về.
+     *
+     * Nếu thiếu dữ liệu để ghép thì rơi về permalink_url gốc của Graph API.
      */
-    private function toFacebookAppLink(array $posted, string $postId, ?string $userAgent): string
+    private function commentUrl(array $posted, string $postId): string
     {
-        $permalink = $posted['permalink_url'];
-
-        if (! TrackingService::isMobile($userAgent)) {
-            return $permalink;
-        }
-
         $commentId = $posted['comment_id'] ?? null;
         [$pageId, $storyFbid] = array_pad(explode('_', $postId, 2), 2, null);
 
         if (! $commentId || ! $pageId || ! $storyFbid) {
-            return $permalink;
+            return $posted['permalink_url'];
         }
 
-        return 'fb://permalink.php?'.http_build_query([
+        return 'https://www.facebook.com/story.php?'.http_build_query([
             'story_fbid' => $storyFbid,
             'id' => $pageId,
             'comment_id' => $commentId,
