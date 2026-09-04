@@ -134,9 +134,11 @@ class ShortLinkController extends Controller
      * click được tính là traffic từ Facebook thật. Khi tắt (mặc định), khách bấm mã đi
      * thẳng $fallbackUrl (/go/{code} → Shopee) như hành vi gốc, không đụng gì tới Facebook.
      *
-     * Giới hạn 1 comment/sản phẩm mỗi 20 phút (bất kể source nào bấm trước) để không bị
-     * Facebook đánh dấu spam khi sản phẩm hot có nhiều lượt bấm liên tục — trong khung đó,
-     * các lượt bấm sau tái sử dụng permalink đã đăng thay vì đăng comment mới.
+     * Giới hạn 1 comment/sản phẩm/loại mã mỗi 20 phút để không bị Facebook đánh dấu spam khi
+     * sản phẩm hot có nhiều lượt bấm liên tục — trong khung đó, các lượt bấm LẶP LẠI cùng
+     * loại mã tái sử dụng permalink đã đăng thay vì đăng comment mới. Tính riêng theo từng
+     * loại mã (không gộp chung theo sản phẩm) vì mỗi mã trỏ tới voucher khác nhau — gộp chung
+     * sẽ đưa nhầm khách bấm mã IG tới đúng comment/voucher của mã FB đã đăng trước đó.
      *
      * Nếu đăng comment thất bại (chưa cấu hình, token lỗi, Facebook sập...) thì trả về
      * $fallbackUrl để không chặn đường mua hàng của khách.
@@ -161,8 +163,11 @@ class ShortLinkController extends Controller
             return $fallbackUrl;
         }
 
+        // Gộp theo cả $source lẫn tên sản phẩm — mỗi loại mã (FB/YTB/IG/Zalo) trỏ tới voucher
+        // khác nhau (khác $fallbackUrl), nên gộp chung chỉ theo sản phẩm sẽ đưa nhầm khách bấm
+        // mã IG tới comment/voucher của mã FB đã đăng trước đó trong cùng cửa sổ cooldown.
         $productKey = Str::slug($productName ?: $shortCode) ?: $shortCode;
-        $cacheKey = "fb_comment_link:{$productKey}";
+        $cacheKey = "fb_comment_link:{$source}:{$productKey}";
 
         if ($cached = Cache::get($cacheKey)) {
             return $cached;
