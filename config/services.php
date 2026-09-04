@@ -64,12 +64,16 @@ return [
         // URL của relay gọi hộ salesoc.vn từ một IP khác rồi trả nguyên response về.
         // SalesOcService thử relay trước, hỏng thì tự rơi xuống proxy/direct.
         //
-        // CẢNH BÁO: default hard-code dưới đây là Cloudflare Worker cũ và ĐÃ BỊ salesoc.vn chặn
-        // (403 từ nginx của họ, xác nhận trong log production 2026-09-04) — Cloudflare tự chèn
-        // header CF-Worker vào subrequest nên mọi Worker đều bị nhận diện. Deploy relay mới theo
-        // deploy/deno-relay/main.ts rồi set SALESOC_RELAY_URL/SECRET trong .env để thay thế.
-        'relay_url' => env('SALESOC_RELAY_URL', 'https://salesoc-relay.hoangvuminhnhat1.workers.dev'),
-        'relay_secret' => env('SALESOC_RELAY_SECRET', '81651b0350a2c63cd43c3f277d8a0c7a125c001980d8b638'),
+        // Hard-code sẵn app Deno Deploy đang chạy (nguồn: deploy/deno-relay/main.ts) để push code
+        // là production dùng được ngay, không phải sửa .env trên server. env() chỉ là đường override
+        // khi cần đổi gấp mà chưa kịp deploy.
+        //
+        // Relay TRƯỚC ĐÓ là Cloudflare Worker và đã bị salesoc.vn chặn 403 ở nginx (log production
+        // 2026-09-04): Cloudflare tự chèn header CF-Worker vào mọi subrequest nên một rule nginx
+        // là chặn được hết Worker, bất kể IP. Nếu Deno Deploy cũng bị chặn thì đổi sang nền tảng
+        // khác (Vercel/Netlify Edge) — code relay là Web standard, port gần như nguyên vẹn.
+        'relay_url' => env('SALESOC_RELAY_URL', 'https://shopee-affiliate.nhatem99.deno.net'),
+        'relay_secret' => env('SALESOC_RELAY_SECRET', 'f58d832ed4b4077f7512eb9bdc964c3a9ff46c906c3920fb'),
     ],
 
 ];
