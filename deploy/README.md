@@ -22,17 +22,41 @@ ra từ `144.202.54.204` (The Constant Company / Vultr). Nghĩa là một relay 
 chỉ cần chặn một địa chỉ.
 
 Cách bù: dựng nhiều relay ở **nhiều nhà cung cấp khác nhau**. `SALESOC_RELAY_URL` nhận danh sách
-ngăn cách bằng dấu phẩy, `SalesOcService` thử lần lượt và lấy cái đầu tiên trả dữ liệu dùng được:
+ngăn cách bằng dấu phẩy (cấu hình mặc định nằm ở `config/services.php`, không cần `.env`):
 
 ```
 SALESOC_RELAY_URL=https://a.deno.net,https://b.vercel.app/api/relay,https://c.netlify.app/relay
 ```
 
-Khi một relay chết, log ghi `SalesOcService: đường 'relay:<host>' bị từ chối` và tính năng vẫn chạy
-bằng relay sau — xem tại `/admin/logs`. Đó là lúc dựng relay thay thế, không phải lúc chữa cháy.
+## Xoay vòng IP
 
-Muốn IP **thật sự xoay theo dải** thì phải dùng rotating residential proxy (trả phí) — cắm vào
-`SALESOC_PROXY_URL`, không cần sửa code.
+`SalesOcService` **xoay vòng** danh sách trên theo từng lần quét:
+
+| Lần quét | Relay đi ra |
+|----------|-------------|
+| link 1 | `a.deno.net` |
+| link 2 | `b.vercel.app` |
+| link 3 | `c.netlify.app` |
+| link 4 | quay lại `a.deno.net` |
+
+Lý do không phải "luôn ưu tiên relay đầu": làm vậy thì toàn bộ lưu lượng dồn vào một IP, salesoc
+nhìn thấy một nguồn gọi dày bất thường rồi chặn — đúng kịch bản đã xảy ra với IP VPS và Cloudflare
+Worker. Chia đều cho n relay thì mỗi IP chỉ gánh 1/n.
+
+Con trỏ xoay vòng nằm ở cache (`salesoc:relay-cursor`, cache store production là `database`) nên
+đếm đúng xuyên qua mọi request và queue worker. Cache hỏng thì chỉ mất phần rải tải, tính năng
+vẫn chạy bằng relay đầu danh sách.
+
+Xoay vòng **không** thay thế fallback: relay được chia cho lượt nào mà chết thì lượt đó tự rơi
+sang relay kế tiếp trong vòng, rồi mới tới `proxy`/`direct`. Khi đó log ghi
+`SalesOcService: đường 'relay:<host>' bị từ chối` — xem tại `/admin/logs`. Đó là lúc dựng relay
+thay thế, không phải lúc chữa cháy.
+
+Lưu ý: kết quả mỗi link được cache 15 phút, nên quét lại **cùng một link** không tốn lượt xoay và
+không gọi ra ngoài.
+
+Muốn IP **thật sự xoay theo dải** (mỗi request một IP khác trong hàng nghìn) thì phải dùng rotating
+residential proxy (trả phí) — cắm vào `SALESOC_PROXY_URL`, không cần sửa code.
 
 ## Các bản hiện có
 

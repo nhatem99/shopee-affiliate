@@ -62,7 +62,7 @@ return [
         'proxy' => env('SALESOC_PROXY_URL'),
 
         // URL của relay gọi hộ salesoc.vn từ một IP khác rồi trả nguyên response về.
-        // SalesOcService thử relay trước, hỏng thì tự rơi xuống proxy/direct.
+        // SalesOcService đi relay trước, hỏng thì tự rơi xuống proxy/direct.
         //
         // Hard-code sẵn app Deno Deploy đang chạy (nguồn: deploy/deno-relay/main.ts) để push code
         // là production dùng được ngay, không phải sửa .env trên server. env() chỉ là đường override
@@ -72,12 +72,22 @@ return [
         // 2026-09-04): Cloudflare tự chèn header CF-Worker vào mọi subrequest nên một rule nginx
         // là chặn được hết Worker, bất kể IP. Nếu Deno Deploy cũng bị chặn thì đổi sang nền tảng
         // khác (Vercel/Netlify Edge) — code relay là Web standard, port gần như nguyên vẹn.
-        // Khai báo được NHIỀU relay, ngăn cách bằng dấu phẩy, theo thứ tự ưu tiên:
-        //   'https://a.deno.net,https://b.vercel.app'
+        // Khai báo được NHIỀU relay, ngăn cách bằng dấu phẩy:
+        //   'https://a.deno.net,https://b.vercel.app/api/relay,https://c.netlify.app/relay'
         // Mỗi relay chỉ có một IP egress cố định nên một cái là một điểm chết — dựng thêm relay
         // ở nhà cung cấp khác là cách rẻ nhất để salesoc không giết được cả tính năng bằng một
         // lệnh chặn. Tất cả relay dùng chung SALESOC_RELAY_SECRET bên dưới.
-        'relay_url' => env('SALESOC_RELAY_URL', 'https://shopee-affiliate.nhatem99.deno.net'),
+        //
+        // SalesOcService XOAY VÒNG danh sách này: link 1 đi relay 1, link 2 đi relay 2, link 3
+        // đi relay 3, link 4 quay lại relay 1 — để lưu lượng chia đều cho từng IP thay vì dồn
+        // hết vào relay đầu (dồn một IP chính là thứ khiến salesoc phát hiện và chặn).
+        // Relay của lượt nào chết thì lượt đó vẫn tự rơi sang relay kế tiếp, rồi proxy/direct.
+        // IP egress đo được (GET vào relay trả về IP của chính nó):
+        //   deno.net        → 144.202.54.204 (The Constant Company / Vultr)
+        //   vercel.app      → 54.254.149.225 (AWS ap-southeast-1, Singapore)
+        // Hai nhà cung cấp, hai dải IP không liên quan nhau — salesoc chặn một bên thì bên kia
+        // vẫn chạy. Deploy thêm bản Netlify (deploy/netlify-relay) rồi nối tiếp vào đây là đủ 3.
+        'relay_url' => env('SALESOC_RELAY_URL', 'https://shopee-affiliate.nhatem99.deno.net,https://shopee-affiliate-phi.vercel.app/api/relay'),
         'relay_secret' => env('SALESOC_RELAY_SECRET', 'f58d832ed4b4077f7512eb9bdc964c3a9ff46c906c3920fb'),
     ],
 

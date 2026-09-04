@@ -150,4 +150,49 @@ class SalesOcServiceTest extends TestCase
             array_column(app(SalesOcService::class)->diagnose(self::SHOPEE_URL), 'route'),
         );
     }
+
+    public function test_each_scan_starts_from_the_next_relay_so_the_load_is_spread_over_every_ip(): void
+    {
+        config(['services.salesoc.relay_url' => 'https://a.test/relay,https://b.test/relay,https://c.test/relay']);
+
+        Http::fake([
+            'https://a.test/*' => Http::response($this->salesOcPayload()),
+            'https://b.test/*' => Http::response($this->salesOcPayload()),
+            'https://c.test/*' => Http::response($this->salesOcPayload()),
+            'https://salesoc.vn/*' => Http::response('không nên gọi tới đây', 500),
+        ]);
+
+        $service = app(SalesOcService::class);
+
+        // Mỗi lượt một link khác nhau, nếu không lượt sau ăn cache 15 phút và không gọi ra ngoài.
+        foreach (range(1, 4) as $i) {
+            $service->fetchProductAndVoucherLabels(self::SHOPEE_URL.'?v='.$i);
+        }
+
+        $hosts = Http::recorded()
+            ->map(fn (array $pair) => parse_url($pair[0]->url(), PHP_URL_HOST))
+            ->all();
+
+        // Link 1→a, link 2→b, link 3→c, link 4 quay lại a. Mỗi relay chỉ đi đúng 1 request,
+        // tức không relay nào bị gọi thừa (relay sau chỉ chạy khi relay của lượt đó hỏng).
+        $this->assertSame(['a.test', 'b.test', 'c.test', 'a.test'], $hosts);
+    }
+
+    public function test_a_dead_relay_still_falls_back_within_the_same_scan(): void
+    {
+        config(['services.salesoc.relay_url' => 'https://a.test/relay,https://b.test/relay']);
+
+        Http::fake([
+            // Lượt đầu được chia cho a.test — a.test chết thì lượt đó phải tự rơi sang b.test,
+            // xoay vòng không được biến một relay chết thành một lần scan hỏng.
+            'https://a.test/*' => Http::response('<html>403 Forbidden</html>', 403),
+            'https://b.test/*' => Http::response($this->salesOcPayload()),
+            'https://salesoc.vn/*' => Http::response('không nên gọi tới đây', 500),
+        ]);
+
+        $result = app(SalesOcService::class)->fetchProductAndVoucherLabels(self::SHOPEE_URL);
+
+        $this->assertSame('Áo Hoodie Zip Feeling Cinder', $result['product_name']);
+        Http::assertSentCount(2);
+    }
 }
