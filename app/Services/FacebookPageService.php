@@ -33,14 +33,24 @@ class FacebookPageService
         return $response->successful();
     }
 
-    /** Đăng comment rồi trả về permalink trỏ thẳng tới comment đó (null nếu thất bại). */
+    /**
+     * Đăng comment rồi trả về permalink trỏ thẳng tới comment đó (null nếu thất bại).
+     *
+     * Xin luôn `permalink_url` ngay trong response của lệnh POST (Graph API hỗ trợ `fields`
+     * trên các endpoint tạo object) để tránh phải gọi thêm 1 request GET riêng — bước GET
+     * phụ đó từng là điểm lỗi: comment đăng thành công nhưng gọi tiếp bị timeout/lỗi mạng
+     * khiến cả hàm coi như thất bại và fallback nhầm về Shopee dù comment đã lên thật.
+     * Nếu vì lý do gì đó vẫn không có permalink_url trong response, thử gọi GET riêng 1 lần;
+     * nếu vẫn không có, dùng link dự phòng theo comment id thay vì bỏ cuộc hoàn toàn.
+     */
     public function postComment(string $postId, string $message): ?string
     {
         try {
-            $response = Http::asForm()->timeout(10)->post(
+            $response = Http::asForm()->timeout(15)->post(
                 'https://graph.facebook.com/'.self::GRAPH_VERSION."/{$postId}/comments",
                 [
                     'message' => $message,
+                    'fields' => 'id,permalink_url',
                     'access_token' => $this->token,
                 ]
             );
@@ -56,7 +66,13 @@ class FacebookPageService
                 return null;
             }
 
-            return $this->fetchPermalink($response->json('id'));
+            $commentId = $response->json('id');
+
+            if ($permalink = $response->json('permalink_url')) {
+                return $permalink;
+            }
+
+            return $this->fetchPermalink($commentId) ?? ($commentId ? "https://www.facebook.com/{$commentId}" : null);
         } catch (\Exception $e) {
             Log::warning('FacebookPageService: lỗi khi đăng comment: '.$e->getMessage(), [
                 'page_id' => $this->pageId,
@@ -107,12 +123,22 @@ class FacebookPageService
         }
 
         try {
-            $response = Http::timeout(10)->get(
+            $response = Http::timeout(15)->get(
                 'https://graph.facebook.com/'.self::GRAPH_VERSION."/{$commentId}",
                 ['fields' => 'permalink_url', 'access_token' => $this->token]
             );
 
-            return $response->successful() ? $response->json('permalink_url') : null;
+            if (! $response->successful()) {
+                Log::warning('FacebookPageService: không lấy được permalink comment', [
+                    'comment_id' => $commentId,
+                    'status' => $response->status(),
+                    'body' => $response->body(),
+                ]);
+
+                return null;
+            }
+
+            return $response->json('permalink_url');
         } catch (\Exception $e) {
             Log::warning('FacebookPageService: không lấy được permalink comment: '.$e->getMessage(), [
                 'comment_id' => $commentId,
