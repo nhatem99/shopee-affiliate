@@ -29,6 +29,7 @@ jobs:
             npm run build
 
             php8.4 artisan migrate --force
+            php8.4 artisan db:seed --class=ApiConfigSeeder --force
             php8.4 artisan optimize:clear
             php8.4 artisan optimize
 
