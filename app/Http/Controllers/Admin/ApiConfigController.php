@@ -47,6 +47,7 @@ class ApiConfigController extends Controller
             'meta' => ['nullable', 'array'],
             'meta.target_post_id' => ['nullable', 'string', 'max:255'],
             'meta.comment_redirect_enabled' => ['nullable', 'boolean'],
+            'meta.auto_source' => ['nullable', 'string', 'in:facebook,instagram,zalo,youtube'],
         ]);
 
         $existing = ApiConfig::where('platform', $validated['platform'])->first();

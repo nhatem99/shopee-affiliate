@@ -28,6 +28,7 @@ function editConfig(config) {
         meta: {
             target_post_id: config.meta?.target_post_id || '',
             comment_redirect_enabled: config.meta?.comment_redirect_enabled || false,
+            auto_source: config.meta?.auto_source || '',
         },
     })
 
@@ -110,6 +111,10 @@ async function testConfig(config) {
                             <span class="font-medium text-[var(--color-ink)]">Chuyển hướng qua comment FB:</span>
                             {{ config.meta?.comment_redirect_enabled ? 'Đang bật' : 'Đang tắt (khách bấm mã đi thẳng Shopee)' }}
                         </p>
+                        <p>
+                            <span class="font-medium text-[var(--color-ink)]">Mã tự động dùng:</span>
+                            {{ config.meta?.auto_source || 'Không (để khách tự chọn mã)' }}
+                        </p>
                     </template>
                 </div>
 
@@ -150,6 +155,23 @@ async function testConfig(config) {
                             Khi bật: mọi lượt bấm mã sẽ đăng comment lên bài viết chọn bên dưới rồi đưa khách tới đúng comment đó thay vì Shopee.
                             Khi tắt: khách bấm mã đi thẳng Shopee như bình thường, không đụng gì tới Facebook.
                         </p>
+
+                        <div>
+                            <label class="block text-sm font-semibold text-[var(--color-ink)] mb-1">Mã tự động dùng</label>
+                            <select v-model="editing.meta.auto_source"
+                                class="w-full border border-[var(--color-line)] rounded-xl px-4 py-2.5 text-sm text-[var(--color-ink)] bg-[var(--color-surface)] focus:outline-none focus:border-[var(--color-accent)] transition">
+                                <option value="">Để khách tự chọn mã (hiện đủ các nút mã)</option>
+                                <option value="facebook">Mã Facebook</option>
+                                <option value="instagram">Mã Instagram</option>
+                                <option value="zalo">Mã Zalo</option>
+                                <option value="youtube">Mã YouTube</option>
+                            </select>
+                            <p class="text-xs text-[var(--color-muted)] mt-1">
+                                Chọn 1 loại mã: khách dán link xong đi thẳng tới comment luôn, không thấy nút chọn mã nữa —
+                                mỗi sản phẩm vì thế chỉ sinh đúng 1 comment. Nếu sản phẩm không có mã của loại đã chọn thì
+                                tự dùng mã đầu tiên còn có. Chỉ có tác dụng khi đã bật chuyển hướng qua comment ở trên.
+                            </p>
+                        </div>
 
                         <div>
                             <label class="block text-sm font-semibold text-[var(--color-ink)] mb-1">Bài viết sẽ nhận comment</label>

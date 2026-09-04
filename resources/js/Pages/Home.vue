@@ -15,6 +15,10 @@ const props = defineProps({
     // Admin-editable button display config (array ordered by sort_order from server).
     // Each element: { source, label, sort_order, is_featured }.
     voucherButtonConfig: { type: Array, default: () => [] },
+    // Khi admin đã bật chuyển hướng qua comment Facebook VÀ chọn sẵn 1 loại mã: ẩn hết nút
+    // chọn mã, tự đưa khách thẳng tới comment ngay sau khi dán link. Mỗi sản phẩm chỉ sinh 1
+    // comment thay vì mỗi loại mã khách bấm lại thêm 1 cái.
+    autoRedirectSource: { type: String, default: null },
 })
 
 const toast = useToast()
@@ -96,6 +100,11 @@ function resolveVoucher() {
                     },
                     ...history.value,
                 ].slice(0, 5)
+            }
+            if (props.autoRedirectSource) {
+                autoRedirect()
+
+                return
             }
             // Cuộn thẳng tới khu vực chọn mã ngay khi có kết quả — khách không cần tự kéo xuống.
             nextTick(() => voucherResultEl.value?.scrollIntoView({ behavior: 'smooth', block: 'start' }))
@@ -181,6 +190,41 @@ const featuredEntryKey = computed(() => {
 })
 
 const shorteningKey = ref(null)
+const autoRedirecting = ref(false)
+
+/**
+ * Chế độ admin chọn sẵn loại mã: khách dán link xong là đi thẳng tới comment, không bấm mã nữa.
+ * Điều hướng ngay trên tab hiện tại thay vì mở tab mới — hàm này chạy sau khi request resolve
+ * trả về nên đã mất "user gesture", window.open() lúc này chắc chắn bị trình duyệt chặn.
+ * Nếu sản phẩm không có mã của đúng nguồn admin chọn thì lấy tạm mã đầu tiên còn có, để khách
+ * vẫn mua được thay vì kẹt lại không có gì.
+ */
+async function autoRedirect() {
+    const entries = voucherLinkEntries.value
+    const entry = entries.find(e => e.source === props.autoRedirectSource) ?? entries[0]
+
+    if (!entry) {
+        toast.error('Sản phẩm này hiện không có mã giảm giá.')
+
+        return
+    }
+
+    autoRedirecting.value = true
+
+    try {
+        const { data } = await axios.post('/voucher/shorten', {
+            ref: entry.ref,
+            source: entry.source,
+            product_name: props.voucherResult?.product?.product_name ?? null,
+            product_image: props.voucherResult?.product?.product_image ?? null,
+            voucher_label: entry.label ?? null,
+        })
+        window.location.href = data.short_url
+    } catch (e) {
+        autoRedirecting.value = false
+        toast.error('Không thể tạo link, vui lòng thử lại.')
+    }
+}
 
 async function openVoucherLink(entry, productName = null) {
     if (!entry?.ref || shorteningKey.value) return
@@ -349,7 +393,13 @@ const openFaq = ref(null)
                         </span>
                     </div>
 
-                    <div v-if="voucherLinkEntries.length" class="grid grid-cols-1 sm:grid-cols-2 gap-2 mb-4 mt-3">
+                    <!-- Admin đã chọn sẵn loại mã: không cho khách chọn nữa, chỉ báo đang chuyển hướng. -->
+                    <div v-if="autoRedirectSource" class="flex items-center gap-3 mb-4 mt-3 px-4 py-3 rounded-xl bg-[var(--color-peach-soft)] text-[var(--color-ink)] text-sm font-semibold">
+                        <span class="w-4 h-4 rounded-full border-2 border-[var(--color-accent)] border-t-transparent animate-spin flex-none"></span>
+                        Đang chuyển tới mã giảm giá, vui lòng đợi giây lát...
+                    </div>
+
+                    <div v-else-if="voucherLinkEntries.length" class="grid grid-cols-1 sm:grid-cols-2 gap-2 mb-4 mt-3">
                         <div v-for="entry in voucherLinkEntries" :key="entry.key" class="relative">
                             <span
                                 v-if="entry.key === featuredEntryKey"

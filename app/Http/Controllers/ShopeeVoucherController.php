@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Exceptions\AffiliateScanException;
+use App\Models\ApiConfig;
 use App\Models\PlatformVoucher;
 use App\Models\VoucherButtonConfig;
 use App\Services\SalesOcService;
@@ -81,7 +82,25 @@ class ShopeeVoucherController extends Controller
             ],
             // Admin-editable display config: sort order, label override, featured source.
             'voucherButtonConfig' => VoucherButtonConfig::orderBy('sort_order')->get(['source', 'label', 'sort_order', 'is_featured']),
+            'autoRedirectSource' => $this->autoRedirectSource(),
         ]);
+    }
+
+    /**
+     * Loại mã admin chọn sẵn để tự động dùng (meta.auto_source ở /admin/api-config) khi đã bật
+     * chuyển hướng qua comment Facebook. Khi có giá trị, Home.vue ẩn hết nút chọn mã và đưa
+     * khách thẳng tới comment ngay sau khi dán link — mỗi sản phẩm vì thế chỉ sinh đúng 1
+     * comment thay vì mỗi loại mã khách bấm lại thêm 1 cái.
+     */
+    private function autoRedirectSource(): ?string
+    {
+        $config = ApiConfig::where('platform', 'facebook')->where('is_active', true)->first();
+
+        if (! $config || ! ($config->meta['comment_redirect_enabled'] ?? false)) {
+            return null;
+        }
+
+        return $config->meta['auto_source'] ?? null;
     }
 
     /**
