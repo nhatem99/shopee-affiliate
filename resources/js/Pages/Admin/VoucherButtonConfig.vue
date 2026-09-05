@@ -20,7 +20,7 @@ const SOURCE_STYLES = {
 }
 
 // Human-readable default label for each source (shown as input placeholder when no override set).
-// Matches the SOURCE_LABELS const and hardcoded service values in Home.vue / SalesOcService.
+// Matches the SOURCE_LABELS const in Home.vue and the channel table in ChannelVoucherMinter.
 const SOURCE_DEFAULT_HINT = {
     facebook:  '(dùng label thật từ API, vd: Mã FB 22%)',
     instagram: 'Mã IG',

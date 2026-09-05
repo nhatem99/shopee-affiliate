@@ -6,14 +6,20 @@ use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 
 /**
- * Đổi mmp_pid trong link voucher salesoc.vn (s.afp.ad/shp.ee/salesoc.vn) sang
- * affiliate ID của mình, để hoa hồng đơn hàng về tài khoản của mình thay vì
- * salesoc.vn — trong khi vẫn giữ nguyên encrypted_payload/credential_token nên
- * mã giảm giá vẫn được áp dụng bình thường (mmp_pid là tham số tracking độc lập,
- * không nằm trong payload đã ký).
+ * Bước KOL -> KOC: đổi mmp_pid trong link đã có mã sang affiliate ID của mình, để hoa hồng đơn
+ * hàng về tài khoản của mình — trong khi vẫn giữ nguyên encrypted_payload/credential_token nên
+ * mã giảm giá vẫn được áp dụng bình thường (mmp_pid là tham số tracking độc lập, không nằm
+ * trong payload đã ký của Shopee).
+ *
+ * Đầu vào là link do App\Services\ChannelVoucher đúc ra — đã ở dạng shopee.vn nên thường không
+ * phải đi hop nào.
  */
 class AffiliateLinkRewriterService
 {
+    // shp.ee/s.shopee.vn là short-link chính thức của Shopee. s.afp.ad/salesoc.vn là di sản của
+    // nguồn cũ (đã gỡ 2026-09-05) — giữ lại tới khi mọi token 'ref' phát trước đó hết hạn, vì
+    // TTL của chúng là 7 ngày và trong nhóm Zalo còn link cũ người ta bấm lại. Bỏ được sau
+    // 2026-09-12.
     private const HOPS_TO_FOLLOW = ['s.afp.ad', 'salesoc.vn', 'shp.ee', 's.shopee.vn'];
 
     private const MAX_HOPS = 4;

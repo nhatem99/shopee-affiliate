@@ -89,7 +89,7 @@ class MaintenanceModeTest extends TestCase
     public function test_admin_can_use_voucher_tool_during_maintenance(): void
     {
         Setting::set('maintenance_mode', '1');
-        // Không gọi ra salesoc.vn/Shopee thật trong test — chỉ cần biết request đi hết được
+        // Không gọi ra Facebook/Shopee thật trong test — chỉ cần biết request đi hết được
         // controller thay vì bị MaintenanceMode chặn ở giữa.
         Http::fake();
 

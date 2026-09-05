@@ -52,43 +52,83 @@ return [
     'shopee_affiliate' => [
         // mmp_pid dùng để gắn hoa hồng đơn hàng về tài khoản affiliate Shopee của mình.
         'mmp_pid' => env('SHOPEE_MMP_PID', 'an_17332410386'),
+
+        // ID tài khoản KOL dùng để ĐÚC link có mã (xem App\Services\ChannelVoucher).
+        // Đây KHÔNG phải tài khoản nhận hoa hồng: link đúc ra mang mmp_pid của KOL này, sau đó
+        // AffiliateLinkRewriterService đổi sang mmp_pid ở trên trước khi trả cho khách (KOL -> KOC).
+        // Vì sao phải là tài khoản khác: chữ ký credential_token của Shopee buộc chặt vào tài khoản
+        // đã liên kết kênh Facebook/Instagram — 30 ký tự đầu của token giống nhau giữa link FB và
+        // link IG của cùng một KOL, chỉ 12 ký tự cuối đổi theo từng link (đo trên 2 link thật).
+        'kol_pid' => env('SHOPEE_KOL_PID', 'an_17356640097'),
+
+        // Nhãn sub_id gắn vào utm_content của link đúc ra, để đối soát doanh thu theo nguồn.
+        // Trường này do người tạo link đặt, Shopee không ký — đổi thoải mái.
+        'sub_id' => env('SHOPEE_SUB_ID', 'tietkiemvi'),
     ],
 
-    'salesoc' => [
-        // salesoc.vn chặn thẳng theo IP của server (403 từ nginx, không phải app) — cấu hình
-        // 1 outbound proxy ở đây để gọi salesoc.vn qua IP khác thay vì IP thật của VPS.
-        // Định dạng: http://user:pass@host:port hoặc http://host:port nếu proxy không cần auth.
-        // Để trống (null) thì gọi trực tiếp như bình thường, không qua proxy.
-        'proxy' => env('SALESOC_PROXY_URL'),
+    /*
+    |--------------------------------------------------------------------------
+    | Tự đúc link có mã — NGUỒN MÃ DUY NHẤT
+    |--------------------------------------------------------------------------
+    |
+    | Cơ chế: dựng link affiliate trơn mang mmp_pid của KOL -> đăng lên Facebook/Instagram bằng
+    | Graph API -> mở chính bài đăng đó bằng trình duyệt thật (Playwright) và bấm vào link ->
+    | Shopee đúc ra link mang credential_token/encrypted_payload (tức là CÓ mã của kênh đó) ->
+    | AffiliateLinkRewriterService đổi mmp_pid sang của mình rồi mới trả cho khách.
+    |
+    | Vì sao phải mở bằng trình duyệt chứ không gọi API: credential_token + encrypted_payload do
+    | Shopee ký, không thể tự sinh từ ID KOL. Chỉ có đường đọc ngược về từ nền tảng.
+    |
+    | KHÔNG CÒN ĐƯỜNG DỰ PHÒNG. Trước đây hỏng thì lùi về salesoc.vn; salesoc đã bị gỡ bỏ hoàn
+    | toàn (2026-09-05) nên đây hỏng là khách không có mã. Đổi lại: hoa hồng về hết tài khoản
+    | của mình thay vì của salesoc, và không còn phụ thuộc một bên có thể chặn mình bất cứ lúc nào.
+    |
+    | MẶC ĐỊNH TẮT ('enabled' => false): chưa điền token/post_id mà bật lên thì mọi lượt quét đều
+    | hỏng và khách không nhận được mã nào. Bật sau khi `php artisan voucher:mint-check <link>`
+    | chạy xanh.
+    |
+    */
+    'channel_voucher' => [
+        'enabled' => env('CHANNEL_VOUCHER_ENABLED', false),
 
-        // URL của relay gọi hộ salesoc.vn từ một IP khác rồi trả nguyên response về.
-        // SalesOcService đi relay trước, hỏng thì tự rơi xuống proxy/direct.
-        //
-        // Hard-code sẵn app Deno Deploy đang chạy (nguồn: deploy/deno-relay/main.ts) để push code
-        // là production dùng được ngay, không phải sửa .env trên server. env() chỉ là đường override
-        // khi cần đổi gấp mà chưa kịp deploy.
-        //
-        // Relay TRƯỚC ĐÓ là Cloudflare Worker và đã bị salesoc.vn chặn 403 ở nginx (log production
-        // 2026-09-04): Cloudflare tự chèn header CF-Worker vào mọi subrequest nên một rule nginx
-        // là chặn được hết Worker, bất kể IP. Nếu Deno Deploy cũng bị chặn thì đổi sang nền tảng
-        // khác (Vercel/Netlify Edge) — code relay là Web standard, port gần như nguyên vẹn.
-        // Khai báo được NHIỀU relay, ngăn cách bằng dấu phẩy:
-        //   'https://a.deno.net,https://b.vercel.app/api/relay,https://c.netlify.app/relay'
-        // Mỗi relay chỉ có một IP egress cố định nên một cái là một điểm chết — dựng thêm relay
-        // ở nhà cung cấp khác là cách rẻ nhất để salesoc không giết được cả tính năng bằng một
-        // lệnh chặn. Tất cả relay dùng chung SALESOC_RELAY_SECRET bên dưới.
-        //
-        // SalesOcService XOAY VÒNG danh sách này: link 1 đi relay 1, link 2 đi relay 2, link 3
-        // đi relay 3, link 4 quay lại relay 1 — để lưu lượng chia đều cho từng IP thay vì dồn
-        // hết vào relay đầu (dồn một IP chính là thứ khiến salesoc phát hiện và chặn).
-        // Relay của lượt nào chết thì lượt đó vẫn tự rơi sang relay kế tiếp, rồi proxy/direct.
-        // IP egress đo được (GET vào relay trả về IP của chính nó):
-        //   deno.net        → 144.202.54.204 (The Constant Company / Vultr)
-        //   vercel.app      → 54.254.149.225 (AWS ap-southeast-1, Singapore)
-        // Hai nhà cung cấp, hai dải IP không liên quan nhau — salesoc chặn một bên thì bên kia
-        // vẫn chạy. Deploy thêm bản Netlify (deploy/netlify-relay) rồi nối tiếp vào đây là đủ 3.
-        'relay_url' => env('SALESOC_RELAY_URL', 'https://shopee-affiliate.nhatem99.deno.net,https://shopee-affiliate-phi.vercel.app/api/relay'),
-        'relay_secret' => env('SALESOC_RELAY_SECRET', 'f58d832ed4b4077f7512eb9bdc964c3a9ff46c906c3920fb'),
+        // Các kênh sẽ đúc mã, theo thứ tự hiển thị cho khách.
+        // 'fb' cần facebook.post_id, 'ig' cần facebook.ig_media_id.
+        'channels' => ['fb', 'ig'],
+
+        // Xoá comment ngay sau khi đọc xong link. Bật mặc định: mỗi lượt khách quét là một comment
+        // mới lên cùng một bài, không dọn thì bài tích luỹ hàng nghìn comment link Shopee và Page
+        // rất dễ bị Facebook đánh dấu spam. Link đã đúc vẫn sống sau khi comment bị xoá.
+        'delete_comment_after' => env('CHANNEL_VOUCHER_DELETE_COMMENT', true),
+
+        // Chờ tối đa bao lâu cho toàn bộ chuỗi (comment -> mở trình duyệt -> đúc link) của MỘT kênh.
+        'timeout' => env('CHANNEL_VOUCHER_TIMEOUT', 60),
+
+        // Link đúc ra có cts (thời điểm đúc) nên coi như hàng tươi, không giữ lâu.
+        'cache_minutes' => env('CHANNEL_VOUCHER_CACHE_MINUTES', 15),
+    ],
+
+    'facebook' => [
+        'graph_version' => env('FACEBOOK_GRAPH_VERSION', 'v21.0'),
+
+        // Page Access Token dài hạn. Quyền cần: pages_manage_engagement (tạo/xoá comment) +
+        // pages_read_engagement (đọc lại comment). Kiểm tra hạn bằng GET /debug_token.
+        'page_access_token' => env('FACEBOOK_PAGE_ACCESS_TOKEN'),
+
+        // ID bài đăng cố định để comment link vào. Dạng {page_id}_{post_id}.
+        'post_id' => env('FACEBOOK_POST_ID'),
+
+        // Media Instagram để comment (kênh 'ig'). Cần tài khoản IG Professional liên kết Page và
+        // quyền instagram_manage_comments.
+        'ig_media_id' => env('INSTAGRAM_MEDIA_ID'),
+        'ig_access_token' => env('INSTAGRAM_ACCESS_TOKEN'),
+    ],
+
+    // Node service chạy Playwright, mở bài đăng Facebook/Instagram bằng Chromium thật rồi bấm vào
+    // link để lấy URL đích. Nguồn: deploy/browser-resolver/ — chạy thường trực bằng pm2/systemd
+    // trên chính VPS, chỉ nghe 127.0.0.1 nên không cần mở cổng ra ngoài.
+    'browser_resolver' => [
+        'url' => env('BROWSER_RESOLVER_URL', 'http://127.0.0.1:8787'),
+        'secret' => env('BROWSER_RESOLVER_SECRET', 'change-me-cung-voi-deploy-browser-resolver'),
     ],
 
 ];

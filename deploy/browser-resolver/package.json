@@ -1,0 +1,17 @@
+{
+  "name": "browser-resolver",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Mo bai dang Facebook/Instagram bang Chromium that de lay link Shopee da duoc duc ma",
+  "engines": {
+    "node": ">=18"
+  },
+  "scripts": {
+    "start": "node server.mjs",
+    "login": "node login.mjs"
+  },
+  "dependencies": {
+    "playwright": "^1.49.0"
+  }
+}

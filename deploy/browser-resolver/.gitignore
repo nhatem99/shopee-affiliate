@@ -1,0 +1,3 @@
+# Phiên đăng nhập Facebook thật + cache của Chromium. Không bao giờ commit.
+.browser-profile/
+node_modules/

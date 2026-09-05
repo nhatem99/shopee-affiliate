@@ -3,12 +3,13 @@
 namespace App\Http\Controllers;
 
 use App\Exceptions\AffiliateScanException;
+use App\Jobs\ResolveVoucherLinks;
 use App\Models\PlatformVoucher;
 use App\Models\VoucherButtonConfig;
-use App\Services\SalesOcService;
 use App\Services\ShopeeLinkResolverService;
 use App\Services\TrackingService;
 use App\Services\UrlValidationService;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Cache;
@@ -21,10 +22,17 @@ class ShopeeVoucherController extends Controller
     public function __construct(
         private UrlValidationService $urlValidator,
         private ShopeeLinkResolverService $resolver,
-        private SalesOcService $salesOc,
         private TrackingService $tracking,
     ) {}
 
+    /**
+     * Nhận link khách dán vào và ĐẨY việc đi tìm mã sang hàng đợi, trả ngay một token để frontend
+     * hỏi lại kết quả (xem status()).
+     *
+     * Vì sao không làm thẳng trong request như trước: đường tự đúc mã (App\Services\ChannelVoucher)
+     * tốn 10-60s vì phải comment lên Facebook rồi mở Chromium thật. Giữ nguyên kiểu đồng bộ thì
+     * request đụng trần timeout của nginx/php-fpm và khách chỉ thấy trang treo rồi 504.
+     */
     public function resolve(Request $request): Response|RedirectResponse
     {
         // Công cụ chỉ dành cho khách trên điện thoại (bấm link Facebook/Zalo) — admin luôn qua
@@ -49,60 +57,43 @@ class ShopeeVoucherController extends Controller
         }
 
         $canonicalUrl = $this->resolver->resolveCanonicalUrl($url);
-        $ids = $this->resolver->extractIds($canonicalUrl);
 
-        // salesoc.vn cung cấp thông tin hiển thị (tên/ảnh/giá) + link áp mã giảm giá thật.
-        // Link voucher_links thuộc affiliate account của salesoc.vn (không sửa được mmp_pid)
-        // nhưng là cách duy nhất người dùng nhận được mã giảm giá thật — xem SalesOcService.
-        $salesOcData = $this->salesOc->fetchProductAndVoucherLabels($canonicalUrl);
-
-        $voucherLabels = $salesOcData['voucher_labels'] ?? [];
-        $voucherLinks = $this->maskVoucherLinks($salesOcData['voucher_links'] ?? []);
-        unset($salesOcData['voucher_labels'], $salesOcData['voucher_links']);
-
-        $product = $salesOcData ?? ($ids
-            ? $this->resolver->fetchProductInfo($ids['item_id'], $ids['shop_id'])
-            : null);
-
+        // Tên sản phẩm chưa biết ở thời điểm này (việc tra cứu nằm trong job) — chấp nhận mất
+        // trường đó trong sự kiện 'url_paste' để đổi lấy việc trả trang về ngay lập tức.
         $this->tracking->log('url_paste', $request, [
             'url' => $canonicalUrl,
             'platform' => 'shopee',
-            'product_name' => $product['product_name'] ?? null,
         ]);
+
+        $token = Str::random(32);
+        Cache::put(ResolveVoucherLinks::cacheKey($token), ['status' => 'pending'], now()->addMinutes(10));
+        ResolveVoucherLinks::dispatch($token, $canonicalUrl);
 
         return Inertia::render('Home', [
             'vouchers' => PlatformVoucher::suggestedList(),
-            'voucherResult' => [
-                'canonical_url' => $canonicalUrl,
-                'product' => $product,
-                'voucher_labels' => $voucherLabels,
-                // Link CTA chính — thuộc affiliate account của salesoc.vn (đổi lấy mã giảm giá thật).
-                'voucher_links' => $voucherLinks,
-            ],
-            // Admin-editable display config: sort order, label override, featured source.
+            // Frontend cầm token này đi hỏi status() cho tới khi có kết quả.
+            'voucherJob' => ['token' => $token, 'canonical_url' => $canonicalUrl],
             'voucherButtonConfig' => VoucherButtonConfig::orderBy('sort_order')->get(['source', 'label', 'sort_order', 'is_featured']),
         ]);
     }
 
     /**
-     * Thay URL affiliate thật (salesoc.vn/s.afp.ad) bằng token mờ trước khi trả về frontend —
-     * URL thật chỉ được giải mã lại phía server (xem ShortLinkController::store()) khi người
-     * dùng thực sự bấm chọn, để không lộ URL affiliate gốc ngay trong response /voucher/resolve
-     * (xem được qua tab Network/Inertia devtools dù chưa bấm link nào).
+     * Frontend hỏi lại kết quả của một lượt quét. Trả về đúng shape mà Home.vue đang render
+     * (product / voucher_labels / voucher_links) khi xong.
      */
-    private function maskVoucherLinks(array $voucherLinks): array
+    public function status(string $token): JsonResponse
     {
-        foreach ($voucherLinks as $source => $options) {
-            foreach ($options as $i => $option) {
-                $ref = Str::random(32);
-                // TTL dài (7 ngày) để nút "mua lại" trong lịch sử chuyển đổi (lưu ở localStorage,
-                // xem Home.vue) còn dùng được sau vài ngày — mã có thể hết lượt trước đó, nhưng
-                // đó vốn là giới hạn có sẵn (salesoc.vn không báo trạng thái còn/hết lượt).
-                Cache::put("voucher_ref:{$ref}", $option['url'], now()->addDays(7));
-                $voucherLinks[$source][$i] = ['label' => $option['label'], 'ref' => $ref];
-            }
+        $payload = Cache::get(ResolveVoucherLinks::cacheKey($token));
+
+        if (! $payload) {
+            // Hết hạn hoặc token bịa. Không phân biệt hai trường hợp: với khách thì cách xử lý
+            // giống nhau (quét lại), còn phân biệt ra chỉ giúp người dò token biết mình dò trúng.
+            return response()->json([
+                'status' => 'expired',
+                'message' => 'Phiên tìm mã đã hết hạn, vui lòng dán lại link.',
+            ]);
         }
 
-        return $voucherLinks;
+        return response()->json($payload);
     }
 }

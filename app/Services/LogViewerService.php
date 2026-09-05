@@ -196,7 +196,7 @@ class LogViewerService
 
     /**
      * Laravel viết context JSON ngay sau nội dung, cùng một dòng:
-     * `SalesOc fetch failed {"status":403}`. Tách ra để danh sách còn đọc được, JSON dài
+     * `ChannelVoucherMinter: ... {"channel":"fb"}`. Tách ra để danh sách còn đọc được, JSON dài
      * đẩy xuống phần chi tiết (bấm mới mở).
      *
      * @return array{0: string, 1: string}

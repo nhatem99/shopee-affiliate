@@ -82,6 +82,12 @@ Route::post('/voucher/resolve', [ShopeeVoucherController::class, 'resolve'])
     ->middleware('throttle:affiliate-scan')
     ->name('voucher.resolve');
 
+// Frontend hỏi lại kết quả của lượt quét đang chạy nền. KHÔNG throttle chung với /voucher/resolve:
+// một lượt quét đẻ ra hàng chục lần poll, dùng chung sẽ tự khoá chính mình.
+Route::get('/voucher/status/{token}', [ShopeeVoucherController::class, 'status'])
+    ->where('token', '[A-Za-z0-9]{32}')
+    ->name('voucher.status');
+
 // Short-link cloaking cho link affiliate: /go/{code} -> 302 -> link Shopee thật (mmp_pid của mình)
 Route::post('/voucher/shorten', [ShortLinkController::class, 'store'])
     ->middleware('throttle:affiliate-scan')

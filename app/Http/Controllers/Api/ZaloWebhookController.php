@@ -2,11 +2,11 @@
 
 namespace App\Http\Controllers\Api;
 
+use App\Exceptions\AffiliateScanException;
 use App\Http\Controllers\Controller;
-use App\Services\AffiliateLinkRewriterService;
-use App\Services\SalesOcService;
+use App\Jobs\ReplyZaloGroupWithVouchers;
 use App\Services\ShopeeLinkResolverService;
-use App\Services\ShortLinkService;
+use App\Services\UrlValidationService;
 use App\Services\ZaloOaService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -18,20 +18,9 @@ class ZaloWebhookController extends Controller
 
     private const DISCLAIMER = "Giá dự kiến tính theo voucher đang áp dụng.\nMức giảm thực tế xác nhận tại checkout Shopee.\nWebsite có sử dụng link tiếp thị liên kết.";
 
-    private const GROUP_NOTE = "⚠️ LƯU Ý KHI SĂN VOUCHER\n• Không thấy mã phù hợp: cập nhật lại link Shopee hoặc thử tài khoản khác.\n• Mỗi tài khoản chỉ nên dùng 1 loại voucher tối đa vài lần/ngày.";
-
-    private const SOURCE_LABELS = [
-        'youtube' => '🔴 Mã YouTube',
-        'facebook' => '🔵 Mã Facebook',
-        'instagram' => '🟣 Mã Instagram',
-        'zalo' => '🟢 Mã Zalo',
-    ];
-
     public function __construct(
         private ShopeeLinkResolverService $resolver,
-        private SalesOcService $salesOc,
-        private AffiliateLinkRewriterService $rewriter,
-        private ShortLinkService $shortLinks,
+        private UrlValidationService $urlValidator,
         private ZaloOaService $zalo,
     ) {}
 
@@ -89,84 +78,43 @@ class ZaloWebhookController extends Controller
             return response()->json(['ok' => true]);
         }
 
-        $canonicalUrl = $this->resolver->resolveCanonicalUrl($url);
-        $data = $this->salesOc->fetchProductAndVoucherLabels($canonicalUrl);
-
-        if (! $data) {
-            return response()->json(['ok' => true]);
-        }
-
-        $reply = $this->buildGroupReply(
-            $data['product_name'] ?? 'Sản phẩm',
-            $data['voucher_links'] ?? []
-        );
-
-        if ($reply) {
-            $this->zalo->sendGroupText($groupId, $reply);
-        }
+        // Đúc mã tốn 10-60s — quá lâu để giữ một webhook. Trả ok ngay, việc nặng đẩy sang job;
+        // nếu không, Zalo coi là timeout rồi gửi lại sự kiện, mỗi lần gửi lại là thêm một comment
+        // lên Facebook.
+        ReplyZaloGroupWithVouchers::dispatch($groupId, $this->resolver->resolveCanonicalUrl($url));
 
         return response()->json(['ok' => true]);
     }
 
+    /**
+     * Rút link Shopee ra khỏi tin nhắn.
+     *
+     * Domain phải nằm ĐÚNG ở vị trí host. Regex cũ là `https?://\S*(?:shopee\.vn|shp\.ee)\S*`,
+     * khớp luôn cả `https://evil.com/?ref=shopee.vn` — và bất kỳ ai nhắn vào nhóm Zalo một link
+     * như vậy là link đó được đem COMMENT LÊN PAGE FACEBOOK của mình rồi MỞ BẰNG CHROMIUM ĐANG
+     * ĐĂNG NHẬP FACEBOOK. Đó là trao cho người lạ quyền điều khiển cả hai thứ, nên vị trí của
+     * domain trong chuỗi là chuyện bảo mật chứ không phải chuyện gọn gàng.
+     */
     private function extractShopeeUrl(string $text): ?string
     {
         if (! str_contains($text, 'shopee.vn') && ! str_contains($text, 'shp.ee')) {
             return null;
         }
 
-        return preg_match('#https?://\S*(?:shopee\.vn|shp\.ee)\S*#i', $text, $m) ? $m[0] : null;
-    }
-
-    private function buildGroupReply(string $productName, array $voucherLinks): ?string
-    {
-        $topLines = [];
-        $breakdownBlocks = [];
-
-        foreach (self::SOURCE_LABELS as $source => $label) {
-            $options = $voucherLinks[$source] ?? [];
-            if (empty($options)) {
-                continue;
-            }
-
-            $best = $options[0];
-            $shortUrl = $this->buildShortLink($best['url'], $source, $productName);
-            $topLines[] = "► Link áp mã {$this->sourceName($source)}: {$shortUrl}";
-
-            $bullets = collect($options)->map(fn ($o) => "• {$o['label']}")->implode("\n");
-            $breakdownBlocks[] = "{$label}\n{$bullets}";
-        }
-
-        if (empty($topLines)) {
+        // (?=\s|$) là bắt buộc: thiếu nó, regex khớp TIỀN TỐ `https://shopee.vn` của
+        // `https://shopee.vn.evil.com/product` và trả về một link cụt trông rất hợp lệ.
+        if (! preg_match('#https?://(?:[\w-]+\.)*(?:shopee\.vn|shp\.ee)(?:[/?\#]\S*)?(?=\s|$)#i', $text, $m)) {
             return null;
         }
 
-        return implode("\n", [
-            "🛒 {$productName}",
-            '',
-            ...$topLines,
-            '',
-            implode("\n\n", $breakdownBlocks),
-            '',
-            self::GROUP_NOTE,
-        ]);
-    }
+        // Kiểm tra lại bằng parse_url thay vì chỉ tin regex: hai tầng, vì hậu quả của một lần
+        // lọt là comment rác trên Page cộng với một phiên Facebook bị đem đi mở link người lạ.
+        try {
+            $this->urlValidator->validateShopeeOnly($m[0]);
+        } catch (AffiliateScanException) {
+            return null;
+        }
 
-    private function buildShortLink(string $salesOcUrl, string $source, string $productName): string
-    {
-        $targetUrl = $this->rewriter->rewriteToOwnAffiliate($salesOcUrl);
-        $link = $this->shortLinks->create($targetUrl, $source, $productName);
-
-        return url('/go/'.$link->code);
-    }
-
-    private function sourceName(string $source): string
-    {
-        return match ($source) {
-            'facebook' => 'Facebook',
-            'youtube' => 'YouTube',
-            'instagram' => 'Instagram',
-            'zalo' => 'Zalo',
-            default => ucfirst($source),
-        };
+        return $m[0];
     }
 }

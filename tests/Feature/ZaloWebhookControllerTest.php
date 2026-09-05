@@ -2,27 +2,23 @@
 
 namespace Tests\Feature;
 
-use App\Services\SalesOcService;
-use App\Services\ZaloOaService;
+use App\Jobs\ReplyZaloGroupWithVouchers;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\Queue;
 use Illuminate\Testing\TestResponse;
-use Mockery;
 use Tests\TestCase;
 
 /**
- * Tests for ZaloWebhookController — covers the group-chat (GMF) feature added
- * alongside the pre-existing 1-1 direct-message handler.
+ * Tests cho ZaloWebhookController — nhánh trả lời nhóm (GMF) bên cạnh handler tin nhắn 1-1.
  *
- * Design notes:
- *  - Real ZaloOaService::verifyWebhookSignature() runs for all tests — we only
- *    intercept sendGroupText() via makePartial() to prevent real HTTP calls.
- *  - SalesOcService is mocked via the IoC container for tests that reach the
- *    inner handler; it makes external HTTP calls we must not fire in tests.
- *  - Shopee.vn URLs (not shp.ee) are used in payloads so that
- *    ShopeeLinkResolverService and AffiliateLinkRewriterService both return
- *    immediately without making any HTTP requests.
- *  - Cache::flush() in setUp() ensures dedup state never leaks between tests.
+ * Ghi chú thiết kế:
+ *  - ZaloOaService::verifyWebhookSignature() chạy thật ở mọi test; chỉ có việc gửi tin là bị chặn.
+ *  - Việc nặng (đúc mã + gửi tin vào nhóm) đã chuyển sang ReplyZaloGroupWithVouchers, nên ở đây
+ *    chỉ cần Queue::fake() và kiểm tra job có được đẩy đi đúng số lần không — không cần mock
+ *    dịch vụ ngoài nào nữa.
+ *  - Dùng URL shopee.vn (không phải shp.ee) để ShopeeLinkResolverService trả về ngay, không gọi HTTP.
+ *  - Cache::flush() ở setUp() để trạng thái chống trùng không rò rỉ giữa các test.
  */
 class ZaloWebhookControllerTest extends TestCase
 {
@@ -40,10 +36,10 @@ class ZaloWebhookControllerTest extends TestCase
     {
         parent::setUp();
 
-        // Cache uses the array driver in tests (phpunit.xml: CACHE_STORE=array).
-        // The same store instance persists across test methods within a process,
-        // so we must flush it to prevent the dedup key from one test leaking.
+        // Cache dùng driver array trong test (phpunit.xml: CACHE_STORE=array). Cùng một instance
+        // sống qua nhiều test trong một process, nên phải xoá để key chống trùng không rò rỉ.
         Cache::flush();
+        Queue::fake();
 
         config([
             'services.zalo.app_id' => self::APP_ID,
@@ -55,9 +51,8 @@ class ZaloWebhookControllerTest extends TestCase
     // ── Helpers ───────────────────────────────────────────────────────────────
 
     /**
-     * Compute the X-ZEvent-Signature value for a known raw body + timestamp,
-     * replicating the formula in ZaloOaService::verifyWebhookSignature().
-     * Formula: sha256( app_id . rawBody . timestamp . secret_key )
+     * Tính X-ZEvent-Signature cho một body + timestamp đã biết, theo đúng công thức trong
+     * ZaloOaService::verifyWebhookSignature(): sha256( app_id . rawBody . timestamp . secret_key )
      */
     private function signature(string $rawBody, string $timestamp): string
     {
@@ -65,12 +60,8 @@ class ZaloWebhookControllerTest extends TestCase
     }
 
     /**
-     * POST the webhook with a correctly computed signature.
-     *
-     * IMPORTANT: postJson() calls json_encode($payload) internally and sends
-     * that as the raw body. We compute our own json_encode($payload) first,
-     * derive the signature from it, then pass the same $payload to postJson()
-     * so that the bytes match exactly what the controller reads via getContent().
+     * QUAN TRỌNG: postJson() tự json_encode($payload) rồi gửi đi. Phải json_encode trước, ký trên
+     * chuỗi đó, rồi truyền chính $payload vào postJson() để byte gửi đi khớp với byte đã ký.
      */
     private function postWithValidSignature(array $payload, array $extraHeaders = []): TestResponse
     {
@@ -84,7 +75,6 @@ class ZaloWebhookControllerTest extends TestCase
         ));
     }
 
-    /** Canonical group-message payload. Override any top-level key via $overrides. */
     private function groupPayload(array $overrides = []): array
     {
         return array_merge([
@@ -100,124 +90,53 @@ class ZaloWebhookControllerTest extends TestCase
         ], $overrides);
     }
 
-    /**
-     * Fake data shaped like what SalesOcService::fetchProductAndVoucherLabels() returns.
-     * Uses shopee.vn URLs so AffiliateLinkRewriterService resolves them without HTTP.
-     */
-    private function fakeSalesOcData(): array
-    {
-        return [
-            'product_name' => 'Áo Thun Test',
-            'product_image' => null,
-            'original_price' => 200000.0,
-            'discounted_price' => 150000.0,
-            'discount_percent' => 25,
-            'sold_count' => 1000,
-            'rating' => 4.8,
-            'voucher_labels' => ['Giảm 50k'],
-            'voucher_links' => [
-                'facebook' => [
-                    ['label' => 'Giảm 50k', 'url' => 'https://shopee.vn/product?mmp_pid=salesoc_fb&smtt=0'],
-                ],
-                'youtube' => [],
-                'instagram' => [],
-                'zalo' => [],
-            ],
-        ];
-    }
-
-    /**
-     * Bind a Mockery partial mock of ZaloOaService.
-     * verifyWebhookSignature() continues to call the real implementation;
-     * sendGroupText() is intercepted and asserted for call count.
-     */
-    private function mockZaloService(int $expectedSendGroupCalls = 0): void
-    {
-        $mock = Mockery::mock(ZaloOaService::class)->makePartial();
-        $mock->shouldReceive('sendGroupText')
-            ->times($expectedSendGroupCalls)
-            ->andReturn(true);
-        $this->app->instance(ZaloOaService::class, $mock);
-    }
-
-    /** Bind a mock SalesOcService that returns the given value for any call. */
-    private function mockSalesOcService(?array $returnValue): void
-    {
-        $mock = Mockery::mock(SalesOcService::class);
-        $mock->shouldReceive('fetchProductAndVoucherLabels')
-            ->andReturn($returnValue);
-        $this->app->instance(SalesOcService::class, $mock);
-    }
-
-    // ── Test 1a: Missing X-ZEvent-Signature header → 403 ─────────────────────
+    // ── Xác thực chữ ký ───────────────────────────────────────────────────────
 
     public function test_missing_signature_header_returns_403(): void
     {
-        $response = $this->postJson(self::ENDPOINT, $this->groupPayload());
-
-        $response->assertStatus(403)
+        $this->postJson(self::ENDPOINT, $this->groupPayload())
+            ->assertStatus(403)
             ->assertJson(['ok' => false]);
     }
-
-    // ── Test 1b: Corrupted / wrong signature → 403 ───────────────────────────
 
     public function test_invalid_signature_value_returns_403(): void
     {
-        $response = $this->postJson(self::ENDPOINT, $this->groupPayload(), [
+        $this->postJson(self::ENDPOINT, $this->groupPayload(), [
             'X-ZEvent-Signature' => 'mac='.str_repeat('0', 64),
-        ]);
-
-        $response->assertStatus(403)
-            ->assertJson(['ok' => false]);
+        ])->assertStatus(403)->assertJson(['ok' => false]);
     }
 
-    // ── Test 2: Unconfigured credentials → 403 even with a header present ─────
-
     /**
-     * The controller is "fail-closed": if ZALO_APP_ID / ZALO_OA_SECRET_KEY are
-     * not set, every request is rejected regardless of what signature is sent.
+     * Controller "fail-closed": chưa cấu hình ZALO_APP_ID / ZALO_OA_SECRET_KEY thì từ chối mọi
+     * request, bất kể gửi kèm chữ ký gì.
      */
     public function test_unconfigured_app_id_and_secret_key_return_403(): void
     {
-        config([
-            'services.zalo.app_id' => null,
-            'services.zalo.secret_key' => null,
-        ]);
+        config(['services.zalo.app_id' => null, 'services.zalo.secret_key' => null]);
 
-        // Send a request with *some* signature header — should still be rejected.
-        $response = $this->postJson(self::ENDPOINT, $this->groupPayload(), [
+        $this->postJson(self::ENDPOINT, $this->groupPayload(), [
             'X-ZEvent-Signature' => 'mac=anysignaturevalue',
-        ]);
-
-        $response->assertStatus(403)
-            ->assertJson(['ok' => false]);
+        ])->assertStatus(403)->assertJson(['ok' => false]);
     }
 
-    // ── Test 3: Valid signature + shopee URL → exactly one group reply sent ───
+    // ── Nhánh nhóm ────────────────────────────────────────────────────────────
 
-    public function test_valid_group_message_with_shopee_url_triggers_one_group_reply(): void
+    public function test_valid_group_message_with_shopee_url_queues_exactly_one_reply(): void
     {
-        $this->mockZaloService(expectedSendGroupCalls: 1);
-        $this->mockSalesOcService($this->fakeSalesOcData());
-
-        $response = $this->postWithValidSignature($this->groupPayload());
-
-        $response->assertOk()
+        $this->postWithValidSignature($this->groupPayload())
+            ->assertOk()
             ->assertJson(['ok' => true]);
-    }
 
-    // ── Test 4: Same msg_id sent twice → only one group-send across both ──────
+        // Webhook phải trả lời NGAY: đúc mã tốn 10-60s, giữ webhook lâu như vậy là để Zalo
+        // coi như timeout rồi gửi lại — mỗi lần gửi lại là thêm một comment lên Facebook.
+        Queue::assertPushed(ReplyZaloGroupWithVouchers::class, 1);
+    }
 
     /**
-     * Simulates a Zalo webhook retry with the same msg_id.
-     * Cache::add() keyed on the msg_id prevents the second request from
-     * triggering another sendGroupText() call (dedup logic in handleGroupMessage).
+     * Zalo gửi lại cùng msg_id (retry). Cache::add() theo msg_id phải chặn lần thứ hai.
      */
-    public function test_duplicate_msg_id_only_triggers_one_group_send_across_two_requests(): void
+    public function test_duplicate_msg_id_only_queues_one_reply_across_two_requests(): void
     {
-        $this->mockZaloService(expectedSendGroupCalls: 1);
-        $this->mockSalesOcService($this->fakeSalesOcData());
-
         $payload = $this->groupPayload([
             'message' => [
                 'text' => 'https://shopee.vn/product-i.111.222 mua đi',
@@ -225,26 +144,35 @@ class ZaloWebhookControllerTest extends TestCase
             ],
         ]);
 
-        // First delivery — processed normally.
+        $this->postWithValidSignature($payload)->assertOk();
         $this->postWithValidSignature($payload)->assertOk();
 
-        // Zalo retry with identical msg_id — must be silently swallowed.
-        $this->postWithValidSignature($payload)->assertOk();
-
-        // Mockery verifies times(1) on tearDown — if sendGroupText were called
-        // twice the assertion would fail there, not here.
+        Queue::assertPushed(ReplyZaloGroupWithVouchers::class, 1);
     }
 
-    // ── Test 5: No Shopee URL in text → no group send, response ok:true ───────
-
-    public function test_group_message_without_shopee_url_returns_ok_without_sending(): void
+    /**
+     * Regex cũ (`https?://\S*shopee\.vn\S*`) khớp cả link có "shopee.vn" nằm trong query của một
+     * domain lạ. Lọt được cái này nghĩa là người lạ nhắn vào nhóm một link bất kỳ, và link đó
+     * được comment lên Page Facebook rồi mở bằng Chromium đang đăng nhập — hai thứ không được
+     * phép để người ngoài điều khiển.
+     */
+    public function test_a_foreign_host_disguised_with_shopee_in_the_query_is_rejected(): void
     {
-        $this->mockZaloService(expectedSendGroupCalls: 0);
-        // SalesOcService must never be called either; bind a strict mock.
-        $strictSalesOc = Mockery::mock(SalesOcService::class);
-        $strictSalesOc->shouldNotReceive('fetchProductAndVoucherLabels');
-        $this->app->instance(SalesOcService::class, $strictSalesOc);
+        foreach ([
+            'https://evil.com/?ref=shopee.vn',
+            'https://shopee.vn.evil.com/product',
+            'http://attacker.test/path#shp.ee',
+        ] as $i => $url) {
+            $this->postWithValidSignature($this->groupPayload([
+                'message' => ['text' => "Sale to nha {$url}", 'msg_id' => "spoof_{$i}"],
+            ]))->assertOk();
+        }
 
+        Queue::assertNothingPushed();
+    }
+
+    public function test_group_message_without_shopee_url_queues_nothing(): void
+    {
         $payload = $this->groupPayload([
             'message' => [
                 'text' => 'Xin chào nhóm! Không có link Shopee nào trong tin nhắn này.',
@@ -252,27 +180,20 @@ class ZaloWebhookControllerTest extends TestCase
             ],
         ]);
 
-        $response = $this->postWithValidSignature($payload);
+        $this->postWithValidSignature($payload)->assertOk()->assertJson(['ok' => true]);
 
-        $response->assertOk()
-            ->assertJson(['ok' => true]);
+        Queue::assertNothingPushed();
     }
 
-    // ── Test 6: Unknown event_name → ok:true, no send ────────────────────────
-
     /**
-     * The match() in handle() has a default arm that returns ok:true for any
-     * event_name that isn't 'user_send_text' or 'user_send_group_text'.
+     * match() trong handle() có nhánh default trả ok:true cho mọi event_name lạ.
      */
-    public function test_unknown_event_name_returns_ok_without_any_send(): void
+    public function test_unknown_event_name_returns_ok_without_queueing(): void
     {
-        $this->mockZaloService(expectedSendGroupCalls: 0);
-
-        $payload = $this->groupPayload(['event_name' => 'oa_send_text']);
-
-        $response = $this->postWithValidSignature($payload);
-
-        $response->assertOk()
+        $this->postWithValidSignature($this->groupPayload(['event_name' => 'oa_send_text']))
+            ->assertOk()
             ->assertJson(['ok' => true]);
+
+        Queue::assertNothingPushed();
     }
 }

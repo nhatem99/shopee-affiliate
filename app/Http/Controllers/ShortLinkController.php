@@ -7,11 +7,11 @@ use App\Services\AffiliateLinkRewriterService;
 use App\Services\ShortLinkService;
 use App\Services\TrackingService;
 use App\Services\UrlValidationService;
+use App\Services\VoucherRefService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Response;
-use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Log;
 
 class ShortLinkController extends Controller
@@ -21,14 +21,15 @@ class ShortLinkController extends Controller
         private ShortLinkService $shortLinks,
         private AffiliateLinkRewriterService $rewriter,
         private TrackingService $tracking,
+        private VoucherRefService $refs,
     ) {}
 
     public function store(Request $request): JsonResponse
     {
         $validated = $request->validate([
-            // 'ref' là token mờ do ShopeeVoucherController::maskVoucherLinks() phát ra — URL
-            // affiliate thật (salesoc.vn/s.afp.ad) không bao giờ đi qua request body, tránh lộ
-            // URL gốc cho ai xem được request này (Network tab, log trung gian...).
+            // 'ref' là token mờ do VoucherRefService::mask() phát ra — URL affiliate thật (link
+            // đã đúc mã) không bao giờ đi qua request body, tránh lộ URL gốc cho ai xem được
+            // request này (Network tab, log trung gian...).
             'ref' => ['required', 'string', 'size:32'],
             'source' => ['nullable', 'string', 'in:facebook,instagram,zalo,youtube'],
             'product_name' => ['nullable', 'string', 'max:255'],
@@ -36,7 +37,7 @@ class ShortLinkController extends Controller
             'voucher_label' => ['nullable', 'string', 'max:100'],
         ]);
 
-        $url = Cache::get("voucher_ref:{$validated['ref']}");
+        $url = $this->refs->resolve($validated['ref']);
 
         if (! $url) {
             return response()->json(['message' => 'Link đã hết hạn, vui lòng tải lại trang và thử lại.'], 422);
@@ -51,7 +52,8 @@ class ShortLinkController extends Controller
         Log::info('ShortLinkController: người dùng bấm "Mua ngay"', [
             'source' => $validated['source'] ?? null,
             'product_name' => $validated['product_name'] ?? null,
-            'salesoc_url' => $url,
+            // Link nguồn do App\Services\ChannelVoucher đúc ra — vẫn mang mmp_pid của KOL.
+            'source_url' => $url,
         ]);
 
         $targetUrl = $this->rewriter->rewriteToOwnAffiliate($url);

@@ -9,7 +9,7 @@ class VoucherButtonConfigSeeder extends Seeder
 {
     public function run(): void
     {
-        // Default order mirrors the hardcoded insertion order in SalesOcService::fetch().
+        // Default order mirrors the channel order in config services.channel_voucher.channels.
         // Facebook is featured by default — its first entry currently gets the "Đề xuất"
         // badge in Home.vue (the first entry overall). Labels are null = use API/fallback label.
         $defaults = [

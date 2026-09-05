@@ -105,7 +105,7 @@ function kb(bytes) {
 
             <div class="flex-1 min-w-0">
                 <label class="block text-xs font-semibold text-[var(--color-ink)] mb-1">Tìm trong nội dung</label>
-                <input v-model="q" type="text" placeholder="VD: SalesOc, 403, timeout..."
+                <input v-model="q" type="text" placeholder="VD: ChannelVoucher, 403, timeout..."
                     class="w-full border border-[var(--color-line)] rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:border-[var(--color-accent)]" />
             </div>
 

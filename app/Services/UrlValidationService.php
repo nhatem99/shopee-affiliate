@@ -77,8 +77,9 @@ class UrlValidationService
         throw new AffiliateScanException('Chỉ hỗ trợ link sản phẩm Shopee.');
     }
 
-    // Domain được phép làm đích cho short-link /go/{code}: link sản phẩm Shopee trực tiếp,
-    // hoặc link voucher salesoc.vn/s.afp.ad/shp.ee (chain redirect áp mã giảm giá thật).
+    // Domain được phép làm đích cho short-link /go/{code}. shopee.vn/shp.ee là đích thật của link
+    // đã đúc mã; salesoc.vn/s.afp.ad là di sản của nguồn cũ (đã gỡ 2026-09-05), giữ lại tới khi
+    // mọi token 'ref' phát trước đó hết hạn (TTL 7 ngày) — bỏ được sau 2026-09-12.
     private array $allowedRedirectDomains = [
         'shopee.vn',
         's.shopee.vn',
@@ -111,6 +112,12 @@ class UrlValidationService
     {
         // Pattern: /product-name-i.SHOP_ID.ITEM_ID
         if (preg_match('/-i\.(\d+)\.(\d+)/', $url, $m)) {
+            return ['shop_id' => $m[1], 'item_id' => $m[2]];
+        }
+
+        // Pattern: /product/SHOP_ID/ITEM_ID — dạng Shopee dùng cho link affiliate (link KOL đúc ra
+        // luôn ở dạng này). Cần nhận ra để đọc lại được ID từ chính link mình vừa đúc.
+        if (preg_match('#/product/(\d+)/(\d+)#', $url, $m)) {
             return ['shop_id' => $m[1], 'item_id' => $m[2]];
         }
 

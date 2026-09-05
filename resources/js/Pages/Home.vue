@@ -11,6 +11,9 @@ import { useToast } from '@/composables/useToast'
 const props = defineProps({
     vouchers: { type: Array, default: () => [] },
     voucherResult: { type: Object, default: null },
+    // Việc tìm mã chạy nền (10-60s vì phải đăng lên Facebook rồi mở trình duyệt thật), nên
+    // /voucher/resolve chỉ trả về token; kết quả lấy qua GET /voucher/status/{token}.
+    voucherJob: { type: Object, default: null },
     canUseVoucherTool: { type: Boolean, default: true },
     // Admin-editable button display config (array ordered by sort_order from server).
     // Each element: { source, label, sort_order, is_featured }.
@@ -20,9 +23,9 @@ const props = defineProps({
 const toast = useToast()
 
 // --- tietkiemvi.com: công cụ lấy link voucher công khai, không cần đăng nhập ---
-// Link CTA (voucher_links) trỏ thẳng tới link affiliate của salesoc.vn — nơi mã giảm giá
-// thực sự được áp dụng. Đơn hàng qua link này tính hoa hồng cho salesoc.vn, không phải
-// cho mình; đây là đánh đổi có chủ đích để người dùng nhận được mã giảm giá thật.
+// Link CTA (voucher_links) là link do mình TỰ ĐÚC (xem App\Services\ChannelVoucher): mang mã
+// giảm giá thật của kênh, và hoa hồng đơn hàng về tài khoản affiliate của mình. Frontend chỉ
+// nhận token mờ 'ref', URL thật được đổi mmp_pid rồi mới trả ra lúc khách bấm.
 const SOURCE_LABELS = { facebook: 'Facebook', instagram: 'Instagram', zalo: 'Zalo', youtube: 'YouTube' }
 // Icon SVG đơn sắc (kế thừa màu chữ nút) thay cho emoji — emoji hiển thị không đồng nhất giữa các máy/font.
 const SOURCE_ICON_SVG = {
@@ -46,6 +49,11 @@ const voucherResultEl = ref(null)
 const resolving = ref(false)
 const voucherError = ref(null)
 const history = useLocalStorage('sv_history', [])
+
+// Kết quả lấy về bằng poll. Ưu tiên hơn prop voucherResult — prop chỉ còn dùng cho những lần
+// render mà server đã có sẵn kết quả (không còn ở luồng chính, nhưng giữ để không vỡ trang cũ).
+const polledResult = ref(null)
+const result = computed(() => polledResult.value ?? props.voucherResult)
 
 async function pasteVoucherUrl() {
     try {
@@ -73,32 +81,76 @@ function focusVoucherTool() {
     voucherUrlInput.value?.focus()
 }
 
+// Trần chờ của frontend. Rộng hơn hẳn trần của server (services.channel_voucher.timeout, mặc định
+// 60s cho mỗi kênh) để bên chờ không bỏ cuộc trước bên làm — bỏ cuộc sớm thì việc vẫn chạy tiếp
+// nhưng khách đã thấy báo lỗi, tốn một comment Facebook mà không ai dùng.
+const POLL_TIMEOUT_MS = 150_000
+const POLL_INTERVAL_MS = 2000
+
+async function pollVoucherJob(token) {
+    const startedAt = Date.now()
+
+    while (Date.now() - startedAt < POLL_TIMEOUT_MS) {
+        await new Promise(r => setTimeout(r, POLL_INTERVAL_MS))
+
+        let data
+        try {
+            ({ data } = await axios.get(`/voucher/status/${token}`))
+        } catch (e) {
+            // Rớt mạng một nhịp là chuyện thường trên 3G/4G — poll tiếp, đừng giết cả lượt quét.
+            continue
+        }
+
+        if (data.status === 'done') return data.result
+        if (data.status === 'failed' || data.status === 'expired') {
+            throw new Error(data.message || 'Không lấy được mã, vui lòng thử lại.')
+        }
+    }
+
+    throw new Error('Tìm mã lâu bất thường, vui lòng thử lại.')
+}
+
 function resolveVoucher() {
     if (!voucherUrl.value.trim()) return
     resolving.value = true
     voucherError.value = null
+    polledResult.value = null
 
     router.post('/voucher/resolve', { url: voucherUrl.value }, {
         preserveScroll: true,
-        onSuccess: () => {
-            resolving.value = false
-            const result = props.voucherResult
-            if (result) {
+        onSuccess: async (page) => {
+            // Lấy token từ chính response của lần visit này, không đợi props kịp cập nhật —
+            // props là trạng thái dùng chung, đọc nhầm lần trước là poll nhầm lượt quét.
+            const token = page?.props?.voucherJob?.token ?? props.voucherJob?.token
+            if (!token) {
+                resolving.value = false
+                return
+            }
+
+            try {
+                polledResult.value = await pollVoucherJob(token)
+
                 history.value = [
                     {
-                        product_name: result.product?.product_name || null,
-                        product_image: result.product?.product_image || null,
+                        product_name: result.value?.product?.product_name || null,
+                        product_image: result.value?.product?.product_image || null,
                         created_at: new Date().toISOString(),
                         // Lưu lại các nút mã (nguồn/label/ref) để "mua lại" sau này chỉ cần bấm nút,
                         // không cần hiện đường dẫn thô cho khách. ref là token mờ do server phát
-                        // ra (xem ShopeeVoucherController::maskVoucherLinks) — sống 7 ngày trong cache.
+                        // ra (xem App\Services\VoucherRefService) — sống 7 ngày trong cache.
                         links: voucherLinkEntries.value.map(({ source, ref, label }) => ({ source, ref, label })),
                     },
                     ...history.value,
                 ].slice(0, 5)
+
+                // Cuộn thẳng tới khu vực chọn mã ngay khi có kết quả — khách không cần tự kéo xuống.
+                nextTick(() => voucherResultEl.value?.scrollIntoView({ behavior: 'smooth', block: 'start' }))
+            } catch (e) {
+                voucherError.value = e.message
+                toast.error(voucherError.value)
+            } finally {
+                resolving.value = false
             }
-            // Cuộn thẳng tới khu vực chọn mã ngay khi có kết quả — khách không cần tự kéo xuống.
-            nextTick(() => voucherResultEl.value?.scrollIntoView({ behavior: 'smooth', block: 'start' }))
         },
         onError: (errors) => {
             voucherError.value = errors.voucher_url || 'Có lỗi xảy ra, vui lòng thử lại.'
@@ -118,13 +170,13 @@ const buttonConfigBySource = computed(() => {
     return map
 })
 
-// Hardcoded fallback order matches the current SalesOcService fetch() insertion order.
+// Hardcoded fallback order matches the channel table in ChannelVoucherMinter.
 const FALLBACK_ORDER = { facebook: 0, instagram: 1, zalo: 2, youtube: 3 }
 
-// salesoc.vn không trả trạng thái còn/hết lượt của từng mã, nên hiển thị TẤT CẢ lựa chọn
-// mỗi nền tảng (không chỉ mã % cao nhất) — bấm thử lần lượt nếu mã đầu đã hết lượt.
+// Shopee không cho biết mã còn hay hết lượt, nên hiển thị TẤT CẢ lựa chọn của mỗi nền tảng
+// — bấm thử lần lượt nếu mã đầu đã hết lượt.
 const voucherLinkEntries = computed(() => {
-    const links = props.voucherResult?.voucher_links || {}
+    const links = result.value?.voucher_links || {}
     const cfgMap = buttonConfigBySource.value
 
     // Group entries by source, preserving each source's internal sub-order from the API.
@@ -194,8 +246,8 @@ async function openVoucherLink(entry, productName = null) {
         const { data } = await axios.post('/voucher/shorten', {
             ref: entry.ref,
             source: entry.source,
-            product_name: productName ?? props.voucherResult?.product?.product_name ?? null,
-            product_image: props.voucherResult?.product?.product_image ?? null,
+            product_name: productName ?? result.value?.product?.product_name ?? null,
+            product_image: result.value?.product?.product_image ?? null,
             voucher_label: entry.label ?? null,
         })
         if (newTab) {
@@ -224,8 +276,8 @@ async function copyVoucherLink(entry) {
         const { data } = await axios.post('/voucher/shorten', {
             ref: entry.ref,
             source: entry.source,
-            product_name: props.voucherResult?.product?.product_name ?? null,
-            product_image: props.voucherResult?.product?.product_image ?? null,
+            product_name: result.value?.product?.product_name ?? null,
+            product_image: result.value?.product?.product_image ?? null,
             voucher_label: entry.label ?? null,
         })
         await navigator.clipboard.writeText(data.short_url)
@@ -311,6 +363,11 @@ const openFaq = ref(null)
                         </button>
                     </div>
                     <p v-if="voucherError" class="text-red-500 text-sm mt-2">{{ voucherError }}</p>
+                    <!-- Đường tự đúc mã phải đăng lên Facebook rồi mở trình duyệt thật, tốn tới cả
+                         phút. Nói trước để khách không tưởng trang bị treo mà bấm lại liên tục. -->
+                    <p v-else-if="resolving" class="text-[var(--color-muted)] text-sm mt-2">
+                        Đang lấy mã riêng cho sản phẩm này — có thể mất tới 1 phút, bạn đợi chút nhé.
+                    </p>
                 </div>
 
                 <!-- Máy tính (không phải admin): ẩn khung tìm mã, chỉ hiện thông báo dùng điện thoại -->
@@ -321,23 +378,23 @@ const openFaq = ref(null)
                 </div>
 
                 <!-- Kết quả -->
-                <div v-if="canUseVoucherTool && voucherResult" ref="voucherResultEl" class="mt-4 card-glass rounded-2xl p-5 scroll-mt-24">
-                    <div v-if="voucherResult.product" class="flex gap-4 items-start mb-5">
+                <div v-if="canUseVoucherTool && result" ref="voucherResultEl" class="mt-4 card-glass rounded-2xl p-5 scroll-mt-24">
+                    <div v-if="result.product" class="flex gap-4 items-start mb-5">
                         <div class="w-16 h-16 rounded-xl bg-[var(--color-peach-soft)] flex-none overflow-hidden">
-                            <img v-if="voucherResult.product.product_image" :src="voucherResult.product.product_image" :alt="voucherResult.product.product_name" class="w-full h-full object-cover" />
+                            <img v-if="result.product.product_image" :src="result.product.product_image" :alt="result.product.product_name" class="w-full h-full object-cover" />
                             <div v-else class="w-full h-full flex items-center justify-center text-2xl">🛍️</div>
                         </div>
                         <div class="flex-1 min-w-0">
                             <span class="inline-flex items-center justify-center w-5 h-5 rounded bg-[#F5511E] text-white text-[10px] font-black mb-1">S</span>
-                            <p class="font-semibold text-[var(--color-ink)] text-sm line-clamp-2">{{ voucherResult.product.product_name || 'Sản phẩm' }}</p>
-                            <p class="font-bold text-[var(--color-accent)] mt-1">{{ vnd(voucherResult.product.discounted_price) }}</p>
+                            <p class="font-semibold text-[var(--color-ink)] text-sm line-clamp-2">{{ result.product.product_name || 'Sản phẩm' }}</p>
+                            <p class="font-bold text-[var(--color-accent)] mt-1">{{ vnd(result.product.discounted_price) }}</p>
                         </div>
                     </div>
                     <p v-else class="text-sm text-[var(--color-muted)] mb-5">Không lấy được thông tin sản phẩm, nhưng bạn vẫn có thể dùng link voucher bên dưới.</p>
 
-                    <div v-if="voucherResult.voucher_labels?.length" class="flex flex-wrap gap-2 mb-4">
+                    <div v-if="result.voucher_labels?.length" class="flex flex-wrap gap-2 mb-4">
                         <span
-                            v-for="(label, i) in voucherResult.voucher_labels"
+                            v-for="(label, i) in result.voucher_labels"
                             :key="i"
                             class="text-xs font-semibold px-3 py-1 rounded-full bg-[var(--color-green-soft)] text-[var(--color-brand-green)] border border-[var(--color-brand-green)]/20"
                         >

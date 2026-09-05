@@ -36,7 +36,7 @@ class AdminLogViewerTest extends TestCase
     {
         return <<<'LOG'
         [2026-09-04 10:00:00] production.INFO: ShortLinkController: redirect thật khi bấm link {"code":"abc123"}
-        [2026-09-04 10:01:00] production.ERROR: SalesOcService: salesoc.vn trả về kết quả không dùng được {"via":"relay","status":403,"body":"Forbidden"}
+        [2026-09-04 10:01:00] production.ERROR: ChannelVoucherMinter: chuỗi chạy xong nhưng không ra mã {"channel":"fb","status":403,"body":"Forbidden"}
         [2026-09-04 10:02:00] production.WARNING: Có lỗi lạ xảy ra
         #0 /var/www/app/Services/Foo.php(12): bar()
         #1 {main}
@@ -78,7 +78,7 @@ class AdminLogViewerTest extends TestCase
         $this->actingAs($this->createAdmin())
             ->get('/admin/logs?file='.self::FILE.'&level=ERROR')
             ->assertInertia(fn ($page) => $page
-                ->where('entries.0.message', 'SalesOcService: salesoc.vn trả về kết quả không dùng được')
+                ->where('entries.0.message', 'ChannelVoucherMinter: chuỗi chạy xong nhưng không ra mã')
                 // Context được in đẹp lại nên tìm theo mảnh, không so khớp cả chuỗi.
                 ->where('entries.0.detail', fn (string $detail) => str_contains($detail, '"status": 403'))
             );
@@ -114,7 +114,7 @@ class AdminLogViewerTest extends TestCase
         $admin = $this->createAdmin();
 
         $this->actingAs($admin)
-            ->get('/admin/logs?file='.self::FILE.'&level=ALL&q=salesoc')
+            ->get('/admin/logs?file='.self::FILE.'&level=ALL&q=ChannelVoucher')
             ->assertInertia(fn ($page) => $page->where('total', 1)->where('entries.0.level', 'ERROR'));
 
         // "Forbidden" chỉ nằm trong context JSON, không có trong nội dung log.
