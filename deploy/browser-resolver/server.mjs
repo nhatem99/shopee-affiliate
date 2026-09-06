@@ -108,6 +108,34 @@ async function resolveOutbound({ url, marker, timeoutMs }) {
   }
 }
 
+/**
+ * Instagram không tự biến URL trong comment thành link bấm được (không có thẻ <a> nào để tìm),
+ * nên không thể dùng resolveOutbound (dò DOM + click). Ở đây điều hướng THẲNG tới link đã dựng
+ * sẵn (Laravel biết chính xác link này từ trước, không cần đọc lại từ trang) — nhưng vẫn mở
+ * permalink trước và gắn nó làm `referer` cho bước điều hướng tiếp theo, để mô phỏng đúng những gì
+ * trình duyệt gửi đi khi người dùng bấm một link thật trên đúng trang đó.
+ *
+ * CHƯA KIỂM CHỨNG: có khả năng Shopee đòi hỏi đúng một sự kiện click thật (không chỉ referer đúng)
+ * để đúc mã — nếu vậy cách này vẫn cho ra link KHÔNG có credential_token, giống hệt như đi theo
+ * redirect từ server. `voucher:mint-check --channel=ig` là công cụ trả lời câu hỏi này bằng dữ liệu.
+ */
+async function resolveDirect({ permalinkUrl, targetUrl, timeoutMs }) {
+  const ctx = await browserContext()
+  const page = await ctx.newPage()
+  const deadline = Date.now() + timeoutMs
+
+  try {
+    await page.goto(permalinkUrl, { waitUntil: 'domcontentloaded', timeout: timeoutMs })
+    await page.goto(targetUrl, { referer: permalinkUrl, waitUntil: 'domcontentloaded', timeout: timeoutMs })
+
+    const finalUrl = await waitForSettledUrl(page, deadline)
+
+    return { final_url: finalUrl }
+  } finally {
+    await page.close().catch(() => {})
+  }
+}
+
 async function waitForMarkedHref(page, marker, deadline) {
   while (Date.now() < deadline) {
     // $$eval là API truy vấn DOM của Playwright (không phải eval() của JavaScript): hàm bên dưới
@@ -210,14 +238,18 @@ const server = createServer(async (req, res) => {
     }
 
     if (req.method === 'POST' && req.url.startsWith('/resolve')) {
-      const { url, marker, timeout_ms: timeoutMs = 60_000 } = await readJson(req)
+      const { url, marker, target_url: targetUrl, timeout_ms: timeoutMs = 60_000 } = await readJson(req)
 
-      if (!url || !marker) {
-        return send(res, 400, { error: 'Thiếu url hoặc marker' })
+      if (!url || (!marker && !targetUrl)) {
+        return send(res, 400, { error: 'Thiếu url và (marker hoặc target_url)' })
       }
 
       const startedAt = Date.now()
-      const result = await enqueue(() => resolveOutbound({ url, marker, timeoutMs }))
+      // target_url có nghĩa là "đừng tìm link trong trang, điều hướng thẳng tới đây" (kênh ig) —
+      // thiếu nó thì giữ hành vi cũ: dò DOM tìm thẻ <a> chứa marker rồi bấm (kênh fb).
+      const result = await enqueue(() => targetUrl
+        ? resolveDirect({ permalinkUrl: url, targetUrl, timeoutMs })
+        : resolveOutbound({ url, marker, timeoutMs }))
 
       if (result.error) {
         return send(res, 422, { ...result, duration_ms: Date.now() - startedAt })

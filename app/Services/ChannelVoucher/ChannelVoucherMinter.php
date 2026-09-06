@@ -196,7 +196,14 @@ class ChannelVoucherMinter
             }
 
             $timeout = (int) config('services.channel_voucher.timeout', 60);
-            $resolved = $this->browser->resolve($permalink, $marker, $timeout);
+
+            // Instagram không tự biến URL trong comment thành link bấm được (đã xác nhận bằng
+            // mint-check --manual ngày 2026-09-06: comment hiện dạng chữ thường, không có thẻ <a>)
+            // — không có gì để dò/bấm. Đưa thẳng $link (đã biết từ đầu, không cần đọc lại từ
+            // trang) để browser điều hướng trực tiếp thay vì tìm marker trong DOM. Kênh 'fb' vẫn
+            // giữ nguyên cách bấm thật vì đó là cơ chế documented, chưa bị chứng minh là sai.
+            $directTarget = $channel === 'ig' ? $link : null;
+            $resolved = $this->browser->resolve($permalink, $marker, $timeout, $directTarget);
             $steps[] = $this->step(
                 'mở bằng trình duyệt',
                 $resolved !== null,

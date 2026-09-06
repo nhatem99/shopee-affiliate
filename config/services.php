@@ -83,17 +83,24 @@ return [
     | toàn (2026-09-05) nên đây hỏng là khách không có mã. Đổi lại: hoa hồng về hết tài khoản
     | của mình thay vì của salesoc, và không còn phụ thuộc một bên có thể chặn mình bất cứ lúc nào.
     |
-    | MẶC ĐỊNH TẮT ('enabled' => false): chưa điền token/post_id mà bật lên thì mọi lượt quét đều
-    | hỏng và khách không nhận được mã nào. Bật sau khi `php artisan voucher:mint-check <link>`
-    | chạy xanh.
+    | Đã bật sẵn 'enabled' => true kèm token/media_id của kênh 'ig' (TechTrust Mobile, xác nhận
+    | bằng `voucher:mint-check` ngày 2026-09-06) để merge xong chạy được ngay, không cần set ENV
+    | trên production. Kênh 'fb' vẫn CHƯA có page_access_token/post_id nên tự động không sinh link,
+    | không cần xoá khỏi mảng 'channels' — xem ChannelVoucherMinter::run().
     |
     */
     'channel_voucher' => [
-        'enabled' => env('CHANNEL_VOUCHER_ENABLED', false),
+        'enabled' => env('CHANNEL_VOUCHER_ENABLED', true),
 
         // Các kênh sẽ đúc mã, theo thứ tự hiển thị cho khách.
         // 'fb' cần facebook.post_id, 'ig' cần facebook.ig_media_id.
-        'channels' => ['fb', 'ig'],
+        //
+        // 'ig' TẮT có chủ ý (2026-09-06): đã kiểm chứng bằng voucher:mint-check --channel=ig rằng
+        // Shopee KHÔNG đúc mã qua đường Instagram — cả bấm link (không khả thi, IG không tự biến
+        // URL trong comment thành link bấm được) lẫn điều hướng thẳng với referer đúng (chạy được
+        // nhưng URL đích không có credential_token) đều thất bại. Bật lại 'ig' chỉ khi tìm ra cơ
+        // chế khác khiến Shopee đúc mã qua kênh này.
+        'channels' => ['fb'],
 
         // Xoá comment ngay sau khi đọc xong link. Bật mặc định: mỗi lượt khách quét là một comment
         // mới lên cùng một bài, không dọn thì bài tích luỹ hàng nghìn comment link Shopee và Page
@@ -119,8 +126,15 @@ return [
 
         // Media Instagram để comment (kênh 'ig'). Cần tài khoản IG Professional liên kết Page và
         // quyền instagram_manage_comments.
-        'ig_media_id' => env('INSTAGRAM_MEDIA_ID'),
-        'ig_access_token' => env('INSTAGRAM_ACCESS_TOKEN'),
+        //
+        // Giá trị mặc định bên dưới là Page Token thật của Page "TechTrust Mobile" (Page id
+        // 1135866952951524, IG business id 17841425760823921) — hardcode có chủ ý để merge xong
+        // chạy ngay không cần set ENV, theo yêu cầu. Token loại PAGE, debug_token trả expires_at=0
+        // (không tự hết hạn), scope gồm instagram_basic + instagram_manage_comments. Đây LÀ SECRET
+        // THẬT nằm trong git — nếu repo này từng public/chia sẻ ra ngoài, coi token đã bị lộ và
+        // phải thu hồi (Graph API Explorer -> App dienthoaigiare -> Đặt lại quyền/Page Token).
+        'ig_media_id' => env('INSTAGRAM_MEDIA_ID', '18624429151052482'),
+        'ig_access_token' => env('INSTAGRAM_ACCESS_TOKEN', 'EAAN8uHrrzHsBSWS1yiZCq4EWtkCVrnN3nNSXKIrd6f599ko9QF29FE0gACiuNbQysiNjxUa8l855jcXoQuWRisuhAwhWBfDRXXZAExMA8Q5pZCdF7ieE6Nx6AGQ1TFb3Rhqf66L554dcUeHA7Gy41ZCHgZCiH50ZBu4AE6jJ7r7HSgMCVzxVbY0ZArWnpJAF74JMHUxZCRWZBqz4c38n8xIVV'),
     ],
 
     // Node service chạy Playwright, mở bài đăng Facebook/Instagram bằng Chromium thật rồi bấm vào

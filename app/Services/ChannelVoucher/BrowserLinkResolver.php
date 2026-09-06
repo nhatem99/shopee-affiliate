@@ -20,9 +20,14 @@ class BrowserLinkResolver
      * @param  string  $pageUrl  permalink của comment (FB) hoặc của media (IG)
      * @param  string  $marker  chuỗi duy nhất có trong link cần bấm, để không bấm nhầm link của
      *                          comment người khác trên cùng bài đăng
+     * @param  string|null  $targetUrl  Instagram không tự biến URL trong comment thành link bấm
+     *                                  được — không có gì để dò/bấm. Truyền link đã dựng sẵn ở đây
+     *                                  (kênh 'ig') để service điều hướng THẲNG tới đó (referer =
+     *                                  $pageUrl) thay vì tìm thẻ <a> chứa marker. Để null (kênh
+     *                                  'fb') giữ hành vi cũ: dò DOM rồi bấm thật.
      * @return array{final_url: string, matched_href: ?string, duration_ms: int}|null
      */
-    public function resolve(string $pageUrl, string $marker, int $timeoutSeconds): ?array
+    public function resolve(string $pageUrl, string $marker, int $timeoutSeconds, ?string $targetUrl = null): ?array
     {
         $base = rtrim((string) config('services.browser_resolver.url'), '/');
 
@@ -34,6 +39,7 @@ class BrowserLinkResolver
             ])->timeout($timeoutSeconds + 5)->post($base.'/resolve', [
                 'url' => $pageUrl,
                 'marker' => $marker,
+                'target_url' => $targetUrl,
                 'timeout_ms' => $timeoutSeconds * 1000,
             ]);
         } catch (\Exception $e) {
