@@ -4,7 +4,7 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use App\Services\AffiliateLinkRewriterService;
-use App\Services\SalesOcService;
+use App\Services\KieuShopeeService;
 use App\Services\ShopeeLinkResolverService;
 use App\Services\ShortLinkService;
 use App\Services\ZaloOaService;
@@ -20,16 +20,9 @@ class ZaloWebhookController extends Controller
 
     private const GROUP_NOTE = "⚠️ LƯU Ý KHI SĂN VOUCHER\n• Không thấy mã phù hợp: cập nhật lại link Shopee hoặc thử tài khoản khác.\n• Mỗi tài khoản chỉ nên dùng 1 loại voucher tối đa vài lần/ngày.";
 
-    private const SOURCE_LABELS = [
-        'youtube' => '🔴 Mã YouTube',
-        'facebook' => '🔵 Mã Facebook',
-        'instagram' => '🟣 Mã Instagram',
-        'zalo' => '🟢 Mã Zalo',
-    ];
-
     public function __construct(
         private ShopeeLinkResolverService $resolver,
-        private SalesOcService $salesOc,
+        private KieuShopeeService $kieuShopee,
         private AffiliateLinkRewriterService $rewriter,
         private ShortLinkService $shortLinks,
         private ZaloOaService $zalo,
@@ -90,20 +83,18 @@ class ZaloWebhookController extends Controller
         }
 
         $canonicalUrl = $this->resolver->resolveCanonicalUrl($url);
-        $data = $this->salesOc->fetchProductAndVoucherLabels($canonicalUrl);
+        $data = $this->kieuShopee->fetchProductAndVoucherLink($canonicalUrl);
 
         if (! $data) {
             return response()->json(['ok' => true]);
         }
 
-        $reply = $this->buildGroupReply(
-            $data['product_name'] ?? 'Sản phẩm',
-            $data['voucher_links'] ?? []
-        );
+        $productName = $data['product']['product_name'] ?? 'Sản phẩm';
 
-        if ($reply) {
-            $this->zalo->sendGroupText($groupId, $reply);
-        }
+        $this->zalo->sendGroupText($groupId, $this->buildGroupReply(
+            $productName,
+            $this->buildShortLink($data['voucher_link'], $productName)
+        ));
 
         return response()->json(['ok' => true]);
     }
@@ -117,56 +108,26 @@ class ZaloWebhookController extends Controller
         return preg_match('#https?://\S*(?:shopee\.vn|shp\.ee)\S*#i', $text, $m) ? $m[0] : null;
     }
 
-    private function buildGroupReply(string $productName, array $voucherLinks): ?string
+    /**
+     * Nguồn mã giờ chỉ trả về đúng một link nên tin nhắn cũng chỉ có một dòng link,
+     * không còn phần liệt kê mã theo từng kênh (Mã FB/YTB/IG/Zalo) như thời salesoc.
+     */
+    private function buildGroupReply(string $productName, string $shortUrl): string
     {
-        $topLines = [];
-        $breakdownBlocks = [];
-
-        foreach (self::SOURCE_LABELS as $source => $label) {
-            $options = $voucherLinks[$source] ?? [];
-            if (empty($options)) {
-                continue;
-            }
-
-            $best = $options[0];
-            $shortUrl = $this->buildShortLink($best['url'], $source, $productName);
-            $topLines[] = "► Link áp mã {$this->sourceName($source)}: {$shortUrl}";
-
-            $bullets = collect($options)->map(fn ($o) => "• {$o['label']}")->implode("\n");
-            $breakdownBlocks[] = "{$label}\n{$bullets}";
-        }
-
-        if (empty($topLines)) {
-            return null;
-        }
-
         return implode("\n", [
             "🛒 {$productName}",
             '',
-            ...$topLines,
-            '',
-            implode("\n\n", $breakdownBlocks),
+            "► Link đã áp mã: {$shortUrl}",
             '',
             self::GROUP_NOTE,
         ]);
     }
 
-    private function buildShortLink(string $salesOcUrl, string $source, string $productName): string
+    private function buildShortLink(string $voucherUrl, string $productName): string
     {
-        $targetUrl = $this->rewriter->rewriteToOwnAffiliate($salesOcUrl);
-        $link = $this->shortLinks->create($targetUrl, $source, $productName);
+        $targetUrl = $this->rewriter->rewriteToOwnAffiliate($voucherUrl);
+        $link = $this->shortLinks->create($targetUrl, KieuShopeeService::SOURCE, $productName);
 
         return url('/go/'.$link->code);
-    }
-
-    private function sourceName(string $source): string
-    {
-        return match ($source) {
-            'facebook' => 'Facebook',
-            'youtube' => 'YouTube',
-            'instagram' => 'Instagram',
-            'zalo' => 'Zalo',
-            default => ucfirst($source),
-        };
     }
 }

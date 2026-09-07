@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Exceptions\AffiliateScanException;
 use App\Services\AffiliateLinkRewriterService;
+use App\Services\KieuShopeeService;
 use App\Services\ShortLinkService;
 use App\Services\TrackingService;
 use App\Services\UrlValidationService;
@@ -26,14 +27,12 @@ class ShortLinkController extends Controller
     public function store(Request $request): JsonResponse
     {
         $validated = $request->validate([
-            // 'ref' là token mờ do ShopeeVoucherController::maskVoucherLinks() phát ra — URL
-            // affiliate thật (salesoc.vn/s.afp.ad) không bao giờ đi qua request body, tránh lộ
-            // URL gốc cho ai xem được request này (Network tab, log trung gian...).
+            // 'ref' là token mờ do ShopeeVoucherController::maskVoucherLink() phát ra — URL
+            // affiliate thật không bao giờ đi qua request body, tránh lộ URL gốc cho ai xem
+            // được request này (Network tab, log trung gian...).
             'ref' => ['required', 'string', 'size:32'],
-            'source' => ['nullable', 'string', 'in:facebook,instagram,zalo,youtube'],
             'product_name' => ['nullable', 'string', 'max:255'],
             'product_image' => ['nullable', 'url', 'max:2000'],
-            'voucher_label' => ['nullable', 'string', 'max:100'],
         ]);
 
         $url = Cache::get("voucher_ref:{$validated['ref']}");
@@ -45,20 +44,29 @@ class ShortLinkController extends Controller
         try {
             $this->urlValidator->validateAffiliateRedirectUrl($url);
         } catch (AffiliateScanException $e) {
+            // Nguồn cấp mã có thể đổi domain trung gian bất kỳ lúc nào. Khi đó khách chỉ thấy
+            // "Link không hợp lệ" — log kèm host để biết ngay cần thêm domain nào vào
+            // UrlValidationService::$allowedRedirectDomains, khỏi phải mò lại từ đầu.
+            Log::warning('ShortLinkController: link voucher bị chặn vì domain lạ', [
+                'host' => parse_url($url, PHP_URL_HOST),
+                'voucher_url' => $url,
+            ]);
+
             return response()->json(['message' => $e->getMessage()], 422);
         }
 
         Log::info('ShortLinkController: người dùng bấm "Mua ngay"', [
-            'source' => $validated['source'] ?? null,
             'product_name' => $validated['product_name'] ?? null,
-            'salesoc_url' => $url,
+            'voucher_url' => $url,
         ]);
 
         $targetUrl = $this->rewriter->rewriteToOwnAffiliate($url);
 
+        // Chỉ còn một nguồn mã duy nhất nên source là hằng số phía server, không nhận từ
+        // client nữa (trước đây client gửi lên facebook/zalo/... vì salesoc trả nhiều kênh).
         $link = $this->shortLinks->create(
             $targetUrl,
-            $validated['source'] ?? null,
+            KieuShopeeService::SOURCE,
             $validated['product_name'] ?? null,
             $validated['product_image'] ?? null,
         );
@@ -70,9 +78,8 @@ class ShortLinkController extends Controller
 
         $this->tracking->log('voucher_select', $request, [
             'url' => $targetUrl,
-            'source' => $validated['source'] ?? null,
+            'source' => KieuShopeeService::SOURCE,
             'product_name' => $validated['product_name'] ?? null,
-            'voucher_code' => $validated['voucher_label'] ?? null,
         ]);
 
         return response()->json([

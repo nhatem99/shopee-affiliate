@@ -12,33 +12,15 @@ const props = defineProps({
     vouchers: { type: Array, default: () => [] },
     voucherResult: { type: Object, default: null },
     canUseVoucherTool: { type: Boolean, default: true },
-    // Admin-editable button display config (array ordered by sort_order from server).
-    // Each element: { source, label, sort_order, is_featured }.
-    voucherButtonConfig: { type: Array, default: () => [] },
 })
 
 const toast = useToast()
 
 // --- tietkiemvi.com: công cụ lấy link voucher công khai, không cần đăng nhập ---
-// Link CTA (voucher_links) trỏ thẳng tới link affiliate của salesoc.vn — nơi mã giảm giá
-// thực sự được áp dụng. Đơn hàng qua link này tính hoa hồng cho salesoc.vn, không phải
-// cho mình; đây là đánh đổi có chủ đích để người dùng nhận được mã giảm giá thật.
-const SOURCE_LABELS = { facebook: 'Facebook', instagram: 'Instagram', zalo: 'Zalo', youtube: 'YouTube' }
-// Icon SVG đơn sắc (kế thừa màu chữ nút) thay cho emoji — emoji hiển thị không đồng nhất giữa các máy/font.
-const SOURCE_ICON_SVG = {
-    facebook: '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M22 12.06C22 6.48 17.52 2 11.94 2 6.36 2 1.88 6.48 1.88 12.06c0 5.02 3.66 9.18 8.44 9.94v-7.03H7.9v-2.91h2.42V9.91c0-2.39 1.42-3.71 3.6-3.71 1.04 0 2.13.19 2.13.19v2.34h-1.2c-1.18 0-1.55.73-1.55 1.48v1.78h2.64l-.42 2.91h-2.22V22c4.78-.76 8.44-4.92 8.44-9.94Z"/></svg>',
-    youtube: '<svg viewBox="0 0 24 24"><rect x="2" y="5" width="20" height="14" rx="4" fill="#FF0000"/><path d="M10 8.5v7l6-3.5-6-3.5Z" fill="#fff"/></svg>',
-    instagram: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="5"/><circle cx="12" cy="12" r="4"/><circle cx="17.5" cy="6.5" r="1.2" fill="currentColor" stroke="none"/></svg>',
-    zalo: '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C6.48 2 2 5.94 2 10.8c0 2.68 1.4 5.06 3.6 6.66-.16 1.1-.6 2.5-1.4 3.54 0 0 2.2-.24 4.24-1.7.8.2 1.66.3 2.56.3 5.52 0 10-3.94 10-8.8S17.52 2 12 2Z"/></svg>',
-    default: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 13a5 5 0 0 0 7.07 0l1.93-1.93a5 5 0 0 0-7.07-7.07L10.5 5.5"/><path d="M14 11a5 5 0 0 0-7.07 0l-1.93 1.93a5 5 0 0 0 7.07 7.07L13.5 18.5"/></svg>',
-}
-// Màu nút theo thương hiệu từng nền tảng, giống cách salesoc.vn phân biệt Mã FB/YTB/IG.
-const SOURCE_STYLES = {
-    facebook: 'text-white bg-gradient-to-r from-blue-600 to-blue-500 shadow-[0_4px_14px_rgba(37,99,235,0.35)] hover:brightness-110',
-    youtube: 'text-white bg-gradient-to-r from-[#f97316] to-[#ea580c] shadow-[0_4px_14px_rgba(249,115,22,0.4)] hover:brightness-110',
-    instagram: 'text-white bg-gradient-to-r from-[#e1306c] via-[#fd1d1d] to-[#fcb045] shadow-[0_4px_14px_rgba(225,48,108,0.35)] hover:brightness-110',
-    zalo: 'text-white bg-gradient-to-r from-[#0068ff] to-[#0052cc] shadow-[0_4px_14px_rgba(0,104,255,0.35)] hover:brightness-110',
-}
+// Nguồn cấp mã (kieushopee) trả về ĐÚNG MỘT link đã áp sẵn mã cho mỗi sản phẩm, nên ở đây
+// chỉ có một nút "Mua ngay" — không còn danh sách mã theo từng nền tảng để khách phải chọn.
+// Server chỉ trả về `voucher_ref` (token mờ); URL affiliate thật được giải mã lại ở
+// /voucher/shorten khi khách thực sự bấm — xem ShopeeVoucherController::maskVoucherLink().
 
 const voucherUrl = ref('')
 const voucherUrlInput = ref(null)
@@ -83,16 +65,16 @@ function resolveVoucher() {
         onSuccess: () => {
             resolving.value = false
             const result = props.voucherResult
-            if (result) {
+            if (result?.voucher_ref) {
                 history.value = [
                     {
                         product_name: result.product?.product_name || null,
                         product_image: result.product?.product_image || null,
                         created_at: new Date().toISOString(),
-                        // Lưu lại các nút mã (nguồn/label/ref) để "mua lại" sau này chỉ cần bấm nút,
-                        // không cần hiện đường dẫn thô cho khách. ref là token mờ do server phát
-                        // ra (xem ShopeeVoucherController::maskVoucherLinks) — sống 7 ngày trong cache.
-                        links: voucherLinkEntries.value.map(({ source, ref, label }) => ({ source, ref, label })),
+                        // Lưu token mờ để "mua lại" sau này chỉ cần bấm nút, không cần hiện đường
+                        // dẫn thô cho khách. ref do server phát ra (xem maskVoucherLink) và sống
+                        // 7 ngày trong cache — hết hạn thì /voucher/shorten trả 422 và báo lỗi.
+                        ref: result.voucher_ref,
                     },
                     ...history.value,
                 ].slice(0, 5)
@@ -108,81 +90,11 @@ function resolveVoucher() {
     })
 }
 
-// Build a source-keyed lookup from the admin config array for O(1) access.
-// Falls back gracefully when voucherButtonConfig is empty (e.g. migration not yet run).
-const buttonConfigBySource = computed(() => {
-    const map = {}
-    for (const cfg of props.voucherButtonConfig) {
-        map[cfg.source] = cfg
-    }
-    return map
-})
-
-// Hardcoded fallback order matches the current SalesOcService fetch() insertion order.
-const FALLBACK_ORDER = { facebook: 0, instagram: 1, zalo: 2, youtube: 3 }
-
-// salesoc.vn không trả trạng thái còn/hết lượt của từng mã, nên hiển thị TẤT CẢ lựa chọn
-// mỗi nền tảng (không chỉ mã % cao nhất) — bấm thử lần lượt nếu mã đầu đã hết lượt.
-const voucherLinkEntries = computed(() => {
-    const links = props.voucherResult?.voucher_links || {}
-    const cfgMap = buttonConfigBySource.value
-
-    // Group entries by source, preserving each source's internal sub-order from the API.
-    const grouped = {}
-    for (const [source, options] of Object.entries(links)) {
-        const cfg = cfgMap[source]
-        grouped[source] = (options || []).map((opt, i) => {
-            // Admin label-override: when set, it replaces ALL labels for this source —
-            // including real per-product API labels (e.g. "Mã FB 22%"). This is intentional
-            // to give admins full control. Null/empty = use API label or SOURCE_LABELS fallback.
-            const label = cfg?.label || opt.label || SOURCE_LABELS[source]
-            return {
-                key: `${source}-${i}`,
-                source,
-                ref: opt.ref,
-                label,
-            }
-        })
-    }
-
-    // Sort source groups by admin sort_order (fallback to hardcoded FALLBACK_ORDER).
-    const sortedSources = Object.keys(grouped).sort((a, b) => {
-        const orderA = cfgMap[a]?.sort_order ?? FALLBACK_ORDER[a] ?? 99
-        const orderB = cfgMap[b]?.sort_order ?? FALLBACK_ORDER[b] ?? 99
-        return orderA - orderB
-    })
-
-    // Flatten groups in sorted order; each group's sub-order is unchanged.
-    const entries = []
-    for (const source of sortedSources) {
-        entries.push(...grouped[source])
-    }
-    return entries
-})
-
-// Determine which entry (if any) should carry the "Đề xuất" badge + animate-pulse-ring.
-// We pick the first entry (lowest final render index) that belongs to the featured source.
-// When no source is marked featured (e.g. config not seeded yet), fall back to index 0
-// so nothing visually breaks in environments without the migration.
-const featuredEntryKey = computed(() => {
-    const cfgMap = buttonConfigBySource.value
-    const featuredCfg = props.voucherButtonConfig
-        .filter(c => c.is_featured)
-        .sort((a, b) => (a.sort_order ?? 99) - (b.sort_order ?? 99))[0]
-
-    if (!featuredCfg) {
-        // Fallback: treat the very first entry as featured (preserves pre-migration behaviour).
-        return voucherLinkEntries.value[0]?.key ?? null
-    }
-
-    // Find the first entry in the final sorted list that belongs to the featured source.
-    const first = voucherLinkEntries.value.find(e => e.source === featuredCfg.source)
-    return first?.key ?? voucherLinkEntries.value[0]?.key ?? null
-})
-
 const shorteningKey = ref(null)
 
-async function openVoucherLink(entry, productName = null) {
+// key chỉ để biết nút nào đang quay (nút kết quả hay một dòng trong lịch sử) — mỗi lần
+// chỉ cho bấm một nút, vì cả hai đều dẫn tới cùng một hành động điều hướng.
+async function openVoucherLink(entry, productName = null, productImage = null) {
     if (!entry?.ref || shorteningKey.value) return
 
     shorteningKey.value = entry.key
@@ -193,10 +105,8 @@ async function openVoucherLink(entry, productName = null) {
     try {
         const { data } = await axios.post('/voucher/shorten', {
             ref: entry.ref,
-            source: entry.source,
             product_name: productName ?? props.voucherResult?.product?.product_name ?? null,
-            product_image: props.voucherResult?.product?.product_image ?? null,
-            voucher_label: entry.label ?? null,
+            product_image: productImage ?? props.voucherResult?.product?.product_image ?? null,
         })
         if (newTab) {
             newTab.location.href = data.short_url
@@ -223,10 +133,8 @@ async function copyVoucherLink(entry) {
     try {
         const { data } = await axios.post('/voucher/shorten', {
             ref: entry.ref,
-            source: entry.source,
             product_name: props.voucherResult?.product?.product_name ?? null,
             product_image: props.voucherResult?.product?.product_image ?? null,
-            voucher_label: entry.label ?? null,
         })
         await navigator.clipboard.writeText(data.short_url)
         toast.success('Đã sao chép link!')
@@ -257,8 +165,8 @@ const filteredVouchers = computed(() => {
 })
 
 const faqs = [
-    { q: 'Công cụ này hoạt động như thế nào?', a: 'Bạn dán link sản phẩm Shopee vào ô ở đầu trang — hệ thống tự động tìm và hiển thị mã giảm giá Facebook, YouTube, Instagram đang áp dụng cho sản phẩm đó, không cần bấm thêm nút nào.' },
-    { q: 'Tôi có được hoàn tiền không?', a: 'Công cụ lấy mã giảm giá không tạo hoàn tiền — mục đích là giúp bạn tìm nhanh mã Facebook/YouTube/Instagram để áp khi thanh toán trên Shopee.' },
+    { q: 'Công cụ này hoạt động như thế nào?', a: 'Bạn dán link sản phẩm Shopee vào ô ở đầu trang — hệ thống tự tìm mã giảm giá đang áp dụng cho sản phẩm đó và trả về một link đã gắn sẵn mã. Bạn chỉ cần bấm "Mua ngay" rồi đặt hàng như bình thường, không phải nhập mã.' },
+    { q: 'Tôi có được hoàn tiền không?', a: 'Công cụ lấy mã giảm giá không tạo hoàn tiền — mục đích là giúp bạn được giảm giá ngay khi thanh toán trên Shopee.' },
     { q: 'Có mất phí không?', a: 'Hoàn toàn miễn phí, bạn không mất phí gì khi dùng công cụ lấy mã.' },
     { q: 'Hỗ trợ những sàn nào?', a: 'Ô dán link ở đầu trang hiện chỉ hỗ trợ Shopee. Riêng mục "Mã giảm giá gợi ý" bên dưới có thêm mã cho Lazada, TikTok Shop và Tiki.' },
 ]
@@ -278,7 +186,7 @@ const openFaq = ref(null)
                     <h1 class="text-xl md:text-2xl font-extrabold text-[var(--color-ink)] mb-1">
                         Dán link sản phẩm Shopee để lấy mã giảm giá
                     </h1>
-                    <p class="text-sm text-[var(--color-muted)] mb-4">Nhận link voucher riêng cho Facebook, YouTube, Instagram — miễn phí.</p>
+                    <p class="text-sm text-[var(--color-muted)] mb-4">Nhận ngay link đã áp sẵn mã giảm giá — không cần nhập mã, miễn phí.</p>
 
                     <div class="flex flex-col md:flex-row gap-3">
                         <div class="relative flex-1">
@@ -333,54 +241,33 @@ const openFaq = ref(null)
                             <p class="font-bold text-[var(--color-accent)] mt-1">{{ vnd(voucherResult.product.discounted_price) }}</p>
                         </div>
                     </div>
-                    <p v-else class="text-sm text-[var(--color-muted)] mb-5">Không lấy được thông tin sản phẩm, nhưng bạn vẫn có thể dùng link voucher bên dưới.</p>
+                    <p v-else class="text-sm text-[var(--color-muted)] mb-5">Không lấy được thông tin sản phẩm, nhưng bạn vẫn có thể dùng link bên dưới.</p>
 
-                    <div v-if="voucherResult.voucher_labels?.length" class="flex flex-wrap gap-2 mb-4">
-                        <span
-                            v-for="(label, i) in voucherResult.voucher_labels"
-                            :key="i"
-                            class="text-xs font-semibold px-3 py-1 rounded-full bg-[var(--color-green-soft)] text-[var(--color-brand-green)] border border-[var(--color-brand-green)]/20"
+                    <!-- Mã đã được áp sẵn trong link nên khách không phải chọn/nhập gì, chỉ bấm mở. -->
+                    <div v-if="voucherResult.voucher_ref" class="flex items-stretch gap-1.5 mb-4">
+                        <button
+                            @click="openVoucherLink({ key: 'result', ref: voucherResult.voucher_ref })"
+                            :disabled="shorteningKey === 'result'"
+                            class="btn-fire flex-1 min-w-0 px-6 py-4 rounded-xl flex items-center justify-center gap-2 text-base animate-pulse-ring disabled:opacity-60"
                         >
-                            {{ label }}
-                        </span>
+                            <span>🛒</span>
+                            <span class="truncate">{{ shorteningKey === 'result' ? 'Đang chuyển hướng...' : 'Mua ngay (đã áp mã)' }}</span>
+                        </button>
+                        <button
+                            @click="copyVoucherLink({ key: 'result', ref: voucherResult.voucher_ref })"
+                            :disabled="copyingKey === 'result'"
+                            title="Sao chép link để dán lên Facebook/Zalo"
+                            class="flex-none w-12 rounded-xl flex items-center justify-center transition-all bg-[var(--color-peach-soft)] hover:bg-[var(--color-peach)] text-[var(--color-ink)] disabled:opacity-60"
+                        >
+                            <svg v-if="copyingKey !== 'result'" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="w-4 h-4"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+                            <svg v-else viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="w-4 h-4 animate-spin"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg>
+                        </button>
                     </div>
-
-                    <div v-if="voucherLinkEntries.length" class="grid grid-cols-1 sm:grid-cols-2 gap-2 mb-4 mt-3">
-                        <div v-for="entry in voucherLinkEntries" :key="entry.key" class="relative">
-                            <span
-                                v-if="entry.key === featuredEntryKey"
-                                class="absolute -top-2.5 left-3 z-10 bg-[#facc15] text-[#1c0a00] text-[10px] font-extrabold px-2.5 py-0.5 rounded-full shadow-md"
-                            >Đề xuất</span>
-                            <div class="flex items-stretch gap-1.5">
-                                <button
-                                    @click="openVoucherLink(entry)"
-                                    :disabled="shorteningKey === entry.key"
-                                    class="flex-1 min-w-0 font-semibold px-4 py-3 rounded-xl transition-all text-sm flex items-center justify-between gap-2 disabled:opacity-60"
-                                    :class="[SOURCE_STYLES[entry.source] || 'bg-[var(--color-peach-soft)] hover:bg-[var(--color-peach)] text-[var(--color-ink)]', entry.key === featuredEntryKey && 'animate-pulse-ring']"
-                                >
-                                    <span class="flex items-center gap-2 min-w-0">
-                                        <span v-html="SOURCE_ICON_SVG[entry.source] || SOURCE_ICON_SVG.default" class="flex-none [&>svg]:w-4 [&>svg]:h-4"></span>
-                                        <span class="truncate">{{ shorteningKey === entry.key ? 'Đang chuyển hướng...' : entry.label }}</span>
-                                    </span>
-                                    <span class="flex-none">→</span>
-                                </button>
-                                <button
-                                    @click="copyVoucherLink(entry)"
-                                    :disabled="copyingKey === entry.key"
-                                    title="Sao chép link để dán lên Facebook/Zalo"
-                                    class="flex-none w-11 rounded-xl flex items-center justify-center transition-all bg-[var(--color-peach-soft)] hover:bg-[var(--color-peach)] text-[var(--color-ink)] disabled:opacity-60"
-                                >
-                                    <svg v-if="copyingKey !== entry.key" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="w-4 h-4"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
-                                    <svg v-else viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="w-4 h-4 animate-spin"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg>
-                                </button>
-                            </div>
-                        </div>
-                    </div>
-                    <p v-else class="text-sm text-[var(--color-muted)] mb-4">Chưa lấy được link voucher cho sản phẩm này — có thể do lỗi kết nối tạm thời, thử dán lại link nhé.</p>
+                    <p v-else class="text-sm text-[var(--color-muted)] mb-4">Chưa lấy được mã cho sản phẩm này — có thể do lỗi kết nối tạm thời, thử dán lại link nhé.</p>
 
                     <div class="flex items-start gap-2 bg-[var(--color-peach-soft)] border border-[var(--color-accent)]/25 rounded-xl px-3 py-2.5">
                         <span class="text-sm leading-none">⚠️</span>
-                        <p class="text-xs text-[var(--color-accent-deep)] leading-relaxed">Nếu 1 mã báo hết lượt, thử mã khác bên trên nhé.</p>
+                        <p class="text-xs text-[var(--color-accent-deep)] leading-relaxed">Mã đã gắn sẵn trong link — bấm "Mua ngay" rồi đặt hàng như bình thường, không cần nhập mã. Nếu Shopee báo mã hết lượt, thử lại sau ít phút nhé.</p>
                     </div>
                 </div>
 
@@ -401,19 +288,17 @@ const openFaq = ref(null)
                                 <span class="truncate flex-1 text-sm text-[var(--color-ink)] font-medium">{{ h.product_name || 'Sản phẩm' }}</span>
                                 <span class="text-[var(--color-muted)] text-xs whitespace-nowrap">{{ new Date(h.created_at).toLocaleDateString('vi-VN') }}</span>
                             </div>
-                            <div v-if="h.links?.length" class="flex flex-wrap gap-2">
-                                <button
-                                    v-for="link in h.links"
-                                    :key="`hist-${hi}-${link.source}`"
-                                    @click="openVoucherLink({ key: `hist-${hi}-${link.source}`, source: link.source, ref: link.ref }, h.product_name)"
-                                    :disabled="shorteningKey === `hist-${hi}-${link.source}`"
-                                    class="font-semibold px-3 py-2 rounded-lg transition-all text-xs flex items-center gap-1.5 disabled:opacity-60"
-                                    :class="SOURCE_STYLES[link.source] || 'bg-[var(--color-peach-soft)] hover:bg-[var(--color-peach)] text-[var(--color-ink)]'"
-                                >
-                                    <span v-html="SOURCE_ICON_SVG[link.source] || SOURCE_ICON_SVG.default" class="flex-none [&>svg]:w-3.5 [&>svg]:h-3.5"></span>
-                                    {{ shorteningKey === `hist-${hi}-${link.source}` ? 'Đang mở...' : link.label }}
-                                </button>
-                            </div>
+                            <!-- Mục cũ (trước khi chuyển sang một mã duy nhất) không có h.ref nên
+                                 không hiện nút — chúng tự trôi khỏi danh sách sau 5 lần quét mới. -->
+                            <button
+                                v-if="h.ref"
+                                @click="openVoucherLink({ key: `hist-${hi}`, ref: h.ref }, h.product_name, h.product_image)"
+                                :disabled="shorteningKey === `hist-${hi}`"
+                                class="btn-fire px-4 py-2 rounded-lg text-xs flex items-center gap-1.5 disabled:opacity-60"
+                            >
+                                <span>🛒</span>
+                                {{ shorteningKey === `hist-${hi}` ? 'Đang mở...' : 'Mua ngay' }}
+                            </button>
                         </div>
                     </div>
                 </div>

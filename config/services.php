@@ -54,41 +54,22 @@ return [
         'mmp_pid' => env('SHOPEE_MMP_PID', 'an_17332410386'),
     ],
 
-    'salesoc' => [
-        // salesoc.vn chặn thẳng theo IP của server (403 từ nginx, không phải app) — cấu hình
-        // 1 outbound proxy ở đây để gọi salesoc.vn qua IP khác thay vì IP thật của VPS.
-        // Định dạng: http://user:pass@host:port hoặc http://host:port nếu proxy không cần auth.
-        // Để trống (null) thì gọi trực tiếp như bình thường, không qua proxy.
-        'proxy' => env('SALESOC_PROXY_URL'),
+    // Nguồn lấy link đã áp mã giảm giá — thay cho salesoc.vn (đã bỏ hẳn).
+    // Hard-code giá trị ngay ở đây để push code là production dùng được ngay, không phải sửa
+    // .env trên server; env() chỉ là đường override khi cần đổi gấp mà chưa kịp deploy.
+    'kieushopee' => [
+        // Endpoint của Next.js Server Action trên site nguồn. Path ("/22") là route của trang
+        // chứa tool, không phải tên API — đổi trang là đổi luôn path này.
+        'endpoint' => env('KIEUSHOPEE_ENDPOINT', 'https://sansale.kieushopee.com/22'),
 
-        // URL của relay gọi hộ salesoc.vn từ một IP khác rồi trả nguyên response về.
-        // SalesOcService đi relay trước, hỏng thì tự rơi xuống proxy/direct.
-        //
-        // Hard-code sẵn app Deno Deploy đang chạy (nguồn: deploy/deno-relay/main.ts) để push code
-        // là production dùng được ngay, không phải sửa .env trên server. env() chỉ là đường override
-        // khi cần đổi gấp mà chưa kịp deploy.
-        //
-        // Relay TRƯỚC ĐÓ là Cloudflare Worker và đã bị salesoc.vn chặn 403 ở nginx (log production
-        // 2026-09-04): Cloudflare tự chèn header CF-Worker vào mọi subrequest nên một rule nginx
-        // là chặn được hết Worker, bất kể IP. Nếu Deno Deploy cũng bị chặn thì đổi sang nền tảng
-        // khác (Vercel/Netlify Edge) — code relay là Web standard, port gần như nguyên vẹn.
-        // Khai báo được NHIỀU relay, ngăn cách bằng dấu phẩy:
-        //   'https://a.deno.net,https://b.vercel.app/api/relay,https://c.netlify.app/relay'
-        // Mỗi relay chỉ có một IP egress cố định nên một cái là một điểm chết — dựng thêm relay
-        // ở nhà cung cấp khác là cách rẻ nhất để salesoc không giết được cả tính năng bằng một
-        // lệnh chặn. Tất cả relay dùng chung SALESOC_RELAY_SECRET bên dưới.
-        //
-        // SalesOcService XOAY VÒNG danh sách này: link 1 đi relay 1, link 2 đi relay 2, link 3
-        // đi relay 3, link 4 quay lại relay 1 — để lưu lượng chia đều cho từng IP thay vì dồn
-        // hết vào relay đầu (dồn một IP chính là thứ khiến salesoc phát hiện và chặn).
-        // Relay của lượt nào chết thì lượt đó vẫn tự rơi sang relay kế tiếp, rồi proxy/direct.
-        // IP egress đo được (GET vào relay trả về IP của chính nó):
-        //   deno.net        → 144.202.54.204 (The Constant Company / Vultr)
-        //   vercel.app      → 54.254.149.225 (AWS ap-southeast-1, Singapore)
-        // Hai nhà cung cấp, hai dải IP không liên quan nhau — salesoc chặn một bên thì bên kia
-        // vẫn chạy. Deploy thêm bản Netlify (deploy/netlify-relay) rồi nối tiếp vào đây là đủ 3.
-        'relay_url' => env('SALESOC_RELAY_URL', 'https://shopee-affiliate.nhatem99.deno.net,https://shopee-affiliate-phi.vercel.app/api/relay'),
-        'relay_secret' => env('SALESOC_RELAY_SECRET', 'f58d832ed4b4077f7512eb9bdc964c3a9ff46c906c3920fb'),
+        // ID của Server Action, do bản build Next.js của họ sinh ra: MỖI LẦN HỌ DEPLOY LẠI
+        // là ID này đổi và request sẽ hỏng (404/500). Lấy ID mới bằng cách mở tool trên site,
+        // xem tab Network → request POST → header `next-action`.
+        'next_action' => env('KIEUSHOPEE_NEXT_ACTION', '40b7104a0118f057e6843f62bb2c67bc4824e3ec0a'),
+
+        // ID của "tool" đang được gọi trên site nguồn — cũng đọc từ chính request đó (field
+        // multipart `1_toolId`). Tool này trả về đúng một link đã áp mã cho mỗi sản phẩm.
+        'tool_id' => env('KIEUSHOPEE_TOOL_ID', 'cmssikp0w000x01qaays5m55b'),
     ],
 
 ];

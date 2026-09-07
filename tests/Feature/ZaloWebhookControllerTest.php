@@ -2,7 +2,7 @@
 
 namespace Tests\Feature;
 
-use App\Services\SalesOcService;
+use App\Services\KieuShopeeService;
 use App\Services\ZaloOaService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Cache;
@@ -17,7 +17,7 @@ use Tests\TestCase;
  * Design notes:
  *  - Real ZaloOaService::verifyWebhookSignature() runs for all tests — we only
  *    intercept sendGroupText() via makePartial() to prevent real HTTP calls.
- *  - SalesOcService is mocked via the IoC container for tests that reach the
+ *  - KieuShopeeService is mocked via the IoC container for tests that reach the
  *    inner handler; it makes external HTTP calls we must not fire in tests.
  *  - Shopee.vn URLs (not shp.ee) are used in payloads so that
  *    ShopeeLinkResolverService and AffiliateLinkRewriterService both return
@@ -101,27 +101,23 @@ class ZaloWebhookControllerTest extends TestCase
     }
 
     /**
-     * Fake data shaped like what SalesOcService::fetchProductAndVoucherLabels() returns.
-     * Uses shopee.vn URLs so AffiliateLinkRewriterService resolves them without HTTP.
+     * Fake data shaped like what KieuShopeeService::fetchProductAndVoucherLink() returns.
+     * Uses a shopee.vn URL so AffiliateLinkRewriterService resolves it without HTTP.
      */
-    private function fakeSalesOcData(): array
+    private function fakeVoucherData(): array
     {
         return [
-            'product_name' => 'Áo Thun Test',
-            'product_image' => null,
-            'original_price' => 200000.0,
-            'discounted_price' => 150000.0,
-            'discount_percent' => 25,
-            'sold_count' => 1000,
-            'rating' => 4.8,
-            'voucher_labels' => ['Giảm 50k'],
-            'voucher_links' => [
-                'facebook' => [
-                    ['label' => 'Giảm 50k', 'url' => 'https://shopee.vn/product?mmp_pid=salesoc_fb&smtt=0'],
-                ],
-                'youtube' => [],
-                'instagram' => [],
-                'zalo' => [],
+            'voucher_link' => 'https://shopee.vn/product?mmp_pid=kieushopee&smtt=0',
+            'shop_id' => '123456789',
+            'item_id' => '987654321',
+            'product' => [
+                'product_name' => 'Áo Thun Test',
+                'product_image' => null,
+                'original_price' => 200000.0,
+                'discounted_price' => 150000.0,
+                'discount_percent' => 25,
+                'sold_count' => 1000,
+                'rating' => 4.8,
             ],
         ];
     }
@@ -140,13 +136,13 @@ class ZaloWebhookControllerTest extends TestCase
         $this->app->instance(ZaloOaService::class, $mock);
     }
 
-    /** Bind a mock SalesOcService that returns the given value for any call. */
-    private function mockSalesOcService(?array $returnValue): void
+    /** Bind a mock KieuShopeeService that returns the given value for any call. */
+    private function mockKieuShopeeService(?array $returnValue): void
     {
-        $mock = Mockery::mock(SalesOcService::class);
-        $mock->shouldReceive('fetchProductAndVoucherLabels')
+        $mock = Mockery::mock(KieuShopeeService::class);
+        $mock->shouldReceive('fetchProductAndVoucherLink')
             ->andReturn($returnValue);
-        $this->app->instance(SalesOcService::class, $mock);
+        $this->app->instance(KieuShopeeService::class, $mock);
     }
 
     // ── Test 1a: Missing X-ZEvent-Signature header → 403 ─────────────────────
@@ -198,7 +194,7 @@ class ZaloWebhookControllerTest extends TestCase
     public function test_valid_group_message_with_shopee_url_triggers_one_group_reply(): void
     {
         $this->mockZaloService(expectedSendGroupCalls: 1);
-        $this->mockSalesOcService($this->fakeSalesOcData());
+        $this->mockKieuShopeeService($this->fakeVoucherData());
 
         $response = $this->postWithValidSignature($this->groupPayload());
 
@@ -216,7 +212,7 @@ class ZaloWebhookControllerTest extends TestCase
     public function test_duplicate_msg_id_only_triggers_one_group_send_across_two_requests(): void
     {
         $this->mockZaloService(expectedSendGroupCalls: 1);
-        $this->mockSalesOcService($this->fakeSalesOcData());
+        $this->mockKieuShopeeService($this->fakeVoucherData());
 
         $payload = $this->groupPayload([
             'message' => [
@@ -240,10 +236,10 @@ class ZaloWebhookControllerTest extends TestCase
     public function test_group_message_without_shopee_url_returns_ok_without_sending(): void
     {
         $this->mockZaloService(expectedSendGroupCalls: 0);
-        // SalesOcService must never be called either; bind a strict mock.
-        $strictSalesOc = Mockery::mock(SalesOcService::class);
-        $strictSalesOc->shouldNotReceive('fetchProductAndVoucherLabels');
-        $this->app->instance(SalesOcService::class, $strictSalesOc);
+        // KieuShopeeService must never be called either; bind a strict mock.
+        $strictKieuShopee = Mockery::mock(KieuShopeeService::class);
+        $strictKieuShopee->shouldNotReceive('fetchProductAndVoucherLink');
+        $this->app->instance(KieuShopeeService::class, $strictKieuShopee);
 
         $payload = $this->groupPayload([
             'message' => [

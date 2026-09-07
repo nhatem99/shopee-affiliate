@@ -4,8 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Exceptions\AffiliateScanException;
 use App\Models\PlatformVoucher;
-use App\Models\VoucherButtonConfig;
-use App\Services\SalesOcService;
+use App\Services\KieuShopeeService;
 use App\Services\ShopeeLinkResolverService;
 use App\Services\TrackingService;
 use App\Services\UrlValidationService;
@@ -21,7 +20,7 @@ class ShopeeVoucherController extends Controller
     public function __construct(
         private UrlValidationService $urlValidator,
         private ShopeeLinkResolverService $resolver,
-        private SalesOcService $salesOc,
+        private KieuShopeeService $kieuShopee,
         private TrackingService $tracking,
     ) {}
 
@@ -49,18 +48,20 @@ class ShopeeVoucherController extends Controller
         }
 
         $canonicalUrl = $this->resolver->resolveCanonicalUrl($url);
+
+        // kieushopee trả về ĐÚNG MỘT link đã áp mã (kèm thông tin sản phẩm nếu đọc được).
+        // Link đó thuộc affiliate account của họ; mmp_pid được đổi về của mình khi người dùng
+        // bấm "Mua ngay" — xem KieuShopeeService + AffiliateLinkRewriterService.
+        $data = $this->kieuShopee->fetchProductAndVoucherLink($canonicalUrl);
+
+        // ID lấy từ URL là nguồn chính; nếu URL không có dạng -i.SHOP.ITEM thì mượn ID mà
+        // kieushopee đã phân giải hộ, để vẫn hỏi được Shopee khi thiếu thông tin sản phẩm.
         $ids = $this->resolver->extractIds($canonicalUrl);
+        if (! $ids && ! empty($data['shop_id']) && ! empty($data['item_id'])) {
+            $ids = ['shop_id' => $data['shop_id'], 'item_id' => $data['item_id']];
+        }
 
-        // salesoc.vn cung cấp thông tin hiển thị (tên/ảnh/giá) + link áp mã giảm giá thật.
-        // Link voucher_links thuộc affiliate account của salesoc.vn (không sửa được mmp_pid)
-        // nhưng là cách duy nhất người dùng nhận được mã giảm giá thật — xem SalesOcService.
-        $salesOcData = $this->salesOc->fetchProductAndVoucherLabels($canonicalUrl);
-
-        $voucherLabels = $salesOcData['voucher_labels'] ?? [];
-        $voucherLinks = $this->maskVoucherLinks($salesOcData['voucher_links'] ?? []);
-        unset($salesOcData['voucher_labels'], $salesOcData['voucher_links']);
-
-        $product = $salesOcData ?? ($ids
+        $product = $data['product'] ?? ($ids
             ? $this->resolver->fetchProductInfo($ids['item_id'], $ids['shop_id'])
             : null);
 
@@ -75,34 +76,27 @@ class ShopeeVoucherController extends Controller
             'voucherResult' => [
                 'canonical_url' => $canonicalUrl,
                 'product' => $product,
-                'voucher_labels' => $voucherLabels,
-                // Link CTA chính — thuộc affiliate account của salesoc.vn (đổi lấy mã giảm giá thật).
-                'voucher_links' => $voucherLinks,
+                // Token mờ của link CTA duy nhất; null nghĩa là chưa lấy được mã cho sản phẩm này.
+                'voucher_ref' => isset($data['voucher_link']) ? $this->maskVoucherLink($data['voucher_link']) : null,
             ],
-            // Admin-editable display config: sort order, label override, featured source.
-            'voucherButtonConfig' => VoucherButtonConfig::orderBy('sort_order')->get(['source', 'label', 'sort_order', 'is_featured']),
         ]);
     }
 
     /**
-     * Thay URL affiliate thật (salesoc.vn/s.afp.ad) bằng token mờ trước khi trả về frontend —
-     * URL thật chỉ được giải mã lại phía server (xem ShortLinkController::store()) khi người
-     * dùng thực sự bấm chọn, để không lộ URL affiliate gốc ngay trong response /voucher/resolve
-     * (xem được qua tab Network/Inertia devtools dù chưa bấm link nào).
+     * Thay URL affiliate thật bằng token mờ trước khi trả về frontend — URL thật chỉ được
+     * giải mã lại phía server (xem ShortLinkController::store()) khi người dùng thực sự bấm
+     * "Mua ngay", để không lộ URL affiliate gốc ngay trong response /voucher/resolve (xem
+     * được qua tab Network/Inertia devtools dù chưa bấm link nào).
      */
-    private function maskVoucherLinks(array $voucherLinks): array
+    private function maskVoucherLink(string $voucherLink): string
     {
-        foreach ($voucherLinks as $source => $options) {
-            foreach ($options as $i => $option) {
-                $ref = Str::random(32);
-                // TTL dài (7 ngày) để nút "mua lại" trong lịch sử chuyển đổi (lưu ở localStorage,
-                // xem Home.vue) còn dùng được sau vài ngày — mã có thể hết lượt trước đó, nhưng
-                // đó vốn là giới hạn có sẵn (salesoc.vn không báo trạng thái còn/hết lượt).
-                Cache::put("voucher_ref:{$ref}", $option['url'], now()->addDays(7));
-                $voucherLinks[$source][$i] = ['label' => $option['label'], 'ref' => $ref];
-            }
-        }
+        $ref = Str::random(32);
 
-        return $voucherLinks;
+        // TTL dài (7 ngày) để nút "mua lại" trong lịch sử chuyển đổi (lưu ở localStorage,
+        // xem Home.vue) còn dùng được sau vài ngày — mã có thể hết lượt trước đó, nhưng
+        // đó vốn là giới hạn có sẵn (nguồn không báo trạng thái còn/hết lượt).
+        Cache::put("voucher_ref:{$ref}", $voucherLink, now()->addDays(7));
+
+        return $ref;
     }
 }

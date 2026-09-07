@@ -78,13 +78,16 @@ class UrlValidationService
     }
 
     // Domain được phép làm đích cho short-link /go/{code}: link sản phẩm Shopee trực tiếp,
-    // hoặc link voucher salesoc.vn/s.afp.ad/shp.ee (chain redirect áp mã giảm giá thật).
+    // hoặc link voucher do kieushopee phát ra — thực tế là short-link của chính Shopee
+    // (shp.ee/shope.ee/s.shopee.vn) hoặc của mạng affiliate (s.afp.ad) đứng trước một
+    // chuỗi redirect kết thúc ở shopee.vn.
     private array $allowedRedirectDomains = [
         'shopee.vn',
         's.shopee.vn',
         'shp.ee',
-        'salesoc.vn',
+        'shope.ee',
         's.afp.ad',
+        'kieushopee.com',
     ];
 
     public function validateAffiliateRedirectUrl(string $url): void

@@ -23,7 +23,6 @@ use App\Http\Controllers\ShortLinkController;
 use App\Http\Controllers\TrackingController;
 use App\Http\Controllers\WithdrawalController;
 use App\Models\PlatformVoucher;
-use App\Models\VoucherButtonConfig;
 use App\Services\TrackingService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
@@ -38,8 +37,6 @@ Route::get('/', function (Request $request, TrackingService $tracking) {
         // Công cụ lấy mã chỉ dùng được trên điện thoại — admin luôn xem/test được từ máy tính.
         'canUseVoucherTool' => TrackingService::isMobile($request->userAgent())
             || ($request->user()?->isAdmin() ?? false),
-        // Admin-editable display config: sort order, label override, featured source.
-        'voucherButtonConfig' => VoucherButtonConfig::orderBy('sort_order')->get(['source', 'label', 'sort_order', 'is_featured']),
     ]);
 })->name('home');
 

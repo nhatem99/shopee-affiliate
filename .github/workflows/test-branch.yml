@@ -1,0 +1,73 @@
+name: Test branch on VPS
+
+# Chạy thử code của MỘT NHÁNH BẤT KỲ bằng chính server production (cùng IP đi ra, cùng
+# .env, cùng PHP) mà KHÔNG đụng tới site đang chạy: code được bung ra một git worktree
+# riêng trong /tmp, chạy xong thì xoá.
+#
+# Dùng cho câu hỏi "nguồn lấy mã có gọi được từ server thật không, response ra sao" —
+# thứ mà máy local không trả lời được vì IP khác và có thể bị chặn.
+
+on:
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: 'Nhánh muốn thử (vd: update-voucher)'
+        required: true
+        default: update-voucher
+      url:
+        description: 'Link sản phẩm Shopee dùng để thử'
+        required: true
+        default: 'https://shopee.vn/Ao-Hoodie-i.564687320.29261186260'
+
+jobs:
+  smoke:
+    name: Run kieushopee:check from the production server
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: SSH and run branch in a throwaway worktree
+        uses: appleboy/ssh-action@v1.2.0
+        env:
+          # Input của người dùng đi qua biến môi trường (không nội suy thẳng vào shell)
+          # rồi mới được dùng có nháy kép trong script — tránh command injection.
+          TEST_REF: ${{ inputs.ref }}
+          TEST_URL: ${{ inputs.url }}
+        with:
+          host: ${{ secrets.VPS_HOST }}
+          username: ${{ secrets.VPS_USER }}
+          key: ${{ secrets.VPS_SSH_KEY }}
+          envs: TEST_REF,TEST_URL
+          script: |
+            set -e
+            APP=/var/www/tietkiemvi.com
+            WT=/tmp/tietkiemvi-test
+
+            cd "$APP"
+            git fetch --prune origin
+
+            # Worktree dùng chung .git với production nhưng có thư mục làm việc riêng —
+            # thư mục đang phục vụ khách không bị đổi một file nào.
+            rm -rf "$WT"
+            git worktree prune
+            git worktree add --detach "$WT" "origin/$TEST_REF"
+
+            # COPY vendor chứ không symlink: autoload của Composer suy ra thư mục gốc từ
+            # đường dẫn THẬT của chính nó, nên symlink sẽ khiến nó nạp app/ của production
+            # thay vì app/ của nhánh đang thử — tức là test nhầm code.
+            cp -a "$APP/vendor" "$WT/vendor"
+            cp "$APP/.env" "$WT/.env"
+            mkdir -p "$WT/bootstrap/cache" "$WT/storage/logs" \
+                     "$WT/storage/framework/cache/data" "$WT/storage/framework/sessions" "$WT/storage/framework/views"
+
+            cd "$WT"
+            echo "--- commit dang thu ---"
+            git log -1 --format="%H %s"
+            echo "--- ket qua goi that toi nguon lay ma ---"
+            php8.4 artisan kieushopee:check "$TEST_URL" || true
+            echo "--- log chi tiet (ly do that su khi that bai) ---"
+            tail -n 50 storage/logs/laravel*.log 2>/dev/null || echo "(khong co log)"
+
+            cd "$APP"
+            git worktree remove --force "$WT" 2>/dev/null || rm -rf "$WT"
+            git worktree prune
+            echo "Da don sach worktree tam."

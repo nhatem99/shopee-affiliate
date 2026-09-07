@@ -6,15 +6,15 @@ use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 
 /**
- * Đổi mmp_pid trong link voucher salesoc.vn (s.afp.ad/shp.ee/salesoc.vn) sang
- * affiliate ID của mình, để hoa hồng đơn hàng về tài khoản của mình thay vì
- * salesoc.vn — trong khi vẫn giữ nguyên encrypted_payload/credential_token nên
+ * Đổi mmp_pid trong link voucher lấy từ kieushopee (shp.ee/shope.ee/s.afp.ad/...) sang
+ * affiliate ID của mình, để hoa hồng đơn hàng về tài khoản của mình thay vì tài khoản
+ * của nguồn cấp mã — trong khi vẫn giữ nguyên encrypted_payload/credential_token nên
  * mã giảm giá vẫn được áp dụng bình thường (mmp_pid là tham số tracking độc lập,
  * không nằm trong payload đã ký).
  */
 class AffiliateLinkRewriterService
 {
-    private const HOPS_TO_FOLLOW = ['s.afp.ad', 'salesoc.vn', 'shp.ee', 's.shopee.vn'];
+    private const HOPS_TO_FOLLOW = ['s.afp.ad', 'shp.ee', 'shope.ee', 's.shopee.vn', 'kieushopee.com'];
 
     private const MAX_HOPS = 4;
 
@@ -52,7 +52,7 @@ class AffiliateLinkRewriterService
                 return $current;
             }
 
-            if (! in_array($host, self::HOPS_TO_FOLLOW, true)) {
+            if (! $this->isKnownHop($host)) {
                 Log::warning('AffiliateLinkRewriterService: dừng theo dõi — domain lạ, không phải chuỗi redirect biết trước', [
                     'hop' => $i,
                     'host' => $host,
@@ -111,6 +111,21 @@ class AffiliateLinkRewriterService
         $base = ($parts['scheme'] ?? 'https').'://'.($parts['host'] ?? '').($parts['path'] ?? '');
 
         return $base.'?'.http_build_query($query);
+    }
+
+    /**
+     * Khớp cả subdomain (vd sansale.kieushopee.com) — nguồn cấp mã hay đổi subdomain theo
+     * từng tool, mà chặn nhầm ở đây thì link vẫn chạy nhưng mất luôn phần đổi mmp_pid.
+     */
+    private function isKnownHop(string $host): bool
+    {
+        foreach (self::HOPS_TO_FOLLOW as $domain) {
+            if ($host === $domain || str_ends_with($host, '.'.$domain)) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     private function hostOf(string $url): string
