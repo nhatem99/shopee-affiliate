@@ -105,11 +105,14 @@ class AuthTest extends TestCase
     {
         $this->setUpRoles();
 
+        // RegisterController bắt Password::min(8)->mixedCase()->numbers() — mật khẩu toàn chữ
+        // thường sẽ trượt validation, redirect ngược về '/' (không có referer) nên
+        // assertRedirect('/') vẫn xanh mà assertAuthenticated() thì đỏ, rất dễ đọc nhầm.
         $this->post('/register', [
             'name' => 'Nguyen Van A',
             'email' => 'test@example.com',
-            'password' => 'password123',
-            'password_confirmation' => 'password123',
+            'password' => 'Password123',
+            'password_confirmation' => 'Password123',
         ])->assertRedirect('/');
 
         $this->assertAuthenticated();
