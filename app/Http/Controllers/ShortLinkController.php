@@ -6,10 +6,13 @@ use App\Exceptions\AffiliateScanException;
 use App\Models\ApiConfig;
 use App\Services\AffiliateLinkRewriterService;
 use App\Services\FacebookPageService;
+use App\Services\FacebookPostTarget;
+use App\Services\FacebookReelSlotService;
 use App\Services\KieuShopeeService;
 use App\Services\ShortLinkService;
 use App\Services\TrackingService;
 use App\Services\UrlValidationService;
+use Illuminate\Contracts\Cache\LockTimeoutException;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -20,6 +23,9 @@ use Illuminate\Support\Str;
 
 class ShortLinkController extends Controller
 {
+    /** Con trỏ xoay vòng nhóm bài viết nhận comment — xem pickTargetPost. */
+    private const POST_CURSOR_KEY = 'fb_comment_post_cursor';
+
     public function __construct(
         private UrlValidationService $urlValidator,
         private ShortLinkService $shortLinks,
@@ -153,6 +159,12 @@ class ShortLinkController extends Controller
      * loại mã vì mỗi loại trỏ tới voucher khác nhau; kieushopee chỉ trả một link cho mỗi sản
      * phẩm nên tên sản phẩm là đủ.
      *
+     * Nhiều khách bấm cùng lúc được xử lý ở hai tầng:
+     *  • KHÁC sản phẩm → mỗi sản phẩm rơi vào một bài viết khác nhau trong nhóm bài đã cấu hình
+     *    (xem pickTargetPost), nên comment không dồn hết vào một bài.
+     *  • CÙNG sản phẩm → khoá theo sản phẩm, chỉ một request được đăng, các request còn lại
+     *    chờ rồi dùng lại đúng comment đó thay vì đăng trùng.
+     *
      * Nếu đăng comment thất bại (chưa cấu hình, token lỗi, Facebook sập...) thì trả về
      * $fallbackUrl để không chặn đường mua hàng của khách.
      */
@@ -164,21 +176,73 @@ class ShortLinkController extends Controller
             return $fallbackUrl;
         }
 
-        $postId = $config->meta['target_post_id'] ?? null;
+        $productKey = Str::slug($productName ?: $shortCode) ?: $shortCode;
 
-        if (! $config->app_id || ! $config->app_secret || ! $postId) {
-            Log::warning('ShortLinkController: đã bật comment_redirect_enabled nhưng thiếu Page ID/Token/target_post_id.');
+        // Chế độ đổi caption reel được ưu tiên khi bật: đo trên máy thật thì chỉ link /reel/ mới
+        // mở được ứng dụng Facebook, VÀ chỉ link trong caption reel mới bấm được (link trong
+        // bình luận reel hiện thành text thường). Hết slot reel thì rơi tiếp xuống chế độ
+        // comment bên dưới, rồi cuối cùng mới tới $fallbackUrl.
+        if ($config->facebookReelCaptionEnabled() && $config->app_id && $config->app_secret) {
+            $reelUrl = (new FacebookReelSlotService($config))->reelUrlFor(
+                $productKey,
+                $productName ?: 'Sản phẩm Shopee',
+                $fallbackUrl,
+            );
+
+            if ($reelUrl) {
+                return $reelUrl;
+            }
+        }
+
+        $pool = $config->facebookTargetPostIds();
+
+        if (! $config->app_id || ! $config->app_secret || ! $pool) {
+            Log::warning('ShortLinkController: đã bật comment_redirect_enabled nhưng thiếu Page ID/Token/bài viết đích.');
 
             return $fallbackUrl;
         }
 
-        $productKey = Str::slug($productName ?: $shortCode) ?: $shortCode;
         $cacheKey = 'fb_comment_link:'.KieuShopeeService::SOURCE.":{$productKey}";
 
         if ($cached = Cache::get($cacheKey)) {
-            return $this->commentUrl($cached, $postId);
+            return $this->cachedCommentUrl($cached, $pool);
         }
 
+        // Tới đây là chưa có comment cho sản phẩm này. Nếu hai khách cùng bấm đúng lúc thì cả
+        // hai đều trượt cache ở trên và cùng đăng comment — trùng nội dung, phí quota, và dễ bị
+        // Facebook coi là spam. Khoá lại để chỉ một request đăng; request còn lại chờ xong rồi
+        // dùng chung kết quả (đọc lại cache ngay sau khi giành được khoá).
+        $lock = Cache::lock($cacheKey.':lock', 30);
+
+        try {
+            $lock->block(15);
+        } catch (LockTimeoutException $e) {
+            Log::warning('ShortLinkController: chờ quá lâu khoá đăng comment Facebook', ['product' => $productKey]);
+
+            return $fallbackUrl;
+        }
+
+        try {
+            return $this->postCommentAndBuildUrl($config, $pool, $cacheKey, $productName, $fallbackUrl);
+        } finally {
+            $lock->release();
+        }
+    }
+
+    /**
+     * Phần đăng comment thật, chạy khi đã giữ khoá theo sản phẩm.
+     *
+     * @param  list<string>  $pool
+     */
+    private function postCommentAndBuildUrl(ApiConfig $config, array $pool, string $cacheKey, ?string $productName, string $fallbackUrl): string
+    {
+        // Request kia có thể vừa đăng xong trong lúc mình đang chờ khoá — đọc lại trước khi đăng.
+        if ($cached = Cache::get($cacheKey)) {
+            return $this->cachedCommentUrl($cached, $pool);
+        }
+
+        $postId = $this->pickTargetPost($pool);
+        $target = FacebookPostTarget::parse($postId);
         $displayName = $productName ?: 'Sản phẩm Shopee';
 
         // Khách vừa bị chuyển từ web sang Facebook nên đang hơi mất phương hướng — câu chữ ở
@@ -192,11 +256,15 @@ class ShortLinkController extends Controller
             '⚠️ Bấm link ở trên mới được giảm giá. Tìm sản phẩm thẳng trên Shopee thì mã không áp được.',
         ]);
 
-        $posted = (new FacebookPageService($config->app_id, $config->app_secret))->postComment($postId, $message);
+        $posted = (new FacebookPageService($config->app_id, $config->app_secret))->postComment($target->graphId, $message);
 
         if (! $posted) {
             return $fallbackUrl;
         }
+
+        // Nhớ luôn bài đã đăng: với nhiều bài trong nhóm, không lưu thì lượt bấm sau lấy lại
+        // comment từ cache mà ghép nhầm vào bài khác → link mở ra bài không chứa comment đó.
+        $posted['post_id'] = $postId;
 
         Cache::put($cacheKey, $posted, now()->addMinutes(20));
 
@@ -204,17 +272,51 @@ class ShortLinkController extends Controller
     }
 
     /**
-     * Ghép URL canonical /{page_id}/posts/{story_fbid}?comment_id=... trỏ tới đúng comment,
-     * thay cho permalink_url dạng /{actor_id}/posts/{post_id} mà Graph API trả về.
+     * Dựng lại URL từ comment đã cache. Bản ghi cache cũ (trước khi có nhóm bài) không kèm
+     * post_id — rơi về bài đầu nhóm, đúng với thời điểm chỉ có một bài duy nhất.
      *
-     * Đã test trên máy thật: mọi biến thể scheme fb:// (permalink.php, story, facewebmodal)
-     * đều KHÔNG mở đúng comment — app Facebook chỉ mở ra trang chủ hoặc báo nội dung không
-     * hiển thị. Riêng URL web thường thì chạy đúng, nên bỏ hẳn hướng custom scheme.
+     * @param  array{comment_id?: ?string, permalink_url: string, post_id?: string}  $cached
+     * @param  list<string>  $pool
+     */
+    private function cachedCommentUrl(array $cached, array $pool): string
+    {
+        return $this->commentUrl($cached, $cached['post_id'] ?? $pool[0]);
+    }
+
+    /**
+     * Chọn bài viết cho comment sắp đăng, xoay vòng lần lượt qua nhóm bài đã cấu hình.
      *
-     * Dùng dạng /posts/ chứ không phải story.php: đây là dạng canonical mà Facebook khai báo
-     * trong universal link (iOS) / app link (Android), nên điện thoại mới có cơ hội bật thẳng
-     * app Facebook lên. story.php là dạng cũ, gần như luôn bị mở bằng trình duyệt. Cả hai đều
-     * ghép từ Page ID trong cấu hình nên không phụ thuộc actor_id lạ của permalink_url.
+     * Con trỏ nằm ở cache (dùng chung giữa các request) nên hai khách bấm gần như cùng lúc với
+     * hai sản phẩm khác nhau sẽ nhận hai bài khác nhau, thay vì cùng đổ vào một bài. Increment
+     * của cache là thao tác nguyên tử trên Redis; các store khác có thể trả về false khi khoá
+     * chưa tồn tại nên phải khởi tạo thủ công.
+     *
+     * @param  list<string>  $pool
+     */
+    private function pickTargetPost(array $pool): string
+    {
+        if (count($pool) === 1) {
+            return $pool[0];
+        }
+
+        $cursor = Cache::increment(self::POST_CURSOR_KEY);
+
+        if (! is_int($cursor)) {
+            Cache::forever(self::POST_CURSOR_KEY, 1);
+            $cursor = 1;
+        }
+
+        return $pool[$cursor % count($pool)];
+    }
+
+    /**
+     * Ghép URL công khai trỏ tới đúng comment, thay cho permalink_url dạng
+     * /{actor_id}/posts/{post_id} mà Graph API trả về (actor_id lạ, không mở đúng trên app).
+     *
+     * Dạng URL phụ thuộc loại bài đích — reel thì /reel/{id}, bài thường thì
+     * /{page_id}/posts/{story_fbid}; xem FacebookPostTarget để biết đo trên máy thật thì mỗi
+     * loại được/mất gì (tóm tắt: reel mở được app nhưng link trong bình luận reel không bấm
+     * được, nên hiện phải dùng bài viết thường).
      *
      * Lưu ý: chỉ URL thôi là chưa đủ để mở được app — phía client khách phải CHẠM VÀO THẺ <a>
      * thật thì iOS mới chịu kích hoạt universal link (xem openVoucherLink trong Home.vue).
@@ -223,15 +325,7 @@ class ShortLinkController extends Controller
      */
     private function commentUrl(array $posted, string $postId): string
     {
-        $commentId = $posted['comment_id'] ?? null;
-        [$pageId, $storyFbid] = array_pad(explode('_', $postId, 2), 2, null);
-
-        if (! $commentId || ! $pageId || ! $storyFbid) {
-            return $posted['permalink_url'];
-        }
-
-        return "https://www.facebook.com/{$pageId}/posts/{$storyFbid}?".http_build_query([
-            'comment_id' => $commentId,
-        ]);
+        return FacebookPostTarget::parse($postId)->commentUrl($posted['comment_id'] ?? null)
+            ?? $posted['permalink_url'];
     }
 }

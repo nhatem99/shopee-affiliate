@@ -87,6 +87,10 @@ class ShopeeVoucherController extends Controller
     /**
      * Hai cờ điều khiển giao diện, cùng đọc từ một bản ghi cấu hình Facebook:
      *
+     * - facebookMode: 'reel' thì khách bấm link trong PHẦN MÔ TẢ của reel, 'comment' thì bấm
+     *   link trong BÌNH LUẬN dưới bài viết. Hai chỗ khác nhau nên câu hướng dẫn cho khách phải
+     *   khác nhau — chỉ đúng một chỗ có link, chỉ sai chỗ là khách loay hoay rồi thoát.
+     *
      * - viaFacebookComment: cú bấm "Mua ngay" sẽ dẫn tới COMMENT TRÊN FACEBOOK chứ không phải
      *   thẳng Shopee. Giao diện bắt buộc phải biết điều này để nói trước cho khách — nếu không
      *   khách bấm "Mua ngay" mà hiện ra Facebook thì tưởng bị lỗi/lừa và thoát luôn.
@@ -101,7 +105,7 @@ class ShopeeVoucherController extends Controller
      *   (meta.auto_redirect_enabled) — vẫn đọc auto_source cũ để cấu hình đang chạy trên
      *   production không mất tác dụng ngay sau khi đổi nguồn.
      *
-     * @return array{viaFacebookComment: bool, autoRedirect: bool}
+     * @return array{viaFacebookComment: bool, autoRedirect: bool, facebookMode: string}
      */
     private function facebookRedirectFlags(): array
     {
@@ -111,14 +115,17 @@ class ShopeeVoucherController extends Controller
             && ($config->meta['comment_redirect_enabled'] ?? false)
             && $config->app_id
             && $config->app_secret
-            && ($config->meta['target_post_id'] ?? null);
+            // Một trong hai chế độ có đủ cấu hình là được: đổi caption reel (khách bấm link
+            // trong phần mô tả reel) hoặc đăng comment (khách bấm link trong bình luận).
+            && ($config->facebookReelCaptionEnabled() || $config->facebookTargetPostIds());
 
         if (! $viaComment) {
-            return ['viaFacebookComment' => false, 'autoRedirect' => false];
+            return ['viaFacebookComment' => false, 'autoRedirect' => false, 'facebookMode' => 'comment'];
         }
 
         return [
             'viaFacebookComment' => true,
+            'facebookMode' => $config->facebookReelCaptionEnabled() ? 'reel' : 'comment',
             'autoRedirect' => (bool) ($config->meta['auto_redirect_enabled'] ?? ! empty($config->meta['auto_source'])),
         ];
     }

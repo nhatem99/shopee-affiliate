@@ -47,6 +47,15 @@ class ApiConfigController extends Controller
             'platform' => ['required', 'in:shopee,lazada,tiktok,accesstrade,facebook,kieushopee'],
             'meta' => ['nullable', 'array'],
             'meta.target_post_id' => ['nullable', 'string', 'max:255'],
+            // Nhóm bài viết nhận comment. Nhiều bài để comment của các sản phẩm khác nhau rải
+            // ra thay vì dồn một chỗ khi nhiều khách bấm cùng lúc — xem ApiConfig::facebookTargetPostIds.
+            'meta.target_post_ids' => ['nullable', 'array', 'max:20'],
+            'meta.target_post_ids.*' => ['string', 'max:255'],
+            // Chế độ đổi caption reel — xem FacebookReelSlotService.
+            'meta.reel_caption_enabled' => ['nullable', 'boolean'],
+            'meta.target_reel_ids' => ['nullable', 'array', 'max:20'],
+            'meta.target_reel_ids.*' => ['string', 'max:255'],
+            'meta.reel_lease_minutes' => ['nullable', 'integer', 'min:1', 'max:120'],
             // Tham số gọi kieushopee — next_action đổi mỗi lần site nguồn deploy lại, nên phải
             // sửa được từ trang admin thay vì phải sửa code rồi deploy. Xem KieuShopeeService.
             'meta.next_action' => ['nullable', 'string', 'max:255'],

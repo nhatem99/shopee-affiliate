@@ -20,7 +20,15 @@ const props = defineProps({
     // bấm tiếp link trong comment đó mới về Shopee. Bắt buộc nói trước, nếu không khách bấm
     // xong thấy Facebook hiện ra sẽ tưởng bị lỗi hoặc bị lừa rồi thoát.
     viaFacebookComment: { type: Boolean, default: false },
+    // 'reel' = link nằm trong PHẦN MÔ TẢ của reel; 'comment' = link nằm trong BÌNH LUẬN dưới
+    // bài viết. Chỉ đúng một chỗ có link, chỉ sai chỗ là khách loay hoay không thấy rồi thoát.
+    facebookMode: { type: String, default: 'comment' },
 })
+
+// Nơi khách phải bấm sau khi Facebook mở ra — dùng lại ở nhiều câu hướng dẫn nên gom một chỗ.
+const linkLocation = computed(() => props.facebookMode === 'reel'
+    ? 'link trong phần mô tả của reel'
+    : 'link trong bình luận')
 
 const toast = useToast()
 
@@ -281,7 +289,7 @@ const filteredVouchers = computed(() => {
 
 const faqs = [
     { q: 'Công cụ này hoạt động như thế nào?', a: 'Bạn dán link sản phẩm Shopee vào ô ở đầu trang — hệ thống tự tìm mã giảm giá đang áp dụng cho sản phẩm đó và trả về một link đã gắn sẵn mã, không phải nhập mã thủ công.' },
-    { q: 'Vì sao bấm nút lại mở ra Facebook?', a: 'Vì đây là mã dành riêng cho người mua đến từ Facebook — Shopee chỉ áp mã khi bạn bấm vào link nằm trong bình luận trên Facebook. Quy trình là: bấm "Lấy mã qua Facebook" → bấm tiếp "Mở Facebook ngay" (ứng dụng Facebook sẽ mở tại một bình luận) → bấm link trong bình luận đó → về Shopee với mã đã được áp sẵn. Bỏ qua bước bình luận thì mã sẽ không có hiệu lực.' },
+    { q: 'Vì sao bấm nút lại mở ra Facebook?', a: 'Vì đây là mã dành riêng cho người mua đến từ Facebook — Shopee chỉ áp mã khi bạn bấm vào link nằm trên Facebook. Quy trình là: bấm "Lấy mã qua Facebook" → bấm tiếp "Mở Facebook ngay" (ứng dụng Facebook sẽ mở ra) → bấm link hiện ở đó → về Shopee với mã đã được áp sẵn. Bỏ qua bước này thì mã sẽ không có hiệu lực.' },
     { q: 'Tôi có được hoàn tiền không?', a: 'Công cụ lấy mã giảm giá không tạo hoàn tiền — mục đích là giúp bạn được giảm giá ngay khi thanh toán trên Shopee.' },
     { q: 'Có mất phí không?', a: 'Hoàn toàn miễn phí, bạn không mất phí gì khi dùng công cụ lấy mã.' },
     { q: 'Hỗ trợ những sàn nào?', a: 'Ô dán link ở đầu trang hiện chỉ hỗ trợ Shopee. Riêng mục "Mã giảm giá gợi ý" bên dưới có thêm mã cho Lazada, TikTok Shop và Tiki.' },
@@ -362,7 +370,7 @@ const openFaq = ref(null)
                     <!-- Chế độ tự chuyển hướng: khách không bấm gì cả, chỉ báo đang đi. -->
                     <div v-if="autoRedirecting" class="flex items-center gap-3 mb-4 mt-3 px-4 py-3 rounded-xl bg-[var(--color-peach-soft)] text-[var(--color-ink)] text-sm font-semibold">
                         <span class="w-4 h-4 rounded-full border-2 border-[var(--color-accent)] border-t-transparent animate-spin flex-none"></span>
-                        <span v-if="viaFacebookComment">Đang mở Facebook... Bấm vào <b>link trong bình luận</b> để nhận mã nhé.</span>
+                        <span v-if="viaFacebookComment">Đang mở Facebook... Bấm vào <b>{{ linkLocation }}</b> để nhận mã nhé.</span>
                         <span v-else>Đang chuyển tới mã giảm giá, vui lòng đợi giây lát...</span>
                     </div>
 
@@ -371,10 +379,11 @@ const openFaq = ref(null)
                         <p class="text-sm font-bold text-[var(--color-ink)] mb-2">Mã này nhận qua Facebook — làm 2 bước:</p>
                         <ol class="text-xs text-[var(--color-ink)] leading-relaxed space-y-1 list-decimal list-inside">
                             <li v-if="!isFacebookLink(readyLinks.result)">Bấm nút bên dưới → hệ thống lấy mã và hiện nút <b>Mở Facebook ngay</b>.</li>
+                            <li v-else-if="facebookMode === 'reel'">Bấm <b>Mở Facebook ngay</b> → <b>ứng dụng Facebook mở ra</b> tại một reel.</li>
                             <li v-else>Bấm <b>Mở Facebook ngay</b> → <b>Facebook sẽ mở ra</b> tại một bình luận.</li>
-                            <li>Bấm tiếp vào <b>link trong bình luận đó</b> → về Shopee, mã đã áp sẵn.</li>
+                            <li>Bấm tiếp vào <b>{{ linkLocation }}</b> → về Shopee, mã đã áp sẵn.</li>
                         </ol>
-                        <p class="text-xs text-[var(--color-muted)] mt-2">Phải đi qua bình luận thì mã mới có hiệu lực — đừng đóng Facebook giữa chừng nhé.</p>
+                        <p class="text-xs text-[var(--color-muted)] mt-2">Phải đi qua Facebook thì mã mới có hiệu lực — đừng đóng giữa chừng nhé.</p>
                     </div>
 
                     <!-- Mã đã được áp sẵn trong link nên khách không phải chọn/nhập gì, chỉ bấm mở. -->
@@ -415,7 +424,7 @@ const openFaq = ref(null)
 
                     <div class="flex items-start gap-2 bg-[var(--color-peach-soft)] border border-[var(--color-accent)]/25 rounded-xl px-3 py-2.5">
                         <span class="text-sm leading-none">⚠️</span>
-                        <p v-if="viaFacebookComment" class="text-xs text-[var(--color-accent-deep)] leading-relaxed">Nhớ bấm <b>link bên trong bình luận Facebook</b> thì mã mới được áp — bấm nhầm chỗ khác là mua không có giảm giá. Sang Shopee rồi thì đặt hàng bình thường, không cần nhập mã. Nếu Shopee báo mã hết lượt, thử lại sau ít phút nhé.</p>
+                        <p v-if="viaFacebookComment" class="text-xs text-[var(--color-accent-deep)] leading-relaxed">Nhớ bấm <b>{{ linkLocation }}</b> thì mã mới được áp — bấm nhầm chỗ khác là mua không có giảm giá. Sang Shopee rồi thì đặt hàng bình thường, không cần nhập mã. Nếu Shopee báo mã hết lượt, thử lại sau ít phút nhé.</p>
                         <p v-else class="text-xs text-[var(--color-accent-deep)] leading-relaxed">Mã đã gắn sẵn trong link — bấm "Mua ngay" rồi đặt hàng như bình thường, không cần nhập mã. Nếu Shopee báo mã hết lượt, thử lại sau ít phút nhé.</p>
                     </div>
                 </div>
