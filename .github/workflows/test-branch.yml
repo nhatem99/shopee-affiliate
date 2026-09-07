@@ -1,76 +1,79 @@
-name: Test branch on VPS
+name: Probe voucher source from VPS
 
-# Chạy thử code của MỘT NHÁNH BẤT KỲ bằng chính server production (cùng IP đi ra, cùng
-# .env, cùng PHP) mà KHÔNG đụng tới site đang chạy: code được bung ra một git worktree
-# riêng trong /tmp, chạy xong thì xoá.
+# Gọi THẲNG nguồn lấy mã bằng curl từ chính server production, in nguyên response thô.
 #
-# Dùng cho câu hỏi "nguồn lấy mã có gọi được từ server thật không, response ra sao" —
-# thứ mà máy local không trả lời được vì IP khác và có thể bị chặn.
+# Cố tình KHÔNG đụng tới git/code của nhánh: VPS hiện không kết nối được github.com
+# (deploy cũng đang chết vì lý do đó), mà câu hỏi cần trả lời chỉ là "gọi từ IP của
+# server này có ra mã không, và response có shape gì" — curl là đủ.
+#
+# next_action / tool_id để ở input: khi site nguồn deploy lại thì ID đổi, dán ID mới vào
+# đây thử được ngay mà không cần sửa code hay deploy.
 
 on:
   workflow_dispatch:
     inputs:
-      ref:
-        description: 'Nhánh muốn thử (vd: kieushopee-link)'
-        required: true
-        default: kieushopee-link
       url:
         description: 'Link sản phẩm Shopee dùng để thử'
         required: true
         default: 'https://shopee.vn/Ao-Hoodie-i.564687320.29261186260'
+      next_action:
+        description: 'Header next-action (ID Server Action của site nguồn)'
+        required: true
+        default: '40b7104a0118f057e6843f62bb2c67bc4824e3ec0a'
+      tool_id:
+        description: 'Field 1_toolId'
+        required: true
+        default: 'cmssikp0w000x01qaays5m55b'
 
 jobs:
-  smoke:
-    name: Run kieushopee:check from the production server
+  probe:
+    name: Curl kieushopee from the production server
     runs-on: ubuntu-latest
 
     steps:
-      - name: SSH and run branch in a throwaway worktree
+      - name: SSH and curl the source
         uses: appleboy/ssh-action@v1.2.0
         env:
-          # Input của người dùng đi qua biến môi trường (không nội suy thẳng vào shell)
-          # rồi mới được dùng có nháy kép trong script — tránh command injection.
-          TEST_REF: ${{ inputs.ref }}
-          TEST_URL: ${{ inputs.url }}
+          # Input của người dùng đi qua biến môi trường rồi mới dùng có nháy kép trong
+          # script — không nội suy thẳng ${{ }} vào shell.
+          PROBE_URL: ${{ inputs.url }}
+          PROBE_NEXT_ACTION: ${{ inputs.next_action }}
+          PROBE_TOOL_ID: ${{ inputs.tool_id }}
         with:
           host: ${{ secrets.VPS_HOST }}
           username: ${{ secrets.VPS_USER }}
           key: ${{ secrets.VPS_SSH_KEY }}
-          envs: TEST_REF,TEST_URL
+          envs: PROBE_URL,PROBE_NEXT_ACTION,PROBE_TOOL_ID
           script: |
-            set -e
-            APP=/var/www/tietkiemvi.com
-            WT=/tmp/tietkiemvi-test
+            echo "=== IP di ra cua server (doi chieu khi bi chan theo IP) ==="
+            curl -s https://api.ipify.org --max-time 15 || echo "(khong goi duoc ipify)"
+            echo
 
-            cd "$APP"
-            # Refspec tường minh: repo deploy có thể được clone --single-branch (chỉ theo dõi
-            # main), khi đó `git fetch origin` không hề tạo ra origin/<nhánh-khác> và bước
-            # worktree bên dưới sẽ fail. Dạng này luôn tạo được ref, kể cả clone đầy đủ.
-            git fetch origin "+refs/heads/$TEST_REF:refs/remotes/origin/$TEST_REF"
+            echo "=== Ket noi co ban toi site nguon ==="
+            curl -s -o /dev/null -w "HTTP %{http_code} — connect %{time_connect}s, total %{time_total}s\n" \
+              https://sansale.kieushopee.com/ --max-time 20 || echo "(khong ket noi duoc)"
 
-            # Worktree dùng chung .git với production nhưng có thư mục làm việc riêng —
-            # thư mục đang phục vụ khách không bị đổi một file nào.
-            rm -rf "$WT"
-            git worktree prune
-            git worktree add --detach "$WT" "origin/$TEST_REF"
+            echo "=== Kiem tra github.com (deploy dang chet o day) ==="
+            curl -s -o /dev/null -w "HTTP %{http_code} — connect %{time_connect}s\n" \
+              https://github.com --max-time 20 || echo "(khong ket noi duoc github.com)"
+            echo "IPv6 cua github.com co route khong:"
+            curl -6 -s -o /dev/null -w "  ipv6 HTTP %{http_code}\n" https://github.com --max-time 10 \
+              || echo "  ipv6 hong (nghi ngo chinh la day: git thu AAAA truoc roi treo den timeout)"
+            curl -4 -s -o /dev/null -w "  ipv4 HTTP %{http_code}\n" https://github.com --max-time 10 \
+              || echo "  ipv4 cung hong"
 
-            # COPY vendor chứ không symlink: autoload của Composer suy ra thư mục gốc từ
-            # đường dẫn THẬT của chính nó, nên symlink sẽ khiến nó nạp app/ của production
-            # thay vì app/ của nhánh đang thử — tức là test nhầm code.
-            cp -a "$APP/vendor" "$WT/vendor"
-            cp "$APP/.env" "$WT/.env"
-            mkdir -p "$WT/bootstrap/cache" "$WT/storage/logs" \
-                     "$WT/storage/framework/cache/data" "$WT/storage/framework/sessions" "$WT/storage/framework/views"
-
-            cd "$WT"
-            echo "--- commit dang thu ---"
-            git log -1 --format="%H %s"
-            echo "--- ket qua goi that toi nguon lay ma ---"
-            php8.4 artisan kieushopee:check "$TEST_URL" || true
-            echo "--- log chi tiet (ly do that su khi that bai) ---"
-            tail -n 50 storage/logs/laravel*.log 2>/dev/null || echo "(khong co log)"
-
-            cd "$APP"
-            git worktree remove --force "$WT" 2>/dev/null || rm -rf "$WT"
-            git worktree prune
-            echo "Da don sach worktree tam."
+            echo
+            echo "=== GOI THAT TOI NGUON LAY MA (response tho) ==="
+            # '0=["$K1"]' phai dung NHAY DON: trong nhay kep, bash se nuot mat $K1.
+            curl -sS -X POST "https://sansale.kieushopee.com/22" \
+              -H "accept: text/x-component" \
+              -H "next-action: $PROBE_NEXT_ACTION" \
+              -H "origin: https://sansale.kieushopee.com" \
+              -H "referer: https://sansale.kieushopee.com/22" \
+              -H "user-agent: Mozilla/5.0 (iPhone; CPU iPhone OS 17_5 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.5 Mobile/15E148 Safari/604.1" \
+              -F "1_url=$PROBE_URL" \
+              -F "1_toolId=$PROBE_TOOL_ID" \
+              -F '0=["$K1"]' \
+              -w "\n=== HTTP_CODE:%{http_code} — total %{time_total}s ===\n" \
+              --max-time 45 | head -c 8000
+            echo
