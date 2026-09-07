@@ -57,7 +57,12 @@ class FacebookReelSlotService
         $service = new FacebookPageService($this->config->app_id, $this->config->app_secret);
         $caption = $this->caption($displayName, $targetUrl);
 
-        foreach ($pool as $reelId) {
+        foreach ($pool as $entry) {
+            // Admin dán cả link reel chứ không phải id trần, mà Graph API cần đúng id. Phân giải
+            // ngay tại đây rồi dùng id cho mọi thứ phía sau — kể cả khoá cache, để hai cách nhập
+            // cùng một reel (link đầy đủ và id trần) không thành hai slot riêng.
+            $reelId = FacebookPostTarget::parse($entry)->graphId;
+
             // Cache::add là thao tác nguyên tử: chỉ một request giành được slot trống, các
             // request cùng lúc khác nhận false và đi thử reel tiếp theo.
             if (! Cache::add($this->leaseKey($reelId), $productKey, now()->addMinutes($leaseMinutes))) {
@@ -108,10 +113,10 @@ class FacebookReelSlotService
         ]);
     }
 
+    /** $reelId ở đây luôn là id trần (đã qua FacebookPostTarget), nên ghép thẳng. */
     private function reelUrl(string $reelId): string
     {
-        return FacebookPostTarget::parse($reelId)->canonicalUrl
-            ?? "https://www.facebook.com/reel/{$reelId}";
+        return "https://www.facebook.com/reel/{$reelId}";
     }
 
     /** Slot đang thuộc về sản phẩm nào. */

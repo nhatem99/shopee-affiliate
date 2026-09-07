@@ -59,7 +59,10 @@ class FacebookReelSlotTest extends TestCase
 
         $this->assertSame('https://www.facebook.com/reel/111', $url);
 
-        Http::assertSent(fn ($request) => str_contains($request->url(), '/111')
+        // Khoá NGUYÊN VĂN URL Graph: trước đây cả link reel được truyền thẳng vào, tạo ra
+        // .../v21.0/https://www.facebook.com/reel/111 — test cũ dùng str_contains('/111') nên
+        // vẫn xanh dù request hỏng hoàn toàn.
+        Http::assertSent(fn ($request) => preg_match('#^https://graph\.facebook\.com/v[\d.]+/111$#', $request->url()) === 1
             && str_contains($request['description'], 'https://tietkiemvi.com/go/abc')
             && str_contains($request['description'], 'Áo Hoodie'));
     }
@@ -138,7 +141,20 @@ class FacebookReelSlotTest extends TestCase
             $service->reelUrlFor('ao-hoodie', 'Áo Hoodie', 'https://tietkiemvi.com/go/a'),
         );
         // reel/111 phải được thả ra, không bị treo vì lần hỏng vừa rồi.
-        $this->assertNull(Cache::get('fb_reel_lease:reel/111'));
+        $this->assertNull(Cache::get('fb_reel_lease:111'));
+    }
+
+    /** Cùng một reel nhập bằng link đầy đủ và bằng id trần phải là MỘT slot, không phải hai. */
+    public function test_full_link_and_bare_id_are_the_same_slot(): void
+    {
+        Http::fake(['graph.facebook.com/*' => Http::response(['success' => true])]);
+        $service = $this->service(['https://www.facebook.com/reel/111', '111']);
+
+        $first = $service->reelUrlFor('ao-hoodie', 'Áo Hoodie', 'https://tietkiemvi.com/go/a');
+        $second = $service->reelUrlFor('quan-jean', 'Quần Jean', 'https://tietkiemvi.com/go/b');
+
+        $this->assertSame('https://www.facebook.com/reel/111', $first);
+        $this->assertNull($second, 'Chỉ có 1 reel thật nên khách thứ hai phải rơi về Shopee');
     }
 
     public function test_does_nothing_when_no_reel_is_configured(): void
