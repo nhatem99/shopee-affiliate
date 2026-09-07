@@ -15,9 +15,19 @@
         <meta property="og:image" content="{{ $link->product_image }}">
     @endif
 
-    {{-- Trình duyệt thật (không phải bot) tự chuyển tiếp ngay; bot Facebook/Zalo/Telegram
-    chỉ đọc thẻ meta ở trên, không thực thi refresh/JS nên vẫn giữ nguyên link rút gọn này. --}}
-    <meta http-equiv="refresh" content="0;url={{ $link->target_url }}">
+    {{-- Trang này CHỈ được trả về cho request bị nhận diện là bot (xem ShortLinkController::
+    redirect()) — người dùng thật luôn nhận 302 riêng, không bao giờ thấy trang này. Vẫn cần
+    tự chuyển tiếp ở đây để chống trường hợp hiếm bot-detection nhận nhầm người thật là bot.
+
+    Dùng JS thay vì <meta http-equiv="refresh"> — đã xác minh trên production (9cd1967) là bot
+    Facebook CÓ thực thi http-equiv="refresh", nên nó tự ghé thẳng target_url rồi lấy
+    title/image/description CỦA SHOPEE làm preview. Shopee không trả gì dùng được cho crawler
+    nên card ra trống trơn: không ảnh, tiêu đề rơi về tên miền.
+
+    Bản JS này từng bị revert ở ee247fc với lý do "chỉ đổi chữ/ảnh hiển thị, không đổi đích
+    click" — nhưng chính chữ/ảnh hiển thị mới là thứ đang hỏng, nên đưa lại. Bot không chạy JS
+    nên buộc phải dùng og tag ở trên; trình duyệt thật (kể cả bị nhận nhầm) vẫn tự chuyển tiếp. --}}
+    <script nonce="{{ request()->attributes->get('csp_nonce') }}">location.replace(@json($link->target_url));</script>
 </head>
 <body>
     <p><a href="{{ $link->target_url }}">Bấm vào đây để nhận mã giảm giá</a></p>

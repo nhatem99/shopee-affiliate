@@ -77,6 +77,10 @@ class ShortLinkController extends Controller
         Log::info('ShortLinkController: đã tạo short-link', [
             'code' => $link->code,
             'target_url' => $targetUrl,
+            // og:image của trang preview lấy thẳng từ đây (short-link-preview.blade.php).
+            // Thiếu ảnh trong card Facebook thì nhìn dòng này là biết ngay lỗi ở nguồn cấp
+            // (không trả ảnh) hay ở khâu hiển thị, khỏi phải mò từ đầu.
+            'product_image' => $link->product_image ?? '(khong co — card FB se khong co anh)',
         ]);
 
         $shortUrl = url('/go/'.$link->code);
