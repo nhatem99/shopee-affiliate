@@ -3,7 +3,9 @@
 namespace App\Http\Controllers;
 
 use App\Exceptions\AffiliateScanException;
+use App\Models\ApiConfig;
 use App\Services\AffiliateLinkRewriterService;
+use App\Services\FacebookPageService;
 use App\Services\KieuShopeeService;
 use App\Services\ShortLinkService;
 use App\Services\TrackingService;
@@ -14,6 +16,7 @@ use Illuminate\Http\Request;
 use Illuminate\Http\Response;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Str;
 
 class ShortLinkController extends Controller
 {
@@ -76,6 +79,14 @@ class ShortLinkController extends Controller
             'target_url' => $targetUrl,
         ]);
 
+        $shortUrl = url('/go/'.$link->code);
+
+        $redirectUrl = $this->facebookCommentRedirectUrl(
+            $validated['product_name'] ?? null,
+            $link->code,
+            $shortUrl,
+        );
+
         $this->tracking->log('voucher_select', $request, [
             'url' => $targetUrl,
             'source' => KieuShopeeService::SOURCE,
@@ -84,7 +95,7 @@ class ShortLinkController extends Controller
 
         return response()->json([
             'code' => $link->code,
-            'short_url' => url('/go/'.$link->code),
+            'short_url' => $redirectUrl,
         ]);
     }
 
@@ -118,5 +129,91 @@ class ShortLinkController extends Controller
         // proxy/CDN phía trước xử lý Location header khác với local); quay lại redirect thẳng
         // như trước cho tới khi tìm ra và kiểm chứng được cách làm đúng.
         return redirect()->away($link->target_url, 302);
+    }
+
+    /**
+     * Khi khách bấm "Mua ngay" VÀ admin đã bật "Bật chuyển hướng qua comment Facebook"
+     * (meta.comment_redirect_enabled ở /admin/api-config, provider 'facebook'), đăng link
+     * affiliate ($fallbackUrl) làm comment vào bài viết admin đã chọn (meta.target_post_id)
+     * trên fanpage, rồi trả về permalink của CHÍNH comment đó thay vì link Shopee — khách
+     * phải mở Facebook, bấm short-link trong comment thì mới thật sự tới Shopee, để lượt
+     * click được tính là traffic từ Facebook thật. Khi tắt (mặc định), khách bấm mã đi
+     * thẳng $fallbackUrl (/go/{code} → Shopee) như hành vi gốc, không đụng gì tới Facebook.
+     *
+     * Lớp này thao tác trên SHORT-LINK của mình chứ không phải link gốc, nên nó độc lập với
+     * nguồn cấp mã — đổi salesoc sang kieushopee không ảnh hưởng gì tới cách nó chạy.
+     *
+     * Giới hạn 1 comment/sản phẩm mỗi 20 phút để không bị Facebook đánh dấu spam khi sản phẩm
+     * hot có nhiều lượt bấm liên tục — trong khung đó, các lượt bấm lặp lại tái sử dụng
+     * permalink đã đăng thay vì đăng comment mới. Thời salesoc khoá cache còn phải tính thêm
+     * loại mã vì mỗi loại trỏ tới voucher khác nhau; kieushopee chỉ trả một link cho mỗi sản
+     * phẩm nên tên sản phẩm là đủ.
+     *
+     * Nếu đăng comment thất bại (chưa cấu hình, token lỗi, Facebook sập...) thì trả về
+     * $fallbackUrl để không chặn đường mua hàng của khách.
+     */
+    private function facebookCommentRedirectUrl(?string $productName, string $shortCode, string $fallbackUrl): string
+    {
+        $config = ApiConfig::where('platform', 'facebook')->where('is_active', true)->first();
+
+        if (! $config || ! ($config->meta['comment_redirect_enabled'] ?? false)) {
+            return $fallbackUrl;
+        }
+
+        $postId = $config->meta['target_post_id'] ?? null;
+
+        if (! $config->app_id || ! $config->app_secret || ! $postId) {
+            Log::warning('ShortLinkController: đã bật comment_redirect_enabled nhưng thiếu Page ID/Token/target_post_id.');
+
+            return $fallbackUrl;
+        }
+
+        $productKey = Str::slug($productName ?: $shortCode) ?: $shortCode;
+        $cacheKey = 'fb_comment_link:'.KieuShopeeService::SOURCE.":{$productKey}";
+
+        if ($cached = Cache::get($cacheKey)) {
+            return $this->commentUrl($cached, $postId);
+        }
+
+        $displayName = $productName ?: 'Sản phẩm Shopee';
+        $message = "🔥 {$displayName}\n🎟️ Mã giảm giá đang chờ bạn!\n👉 Bấm vào link dưới đây để lấy mã & mua ngay:\n{$fallbackUrl}";
+
+        $posted = (new FacebookPageService($config->app_id, $config->app_secret))->postComment($postId, $message);
+
+        if (! $posted) {
+            return $fallbackUrl;
+        }
+
+        Cache::put($cacheKey, $posted, now()->addMinutes(20));
+
+        return $this->commentUrl($posted, $postId);
+    }
+
+    /**
+     * Ghép URL story.php trỏ tới đúng comment, thay cho permalink_url dạng
+     * /{actor_id}/posts/{post_id} mà Graph API trả về.
+     *
+     * Đã test trên máy thật: mọi biến thể scheme fb:// (permalink.php, story, facewebmodal)
+     * đều KHÔNG mở đúng comment — app Facebook chỉ mở ra trang chủ hoặc báo nội dung không
+     * hiển thị. Riêng URL web thường thì chạy đúng, nên bỏ hẳn hướng custom scheme (cũng không
+     * còn cần phân biệt mobile/desktop nữa). Dùng story.php vì nó ghép từ đúng Page ID trong
+     * cấu hình, không phụ thuộc actor_id lạ mà permalink_url hay trả về.
+     *
+     * Nếu thiếu dữ liệu để ghép thì rơi về permalink_url gốc của Graph API.
+     */
+    private function commentUrl(array $posted, string $postId): string
+    {
+        $commentId = $posted['comment_id'] ?? null;
+        [$pageId, $storyFbid] = array_pad(explode('_', $postId, 2), 2, null);
+
+        if (! $commentId || ! $pageId || ! $storyFbid) {
+            return $posted['permalink_url'];
+        }
+
+        return 'https://www.facebook.com/story.php?'.http_build_query([
+            'story_fbid' => $storyFbid,
+            'id' => $pageId,
+            'comment_id' => $commentId,
+        ]);
     }
 }

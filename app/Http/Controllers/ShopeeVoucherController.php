@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Exceptions\AffiliateScanException;
+use App\Models\ApiConfig;
 use App\Models\PlatformVoucher;
 use App\Services\KieuShopeeService;
 use App\Services\ShopeeLinkResolverService;
@@ -79,7 +80,31 @@ class ShopeeVoucherController extends Controller
                 // Token mờ của link CTA duy nhất; null nghĩa là chưa lấy được mã cho sản phẩm này.
                 'voucher_ref' => isset($data['voucher_link']) ? $this->maskVoucherLink($data['voucher_link']) : null,
             ],
+            'autoRedirect' => $this->autoRedirect(),
         ]);
+    }
+
+    /**
+     * Có bỏ luôn bước bấm nút không: dán link xong là đi thẳng tới đích (comment Facebook hoặc
+     * Shopee), khách không thấy nút "Mua ngay" nữa. Bật ở /admin/api-config (provider facebook).
+     *
+     * Chỉ có nghĩa khi đã bật chuyển hướng qua comment Facebook — mục đích của nó là để mỗi sản
+     * phẩm chỉ sinh đúng 1 comment thay vì mỗi lượt bấm lại thêm một cái.
+     *
+     * Thời salesoc, ô này là DANH SÁCH chọn loại mã (meta.auto_source: facebook/instagram/...)
+     * vì một sản phẩm có nhiều mã. kieushopee chỉ trả một link duy nhất nên không còn gì để
+     * chọn, ô đó thành công tắc bật/tắt (meta.auto_redirect_enabled). Vẫn đọc auto_source cũ
+     * để cấu hình đang chạy trên production không mất tác dụng ngay sau khi đổi nguồn.
+     */
+    private function autoRedirect(): bool
+    {
+        $config = ApiConfig::where('platform', 'facebook')->where('is_active', true)->first();
+
+        if (! $config || ! ($config->meta['comment_redirect_enabled'] ?? false)) {
+            return false;
+        }
+
+        return (bool) ($config->meta['auto_redirect_enabled'] ?? ! empty($config->meta['auto_source']));
     }
 
     /**

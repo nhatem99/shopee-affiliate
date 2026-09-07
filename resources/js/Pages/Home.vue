@@ -12,6 +12,10 @@ const props = defineProps({
     vouchers: { type: Array, default: () => [] },
     voucherResult: { type: Object, default: null },
     canUseVoucherTool: { type: Boolean, default: true },
+    // Khi admin đã bật chuyển hướng qua comment Facebook kèm chế độ tự chuyển hướng: ẩn luôn
+    // nút "Mua ngay", đưa khách thẳng tới comment ngay sau khi dán link. Mỗi sản phẩm chỉ sinh
+    // 1 comment thay vì mỗi lượt bấm lại thêm 1 cái.
+    autoRedirect: { type: Boolean, default: false },
 })
 
 const toast = useToast()
@@ -79,6 +83,11 @@ function resolveVoucher() {
                     ...history.value,
                 ].slice(0, 5)
             }
+            if (props.autoRedirect && result?.voucher_ref) {
+                goStraightToVoucher()
+
+                return
+            }
             // Cuộn thẳng tới khu vực chọn mã ngay khi có kết quả — khách không cần tự kéo xuống.
             nextTick(() => voucherResultEl.value?.scrollIntoView({ behavior: 'smooth', block: 'start' }))
         },
@@ -91,6 +100,28 @@ function resolveVoucher() {
 }
 
 const shorteningKey = ref(null)
+const autoRedirecting = ref(false)
+
+/**
+ * Chế độ tự chuyển hướng: khách dán link xong là đi thẳng tới đích, không bấm nút nào nữa.
+ * Điều hướng ngay trên tab hiện tại thay vì mở tab mới — hàm này chạy sau khi request resolve
+ * trả về nên đã mất "user gesture", window.open() lúc này chắc chắn bị trình duyệt chặn.
+ */
+async function goStraightToVoucher() {
+    autoRedirecting.value = true
+
+    try {
+        const { data } = await axios.post('/voucher/shorten', {
+            ref: props.voucherResult.voucher_ref,
+            product_name: props.voucherResult?.product?.product_name ?? null,
+            product_image: props.voucherResult?.product?.product_image ?? null,
+        })
+        window.location.href = data.short_url
+    } catch (e) {
+        autoRedirecting.value = false
+        toast.error('Không thể tạo link, vui lòng thử lại.')
+    }
+}
 
 // key chỉ để biết nút nào đang quay (nút kết quả hay một dòng trong lịch sử) — mỗi lần
 // chỉ cho bấm một nút, vì cả hai đều dẫn tới cùng một hành động điều hướng.
@@ -101,6 +132,10 @@ async function openVoucherLink(entry, productName = null, productImage = null) {
     // Mở tab trắng NGAY trong lúc click (đồng bộ) để trình duyệt không chặn popup —
     // nếu đợi axios xong mới gọi window.open() thì đã mất "user gesture", dễ bị chặn.
     const newTab = window.open('', '_blank')
+    // Ghi tạm 1 trang loading vào tab đó — bước tạo link có thể mất vài giây (theo dõi
+    // redirect chuỗi + có thể đăng comment Facebook), tab trắng trơn trong lúc chờ dễ khiến
+    // khách tưởng bị treo rồi đóng tab/bấm lại.
+    newTab?.document.write('<!DOCTYPE html><html lang="vi"><head><meta charset="utf-8"><title>Đang tạo liên kết...</title><style>body{display:flex;align-items:center;justify-content:center;height:100vh;margin:0;font-family:system-ui,sans-serif;color:#666;background:#fafafa}</style></head><body>Đang tạo liên kết, vui lòng đợi giây lát...</body></html>')
 
     try {
         const { data } = await axios.post('/voucher/shorten', {
@@ -243,8 +278,14 @@ const openFaq = ref(null)
                     </div>
                     <p v-else class="text-sm text-[var(--color-muted)] mb-5">Không lấy được thông tin sản phẩm, nhưng bạn vẫn có thể dùng link bên dưới.</p>
 
+                    <!-- Chế độ tự chuyển hướng: khách không bấm gì cả, chỉ báo đang đi. -->
+                    <div v-if="autoRedirecting" class="flex items-center gap-3 mb-4 mt-3 px-4 py-3 rounded-xl bg-[var(--color-peach-soft)] text-[var(--color-ink)] text-sm font-semibold">
+                        <span class="w-4 h-4 rounded-full border-2 border-[var(--color-accent)] border-t-transparent animate-spin flex-none"></span>
+                        Đang chuyển tới mã giảm giá, vui lòng đợi giây lát...
+                    </div>
+
                     <!-- Mã đã được áp sẵn trong link nên khách không phải chọn/nhập gì, chỉ bấm mở. -->
-                    <div v-if="voucherResult.voucher_ref" class="flex items-stretch gap-1.5 mb-4">
+                    <div v-else-if="voucherResult.voucher_ref" class="flex items-stretch gap-1.5 mb-4">
                         <button
                             @click="openVoucherLink({ key: 'result', ref: voucherResult.voucher_ref })"
                             :disabled="shorteningKey === 'result'"

@@ -62,7 +62,7 @@ class AffiliateLinkRewriterService
                 return $current;
             }
 
-            $response = Http::withOptions(['allow_redirects' => false])->timeout(10)->get($current);
+            $response = Http::withOptions(['allow_redirects' => false])->timeout(6)->get($current);
             $location = $response->header('Location');
 
             Log::info('AffiliateLinkRewriterService: theo dõi 1 hop redirect', [

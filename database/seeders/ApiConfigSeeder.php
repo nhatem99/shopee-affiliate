@@ -30,5 +30,17 @@ class ApiConfigSeeder extends Seeder
                 'is_active' => false,
             ]
         );
+
+        ApiConfig::firstOrCreate(
+            ['platform' => 'facebook'],
+            [
+                'name' => 'Facebook — TechTrust Mobile',
+                'endpoint' => 'https://graph.facebook.com/v21.0',
+                'app_id' => 'YOUR_FACEBOOK_PAGE_ID',
+                'app_secret' => 'YOUR_FACEBOOK_PAGE_ACCESS_TOKEN',
+                'meta' => ['target_post_id' => null],
+                'is_active' => false,
+            ]
+        );
     }
 }

@@ -5,7 +5,7 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Model;
 
-#[Fillable(['name', 'endpoint', 'app_id', 'app_secret', 'is_active', 'platform'])]
+#[Fillable(['name', 'endpoint', 'app_id', 'app_secret', 'is_active', 'platform', 'meta'])]
 class ApiConfig extends Model
 {
     protected function casts(): array
@@ -13,6 +13,7 @@ class ApiConfig extends Model
         return [
             'app_secret' => 'encrypted',
             'is_active' => 'boolean',
+            'meta' => 'array',
         ];
     }
 }
