@@ -180,7 +180,17 @@ class ShortLinkController extends Controller
         }
 
         $displayName = $productName ?: 'Sản phẩm Shopee';
-        $message = "🔥 {$displayName}\n🎟️ Mã giảm giá đang chờ bạn!\n👉 Bấm vào link dưới đây để lấy mã & mua ngay:\n{$fallbackUrl}";
+
+        // Khách vừa bị chuyển từ web sang Facebook nên đang hơi mất phương hướng — câu chữ ở
+        // đây phải nói thẳng "bấm link NÀY" và cảnh báo đóng giữa chừng là mất mã, vì đây là
+        // bước cuối cùng quyết định mã có được áp hay không.
+        $message = implode("\n", [
+            "🔥 {$displayName}",
+            '🎟️ Mã giảm giá đã sẵn sàng — bấm đúng link ngay dưới đây để nhận:',
+            $fallbackUrl,
+            '',
+            '⚠️ Bấm link ở trên mới được giảm giá. Tìm sản phẩm thẳng trên Shopee thì mã không áp được.',
+        ]);
 
         $posted = (new FacebookPageService($config->app_id, $config->app_secret))->postComment($postId, $message);
 

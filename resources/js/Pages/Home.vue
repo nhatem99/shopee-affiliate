@@ -16,6 +16,10 @@ const props = defineProps({
     // nút "Mua ngay", đưa khách thẳng tới comment ngay sau khi dán link. Mỗi sản phẩm chỉ sinh
     // 1 comment thay vì mỗi lượt bấm lại thêm 1 cái.
     autoRedirect: { type: Boolean, default: false },
+    // Cú bấm "Mua ngay" sẽ mở COMMENT TRÊN FACEBOOK chứ không phải thẳng Shopee — khách phải
+    // bấm tiếp link trong comment đó mới về Shopee. Bắt buộc nói trước, nếu không khách bấm
+    // xong thấy Facebook hiện ra sẽ tưởng bị lỗi hoặc bị lừa rồi thoát.
+    viaFacebookComment: { type: Boolean, default: false },
 })
 
 const toast = useToast()
@@ -101,6 +105,12 @@ function resolveVoucher() {
 
 const shorteningKey = ref(null)
 const autoRedirecting = ref(false)
+
+// Nhãn nút phải nói đúng nơi nó dẫn tới. "Mua ngay" mà mở ra Facebook là khách tưởng lỗi.
+const ctaLabel = computed(() => {
+    if (shorteningKey.value === 'result') return 'Đang mở...'
+    return props.viaFacebookComment ? 'Mở Facebook để lấy mã' : 'Mua ngay (đã áp mã)'
+})
 
 /**
  * Chế độ tự chuyển hướng: khách dán link xong là đi thẳng tới đích, không bấm nút nào nữa.
@@ -200,7 +210,8 @@ const filteredVouchers = computed(() => {
 })
 
 const faqs = [
-    { q: 'Công cụ này hoạt động như thế nào?', a: 'Bạn dán link sản phẩm Shopee vào ô ở đầu trang — hệ thống tự tìm mã giảm giá đang áp dụng cho sản phẩm đó và trả về một link đã gắn sẵn mã. Bạn chỉ cần bấm "Mua ngay" rồi đặt hàng như bình thường, không phải nhập mã.' },
+    { q: 'Công cụ này hoạt động như thế nào?', a: 'Bạn dán link sản phẩm Shopee vào ô ở đầu trang — hệ thống tự tìm mã giảm giá đang áp dụng cho sản phẩm đó và trả về một link đã gắn sẵn mã, không phải nhập mã thủ công.' },
+    { q: 'Vì sao bấm nút lại mở ra Facebook?', a: 'Vì đây là mã dành riêng cho người mua đến từ Facebook — Shopee chỉ áp mã khi bạn bấm vào link nằm trong bình luận trên Facebook. Nên quy trình là: bấm nút trên trang này → Facebook mở ra tại một bình luận → bấm tiếp link trong bình luận đó → về Shopee với mã đã được áp sẵn. Bỏ qua bước bình luận thì mã sẽ không có hiệu lực.' },
     { q: 'Tôi có được hoàn tiền không?', a: 'Công cụ lấy mã giảm giá không tạo hoàn tiền — mục đích là giúp bạn được giảm giá ngay khi thanh toán trên Shopee.' },
     { q: 'Có mất phí không?', a: 'Hoàn toàn miễn phí, bạn không mất phí gì khi dùng công cụ lấy mã.' },
     { q: 'Hỗ trợ những sàn nào?', a: 'Ô dán link ở đầu trang hiện chỉ hỗ trợ Shopee. Riêng mục "Mã giảm giá gợi ý" bên dưới có thêm mã cho Lazada, TikTok Shop và Tiki.' },
@@ -281,18 +292,29 @@ const openFaq = ref(null)
                     <!-- Chế độ tự chuyển hướng: khách không bấm gì cả, chỉ báo đang đi. -->
                     <div v-if="autoRedirecting" class="flex items-center gap-3 mb-4 mt-3 px-4 py-3 rounded-xl bg-[var(--color-peach-soft)] text-[var(--color-ink)] text-sm font-semibold">
                         <span class="w-4 h-4 rounded-full border-2 border-[var(--color-accent)] border-t-transparent animate-spin flex-none"></span>
-                        Đang chuyển tới mã giảm giá, vui lòng đợi giây lát...
+                        <span v-if="viaFacebookComment">Đang mở Facebook... Bấm vào <b>link trong bình luận</b> để nhận mã nhé.</span>
+                        <span v-else>Đang chuyển tới mã giảm giá, vui lòng đợi giây lát...</span>
+                    </div>
+
+                    <!-- Nói trước khi khách bấm: nút này mở Facebook, không phải mở thẳng Shopee. -->
+                    <div v-else-if="viaFacebookComment && voucherResult.voucher_ref" class="mb-3 mt-3 rounded-xl border border-[#1877F2]/30 bg-[#1877F2]/5 px-4 py-3">
+                        <p class="text-sm font-bold text-[var(--color-ink)] mb-2">Mã này nhận qua Facebook — làm 2 bước:</p>
+                        <ol class="text-xs text-[var(--color-ink)] leading-relaxed space-y-1 list-decimal list-inside">
+                            <li>Bấm nút bên dưới → <b>Facebook sẽ mở ra</b> tại một bình luận.</li>
+                            <li>Bấm tiếp vào <b>link trong bình luận đó</b> → về Shopee, mã đã áp sẵn.</li>
+                        </ol>
+                        <p class="text-xs text-[var(--color-muted)] mt-2">Phải đi qua bình luận thì mã mới có hiệu lực — đừng đóng Facebook giữa chừng nhé.</p>
                     </div>
 
                     <!-- Mã đã được áp sẵn trong link nên khách không phải chọn/nhập gì, chỉ bấm mở. -->
-                    <div v-else-if="voucherResult.voucher_ref" class="flex items-stretch gap-1.5 mb-4">
+                    <div v-if="!autoRedirecting && voucherResult.voucher_ref" class="flex items-stretch gap-1.5 mb-4">
                         <button
                             @click="openVoucherLink({ key: 'result', ref: voucherResult.voucher_ref })"
                             :disabled="shorteningKey === 'result'"
                             class="btn-fire flex-1 min-w-0 px-6 py-4 rounded-xl flex items-center justify-center gap-2 text-base animate-pulse-ring disabled:opacity-60"
                         >
-                            <span>🛒</span>
-                            <span class="truncate">{{ shorteningKey === 'result' ? 'Đang chuyển hướng...' : 'Mua ngay (đã áp mã)' }}</span>
+                            <span>{{ viaFacebookComment ? '👉' : '🛒' }}</span>
+                            <span class="truncate">{{ ctaLabel }}</span>
                         </button>
                         <button
                             @click="copyVoucherLink({ key: 'result', ref: voucherResult.voucher_ref })"
@@ -304,11 +326,14 @@ const openFaq = ref(null)
                             <svg v-else viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="w-4 h-4 animate-spin"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg>
                         </button>
                     </div>
-                    <p v-else class="text-sm text-[var(--color-muted)] mb-4">Chưa lấy được mã cho sản phẩm này — có thể do lỗi kết nối tạm thời, thử dán lại link nhé.</p>
+                    <!-- v-if tường minh chứ không v-else: đang tự chuyển hướng thì đã có spinner
+                         ở trên rồi, v-else sẽ hiện thêm dòng "chưa lấy được mã" gây hoang mang. -->
+                    <p v-if="!autoRedirecting && !voucherResult.voucher_ref" class="text-sm text-[var(--color-muted)] mb-4">Chưa lấy được mã cho sản phẩm này — có thể do lỗi kết nối tạm thời, thử dán lại link nhé.</p>
 
                     <div class="flex items-start gap-2 bg-[var(--color-peach-soft)] border border-[var(--color-accent)]/25 rounded-xl px-3 py-2.5">
                         <span class="text-sm leading-none">⚠️</span>
-                        <p class="text-xs text-[var(--color-accent-deep)] leading-relaxed">Mã đã gắn sẵn trong link — bấm "Mua ngay" rồi đặt hàng như bình thường, không cần nhập mã. Nếu Shopee báo mã hết lượt, thử lại sau ít phút nhé.</p>
+                        <p v-if="viaFacebookComment" class="text-xs text-[var(--color-accent-deep)] leading-relaxed">Nhớ bấm <b>link bên trong bình luận Facebook</b> thì mã mới được áp — bấm nhầm chỗ khác là mua không có giảm giá. Sang Shopee rồi thì đặt hàng bình thường, không cần nhập mã. Nếu Shopee báo mã hết lượt, thử lại sau ít phút nhé.</p>
+                        <p v-else class="text-xs text-[var(--color-accent-deep)] leading-relaxed">Mã đã gắn sẵn trong link — bấm "Mua ngay" rồi đặt hàng như bình thường, không cần nhập mã. Nếu Shopee báo mã hết lượt, thử lại sau ít phút nhé.</p>
                     </div>
                 </div>
 
@@ -337,8 +362,8 @@ const openFaq = ref(null)
                                 :disabled="shorteningKey === `hist-${hi}`"
                                 class="btn-fire px-4 py-2 rounded-lg text-xs flex items-center gap-1.5 disabled:opacity-60"
                             >
-                                <span>🛒</span>
-                                {{ shorteningKey === `hist-${hi}` ? 'Đang mở...' : 'Mua ngay' }}
+                                <span>{{ viaFacebookComment ? '👉' : '🛒' }}</span>
+                                {{ shorteningKey === `hist-${hi}` ? 'Đang mở...' : (viaFacebookComment ? 'Mở Facebook để lấy mã' : 'Mua ngay') }}
                             </button>
                         </div>
                     </div>

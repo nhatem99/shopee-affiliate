@@ -80,31 +80,47 @@ class ShopeeVoucherController extends Controller
                 // Token mờ của link CTA duy nhất; null nghĩa là chưa lấy được mã cho sản phẩm này.
                 'voucher_ref' => isset($data['voucher_link']) ? $this->maskVoucherLink($data['voucher_link']) : null,
             ],
-            'autoRedirect' => $this->autoRedirect(),
+            ...$this->facebookRedirectFlags(),
         ]);
     }
 
     /**
-     * Có bỏ luôn bước bấm nút không: dán link xong là đi thẳng tới đích (comment Facebook hoặc
-     * Shopee), khách không thấy nút "Mua ngay" nữa. Bật ở /admin/api-config (provider facebook).
+     * Hai cờ điều khiển giao diện, cùng đọc từ một bản ghi cấu hình Facebook:
      *
-     * Chỉ có nghĩa khi đã bật chuyển hướng qua comment Facebook — mục đích của nó là để mỗi sản
-     * phẩm chỉ sinh đúng 1 comment thay vì mỗi lượt bấm lại thêm một cái.
+     * - viaFacebookComment: cú bấm "Mua ngay" sẽ dẫn tới COMMENT TRÊN FACEBOOK chứ không phải
+     *   thẳng Shopee. Giao diện bắt buộc phải biết điều này để nói trước cho khách — nếu không
+     *   khách bấm "Mua ngay" mà hiện ra Facebook thì tưởng bị lỗi/lừa và thoát luôn.
+     *   Điều kiện phải khớp ĐÚNG với ShortLinkController::facebookCommentRedirectUrl(): thiếu
+     *   Page ID/token/bài viết thì bên đó tự rơi về Shopee, hứa trước là hứa sai.
      *
-     * Thời salesoc, ô này là DANH SÁCH chọn loại mã (meta.auto_source: facebook/instagram/...)
-     * vì một sản phẩm có nhiều mã. kieushopee chỉ trả một link duy nhất nên không còn gì để
-     * chọn, ô đó thành công tắc bật/tắt (meta.auto_redirect_enabled). Vẫn đọc auto_source cũ
-     * để cấu hình đang chạy trên production không mất tác dụng ngay sau khi đổi nguồn.
+     * - autoRedirect: bỏ luôn bước bấm nút, dán link xong đi thẳng. Chỉ có nghĩa khi đã bật
+     *   chuyển hướng qua comment — mục đích là mỗi sản phẩm chỉ sinh đúng 1 comment thay vì
+     *   mỗi lượt bấm lại thêm một cái.
+     *   Thời salesoc, ô này là DANH SÁCH chọn loại mã (meta.auto_source) vì một sản phẩm có
+     *   nhiều mã. kieushopee chỉ trả một link nên không còn gì để chọn, ô đó thành công tắc
+     *   (meta.auto_redirect_enabled) — vẫn đọc auto_source cũ để cấu hình đang chạy trên
+     *   production không mất tác dụng ngay sau khi đổi nguồn.
+     *
+     * @return array{viaFacebookComment: bool, autoRedirect: bool}
      */
-    private function autoRedirect(): bool
+    private function facebookRedirectFlags(): array
     {
         $config = ApiConfig::where('platform', 'facebook')->where('is_active', true)->first();
 
-        if (! $config || ! ($config->meta['comment_redirect_enabled'] ?? false)) {
-            return false;
+        $viaComment = $config
+            && ($config->meta['comment_redirect_enabled'] ?? false)
+            && $config->app_id
+            && $config->app_secret
+            && ($config->meta['target_post_id'] ?? null);
+
+        if (! $viaComment) {
+            return ['viaFacebookComment' => false, 'autoRedirect' => false];
         }
 
-        return (bool) ($config->meta['auto_redirect_enabled'] ?? ! empty($config->meta['auto_source']));
+        return [
+            'viaFacebookComment' => true,
+            'autoRedirect' => (bool) ($config->meta['auto_redirect_enabled'] ?? ! empty($config->meta['auto_source'])),
+        ];
     }
 
     /**
