@@ -1,0 +1,144 @@
+name: Fix VPS connection to GitHub
+
+# VPS khong ket noi duoc github.com nen `git fetch` trong Deploy chet -> khong deploy duoc gi.
+# Do duoc tu workflow Probe: internet noi chung van tot (kieushopee HTTP 200, ipify goi duoc),
+# rieng github.com thi curl tra HTTP 000 voi connect 0.000000s — tuc la KHONG he mo ket noi,
+# hong ngay tu khau phan giai ten mien.
+#
+# Workflow nay chan doan truoc, va CHI SUA khi da chung minh duoc dung la loi DNS:
+#   - resolver hien tai khong phan giai duoc github.com, VA
+#   - resolver cong cong (1.1.1.1) phan giai duoc, VA
+#   - ket noi thang toi IP do thi thanh cong
+# Ba dieu kien do dung ca thi moi doi DNS. Neu ket noi thang toi IP cung hong thi la
+# firewall/dinh tuyen chan — luc do khong dong gi vao cau hinh, chi bao cao.
+#
+# Moi thay doi deu co ban sao luu kem timestamp; cach hoan tac in ra o cuoi log.
+
+on:
+  workflow_dispatch:
+    inputs:
+      apply:
+        description: 'Sửa thật, hay chỉ chẩn đoán rồi dừng?'
+        required: true
+        type: choice
+        default: 'apply'
+        options:
+          - apply
+          - diagnose-only
+
+jobs:
+  fix:
+    name: Diagnose and fix DNS on the VPS
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: SSH and repair
+        uses: appleboy/ssh-action@v1.2.0
+        env:
+          FIX_MODE: ${{ inputs.apply }}
+        with:
+          host: ${{ secrets.VPS_HOST }}
+          username: ${{ secrets.VPS_USER }}
+          key: ${{ secrets.VPS_SSH_KEY }}
+          envs: FIX_MODE
+          command_timeout: 5m
+          script: |
+            # Khong dung `set -e`: gan het cac lenh duoi day la phep THU, that bai la thong tin
+            # can thu thap chu khong phai ly do dung script.
+            set -u
+
+            echo "==================== 1. HIEN TRANG ===================="
+            echo "-- /etc/resolv.conf --"
+            ls -l /etc/resolv.conf
+            grep -v '^#' /etc/resolv.conf 2>/dev/null | grep -v '^$'
+            echo "-- systemd-resolved --"
+            systemctl is-active systemd-resolved 2>/dev/null || echo "khong chay"
+            echo "-- /etc/hosts co dong github khong --"
+            grep -i github /etc/hosts || echo "(khong co — tot)"
+
+            echo
+            echo "==================== 2. CHAN DOAN ===================="
+
+            LOCAL_OK=no
+            if getent hosts github.com >/dev/null 2>&1; then LOCAL_OK=yes; fi
+            echo "Resolver hien tai phan giai duoc github.com: $LOCAL_OK"
+            getent hosts github.com 2>/dev/null | head -3
+
+            PUB_IPS=""
+            if command -v dig >/dev/null 2>&1; then
+              PUB_IPS=$(dig +short +time=3 +tries=1 A github.com @1.1.1.1 2>/dev/null | grep -E '^[0-9.]+$' | head -3)
+            fi
+            if [ -z "$PUB_IPS" ] && command -v nslookup >/dev/null 2>&1; then
+              PUB_IPS=$(nslookup github.com 1.1.1.1 2>/dev/null | awk '/^Address: /{print $2}' | grep -E '^[0-9.]+$' | head -3)
+            fi
+            echo "Resolver cong cong 1.1.1.1 tra ve: ${PUB_IPS:-(khong lay duoc — thieu dig/nslookup hoac 1.1.1.1 cung bi chan)}"
+
+            DIRECT_OK=no
+            FIRST_IP=$(echo "$PUB_IPS" | head -1)
+            if [ -n "$FIRST_IP" ]; then
+              if curl -s -o /dev/null --resolve "github.com:443:$FIRST_IP" https://github.com --max-time 10; then
+                DIRECT_OK=yes
+              fi
+            fi
+            echo "Ket noi thang toi $FIRST_IP (bo qua DNS): $DIRECT_OK"
+
+            echo
+            echo "==================== 3. KET LUAN ===================="
+            VERDICT=unknown
+            if [ "$LOCAL_OK" = "yes" ]; then
+              VERDICT=not-dns
+              echo "Resolver van phan giai duoc github.com -> KHONG phai loi DNS."
+              echo "Nghi ngo: firewall/dinh tuyen, hoac loi chi xay ra luc git chay."
+            elif [ "$DIRECT_OK" = "yes" ]; then
+              VERDICT=dns
+              echo "Resolver hien tai hong NHUNG di thang toi IP thi duoc -> DUNG la loi DNS. Sua duoc."
+            else
+              VERDICT=network
+              echo "Ca DNS lan ket noi thang toi IP deu hong -> firewall/dinh tuyen chan github.com."
+              echo "Doi DNS se KHONG giai quyet duoc. Can kiem tra iptables/ufw hoac hoi nha cung cap VPS."
+            fi
+
+            echo
+            echo "==================== 4. SUA ===================="
+            if [ "$FIX_MODE" != "apply" ]; then
+              echo "Che do diagnose-only — khong dong gi."
+            elif [ "$VERDICT" != "dns" ]; then
+              echo "Khong phai loi DNS (ket luan: $VERDICT) -> khong dong vao cau hinh mang."
+              echo "Doi DNS luc nay chi lam nhieu them chu khong sua duoc gi."
+            else
+              TS=$(date +%Y%m%d-%H%M%S)
+              if systemctl is-active --quiet systemd-resolved 2>/dev/null; then
+                # /etc/resolv.conf luc nay thuong la symlink toi stub cua systemd-resolved —
+                # sua thang vao no se bi ghi de. Phai cau hinh o resolved.conf moi ben.
+                echo "systemd-resolved dang chay -> cau hinh qua /etc/systemd/resolved.conf"
+                cp -a /etc/systemd/resolved.conf "/etc/systemd/resolved.conf.bak-$TS"
+                sed -i 's/^#\?DNS=.*/DNS=1.1.1.1 8.8.8.8/' /etc/systemd/resolved.conf
+                grep -q '^DNS=' /etc/systemd/resolved.conf || printf '\n[Resolve]\nDNS=1.1.1.1 8.8.8.8\n' >> /etc/systemd/resolved.conf
+                systemctl restart systemd-resolved
+                echo "Da sua. Ban sao luu: /etc/systemd/resolved.conf.bak-$TS"
+                echo "Hoan tac: cp /etc/systemd/resolved.conf.bak-$TS /etc/systemd/resolved.conf && systemctl restart systemd-resolved"
+              else
+                echo "Khong co systemd-resolved -> ghi thang /etc/resolv.conf"
+                cp -aL /etc/resolv.conf "/etc/resolv.conf.bak-$TS"
+                rm -f /etc/resolv.conf
+                printf 'nameserver 1.1.1.1\nnameserver 8.8.8.8\n' > /etc/resolv.conf
+                echo "Da sua. Ban sao luu: /etc/resolv.conf.bak-$TS"
+                echo "Hoan tac: cp /etc/resolv.conf.bak-$TS /etc/resolv.conf"
+              fi
+              sleep 2
+            fi
+
+            echo
+            echo "==================== 5. KIEM CHUNG ===================="
+            echo "-- phan giai lai --"
+            getent hosts github.com || echo "van khong phan giai duoc"
+            echo "-- thu dung lenh ma Deploy that su chay --"
+            cd /var/www/tietkiemvi.com 2>/dev/null || { echo "khong vao duoc thu muc app"; exit 0; }
+            # GIT_TERMINAL_PROMPT=0 de khong bi treo cho nhap user/pass neu repo doi xac thuc.
+            if GIT_TERMINAL_PROMPT=0 timeout 60 git ls-remote origin HEAD >/dev/null 2>&1; then
+              echo "✅ git ls-remote OK -> Deploy se chay duoc."
+            else
+              echo "❌ git ls-remote van hong -> Deploy van se chet o buoc git fetch."
+            fi
+            echo "-- commit dang chay tren server --"
+            git log -1 --format="%H %s"
