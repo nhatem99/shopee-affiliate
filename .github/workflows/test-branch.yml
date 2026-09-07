@@ -53,14 +53,27 @@ jobs:
             curl -s -o /dev/null -w "HTTP %{http_code} — connect %{time_connect}s, total %{time_total}s\n" \
               https://sansale.kieushopee.com/ --max-time 20 || echo "(khong ket noi duoc)"
 
-            echo "=== Kiem tra github.com (deploy dang chet o day) ==="
-            curl -s -o /dev/null -w "HTTP %{http_code} — connect %{time_connect}s\n" \
-              https://github.com --max-time 20 || echo "(khong ket noi duoc github.com)"
-            echo "IPv6 cua github.com co route khong:"
-            curl -6 -s -o /dev/null -w "  ipv6 HTTP %{http_code}\n" https://github.com --max-time 10 \
-              || echo "  ipv6 hong (nghi ngo chinh la day: git thu AAAA truoc roi treo den timeout)"
-            curl -4 -s -o /dev/null -w "  ipv4 HTTP %{http_code}\n" https://github.com --max-time 10 \
-              || echo "  ipv4 cung hong"
+            # Deploy dang chet o buoc `git fetch`. Do duoc: ca ipv4 lan ipv6 deu HTTP 000 voi
+            # connect 0.000000s — tuc la curl KHONG HE mo ket noi, hong tu khau phan giai ten
+            # mien. Cac lenh duoi day chia doi kha nang: DNS hong hay dinh tuyen/firewall hong.
+            echo "=== Chan doan github.com ==="
+            echo "-- resolver dang dung --"
+            grep -v '^#' /etc/resolv.conf 2>/dev/null | grep -v '^$' || echo "(khong doc duoc)"
+            echo "-- /etc/hosts co dong github nao khong --"
+            grep -i github /etc/hosts || echo "(khong co — tot)"
+            echo "-- phan giai bang resolver hien tai --"
+            getent hosts github.com || echo "(KHONG PHAN GIAI DUOC -> resolver la thu phai sua)"
+            echo "-- phan giai bang resolver cong cong --"
+            if command -v dig >/dev/null; then
+              echo "  1.1.1.1: $(dig +short +time=5 +tries=1 github.com @1.1.1.1 | tr '\n' ' ')"
+              echo "  8.8.8.8: $(dig +short +time=5 +tries=1 github.com @8.8.8.8 | tr '\n' ' ')"
+            else
+              echo "  (khong co dig — cai: apt install dnsutils)"
+            fi
+            echo "-- ket noi thang toi IP cua github, BO QUA DNS --"
+            curl -s -o /dev/null -w "  140.82.121.4 -> HTTP %{http_code}, connect %{time_connect}s\n" \
+              --resolve github.com:443:140.82.121.4 https://github.com --max-time 10 \
+              || echo "  khong ket noi duoc ke ca khi bo qua DNS -> dinh tuyen/firewall chan, khong phai DNS"
 
             echo
             echo "=== GOI THAT TOI NGUON LAY MA (response tho) ==="
