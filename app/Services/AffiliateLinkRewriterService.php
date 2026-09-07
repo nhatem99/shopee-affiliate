@@ -101,12 +101,22 @@ class AffiliateLinkRewriterService
 
         $mmpPid = config('services.shopee_affiliate.mmp_pid');
         $query['mmp_pid'] = $mmpPid;
+
+        // utm_source đi kèm mmp_pid cho khớp nhau — đây là affiliate ID, thứ Shopee vốn phải
+        // biết để trả hoa hồng, không tiết lộ thêm gì về website nguồn.
         if (isset($query['utm_source'])) {
             $query['utm_source'] = $mmpPid;
         }
-        if (isset($query['utm_content'])) {
-            $query['utm_content'] = 'tietkiemvi';
-        }
+
+        // KHÔNG gắn tên website vào URL. Trước đây chỗ này đặt utm_content = 'tietkiemvi',
+        // nghĩa là mọi đơn hàng đều tự khai với Shopee rằng traffic đến từ tietkiemvi.com —
+        // trong khi cả thiết kế (bọc qua comment Facebook) là để lượt click được tính là
+        // traffic từ Facebook. Xoá hẳn tham số thay vì để nguyên giá trị của nguồn cấp mã,
+        // vì giá trị đó cũng là một định danh không phải của mình.
+        //
+        // An toàn: utm_* là tham số tracking độc lập, không nằm trong encrypted_payload /
+        // credential_token đã ký — bỏ đi không ảnh hưởng việc áp mã giảm giá.
+        unset($query['utm_content']);
 
         $base = ($parts['scheme'] ?? 'https').'://'.($parts['host'] ?? '').($parts['path'] ?? '');
 
