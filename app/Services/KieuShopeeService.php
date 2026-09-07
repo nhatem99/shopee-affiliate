@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use App\Models\ApiConfig;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
@@ -38,6 +39,35 @@ class KieuShopeeService
     // ở tầng CDN/WAF, mà đổi UA thì không ảnh hưởng gì tới cách server action xử lý.
     private const MOBILE_USER_AGENT = 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_5 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.5 Mobile/15E148 Safari/604.1';
 
+    /** Link mặc định cho nút "Kiểm tra kết nối" khi admin chưa đặt meta.test_url. */
+    private const FALLBACK_TEST_URL = 'https://shopee.vn/Ao-Hoodie-i.564687320.29261186260';
+
+    /**
+     * Nút "Kiểm tra kết nối" ở /admin/api-config: gọi thử bằng đúng tham số vừa lưu, bỏ qua
+     * cache. Dùng ngay sau khi dán next_action mới để biết ID đó còn sống hay không, thay vì
+     * phải ra trang chủ dán link rồi đoán.
+     *
+     * @return array{ok: bool, message: string}
+     */
+    public function testConnection(): array
+    {
+        $row = ApiConfig::where('platform', self::SOURCE)->first();
+        $testUrl = $row->meta['test_url'] ?? null;
+
+        $result = $this->fetchProductAndVoucherLink($testUrl ?: self::FALLBACK_TEST_URL, useCache: false);
+
+        if ($result === null) {
+            return [
+                'ok' => false,
+                'message' => 'Không lấy được mã. Nghi ngờ đầu tiên: next_action đã đổi — mở tab Network trên site nguồn lấy ID mới. Chi tiết ở /admin/logs (tìm "KieuShopeeService").',
+            ];
+        }
+
+        $name = $result['product']['product_name'] ?? 'không đọc được tên sản phẩm';
+
+        return ['ok' => true, 'message' => "Lấy mã thành công — {$name}"];
+    }
+
     /**
      * @return array{voucher_link: string, shop_id: ?string, item_id: ?string, product: ?array}|null
      */
@@ -57,16 +87,46 @@ class KieuShopeeService
         );
     }
 
+    /**
+     * Tham số gọi kieushopee, ưu tiên bản ghi ở /admin/api-config rồi mới tới config/services.php.
+     *
+     * Lý do để trong DB: `next_action` là ID Server Action do bản build Next.js của họ sinh ra,
+     * cứ deploy lại là đổi và tính năng chết ngay. Nằm ở config thì mỗi lần họ đổi phải sửa code
+     * + deploy mới cứu được — mà deploy đang là thứ hay hỏng nhất ở đây. Để trong DB thì admin
+     * dán ID mới vào là chạy lại tức thì.
+     *
+     * config/services.php vẫn là lưới an toàn: mất bản ghi, chưa chạy migrate, hoặc admin lỡ
+     * xoá trắng một ô thì rơi về giá trị mặc định thay vì gửi request rỗng.
+     *
+     * @return array{endpoint: string, next_action: string, tool_id: string, action_payload: string}
+     */
+    private function params(): array
+    {
+        $row = ApiConfig::where('platform', self::SOURCE)->where('is_active', true)->first();
+        $meta = $row->meta ?? [];
+
+        $pick = fn (?string $fromDb, string $configKey) => filled($fromDb)
+            ? trim($fromDb)
+            : (string) config("services.kieushopee.{$configKey}");
+
+        return [
+            'endpoint' => $pick($row->endpoint ?? null, 'endpoint'),
+            'next_action' => $pick($meta['next_action'] ?? null, 'next_action'),
+            'tool_id' => $pick($meta['tool_id'] ?? null, 'tool_id'),
+            'action_payload' => $pick($meta['action_payload'] ?? null, 'action_payload'),
+        ];
+    }
+
     private function fetch(string $shopeeUrl): ?array
     {
-        $endpoint = (string) config('services.kieushopee.endpoint');
-        $origin = $this->originOf($endpoint);
+        $params = $this->params();
+        $endpoint = $params['endpoint'];
 
         try {
             $response = Http::withHeaders([
                 'Accept' => 'text/x-component',
-                'Next-Action' => (string) config('services.kieushopee.next_action'),
-                'Origin' => $origin,
+                'Next-Action' => $params['next_action'],
+                'Origin' => $this->originOf($endpoint),
                 'Referer' => $endpoint,
                 'User-Agent' => self::MOBILE_USER_AGENT,
             ])
@@ -74,10 +134,10 @@ class KieuShopeeService
                 ->asMultipart()
                 ->post($endpoint, [
                     ['name' => '1_url', 'contents' => $shopeeUrl],
-                    ['name' => '1_toolId', 'contents' => (string) config('services.kieushopee.tool_id')],
+                    ['name' => '1_toolId', 'contents' => $params['tool_id']],
                     // Cách Next.js đóng gói tham số cho Server Action: field "0" là danh sách
                     // tham số, "$K1" là tham chiếu tới cụm field có tiền tố "1_" ở trên.
-                    ['name' => '0', 'contents' => '["$K1"]'],
+                    ['name' => '0', 'contents' => $params['action_payload']],
                 ]);
         } catch (\Exception $e) {
             Log::error('KieuShopeeService: lỗi kết nối tới '.$endpoint.': '.$e->getMessage(), [

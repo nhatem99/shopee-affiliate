@@ -79,6 +79,11 @@ return [
         // ID của "tool" đang được gọi trên site nguồn — cũng đọc từ chính request đó (field
         // multipart `1_toolId`). Tool này trả về đúng một link đã áp mã cho mỗi sản phẩm.
         'tool_id' => env('KIEUSHOPEE_TOOL_ID', 'cmssikp0w000x01qaays5m55b'),
+
+        // Field multipart "0" — cách Next.js đóng gói danh sách tham số cho Server Action.
+        // "$K1" là tham chiếu tới cụm field có tiền tố "1_". Hiếm khi đổi, nhưng nếu họ thêm
+        // tham số thì chuỗi này đổi theo nên vẫn để sửa được.
+        'action_payload' => env('KIEUSHOPEE_ACTION_PAYLOAD', '["$K1"]'),
     ],
 
 ];

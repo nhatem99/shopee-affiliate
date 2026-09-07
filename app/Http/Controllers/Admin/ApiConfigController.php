@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\ApiConfig;
 use App\Services\AccessTradeService;
 use App\Services\FacebookPageService;
+use App\Services\KieuShopeeService;
 use App\Services\ShopeeApiService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
@@ -43,9 +44,14 @@ class ApiConfigController extends Controller
             // chỉ bắt buộc khi tạo mới (chưa có bản ghi nào cho platform này).
             'app_secret' => ['nullable', 'string'],
             'is_active' => ['boolean'],
-            'platform' => ['required', 'in:shopee,lazada,tiktok,accesstrade,facebook'],
+            'platform' => ['required', 'in:shopee,lazada,tiktok,accesstrade,facebook,kieushopee'],
             'meta' => ['nullable', 'array'],
             'meta.target_post_id' => ['nullable', 'string', 'max:255'],
+            // Tham số gọi kieushopee — next_action đổi mỗi lần site nguồn deploy lại, nên phải
+            // sửa được từ trang admin thay vì phải sửa code rồi deploy. Xem KieuShopeeService.
+            'meta.next_action' => ['nullable', 'string', 'max:255'],
+            'meta.tool_id' => ['nullable', 'string', 'max:255'],
+            'meta.action_payload' => ['nullable', 'string', 'max:255'],
             'meta.comment_redirect_enabled' => ['nullable', 'boolean'],
             // Thời salesoc đây là DANH SÁCH chọn loại mã (meta.auto_source) vì một sản phẩm có
             // nhiều mã. kieushopee chỉ trả một link nên không còn gì để chọn — thành công tắc.
@@ -73,6 +79,14 @@ class ApiConfigController extends Controller
     public function test(ApiConfig $config): JsonResponse
     {
         try {
+            // kieushopee trả kèm lý do hỏng cụ thể (thường là next_action đã đổi) chứ không chỉ
+            // ok/không — đây là nguồn hay chết nhất nên thông báo phải chỉ thẳng việc cần làm.
+            if ($config->platform === KieuShopeeService::SOURCE) {
+                $result = app(KieuShopeeService::class)->testConnection();
+
+                return response()->json($result, $result['ok'] ? 200 : 422);
+            }
+
             $ok = match ($config->platform) {
                 'shopee' => app(ShopeeApiService::class)->testConnection($config),
                 'accesstrade' => app(AccessTradeService::class)->testConnection($config),

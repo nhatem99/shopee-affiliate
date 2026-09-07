@@ -2,7 +2,9 @@
 
 namespace Tests\Feature;
 
+use App\Models\ApiConfig;
 use App\Services\KieuShopeeService;
+use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\Client\Request;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Http;
@@ -15,6 +17,8 @@ use Tests\TestCase;
  */
 class KieuShopeeServiceTest extends TestCase
 {
+    use RefreshDatabase;
+
     private const ENDPOINT = 'https://sansale.kieushopee.com/22';
 
     private const SHOPEE_URL = 'https://shopee.vn/Ao-Hoodie-i.564687320.29261186260';
@@ -27,10 +31,28 @@ class KieuShopeeServiceTest extends TestCase
         // trong 1 process — không flush thì test sau đọc lại kết quả của test trước.
         Cache::flush();
 
+        // Migration tạo sẵn bản ghi kieushopee với giá trị production; xoá đi để phần lớn
+        // test chạy trên nhánh "chưa cấu hình ở admin" → rơi về config/services.php.
+        // Hai test cuối tự dựng lại bản ghi để kiểm tra nhánh đọc từ DB.
+        ApiConfig::where('platform', KieuShopeeService::SOURCE)->delete();
+
         config([
             'services.kieushopee.endpoint' => self::ENDPOINT,
             'services.kieushopee.next_action' => 'test-next-action',
             'services.kieushopee.tool_id' => 'test-tool-id',
+            'services.kieushopee.action_payload' => '["$K1"]',
+        ]);
+    }
+
+    private function storeAdminParams(array $meta, bool $isActive = true): void
+    {
+        ApiConfig::create([
+            'name' => 'KieuShopee',
+            'endpoint' => self::ENDPOINT,
+            'platform' => KieuShopeeService::SOURCE,
+            'app_secret' => '',
+            'is_active' => $isActive,
+            'meta' => $meta,
         ]);
     }
 
@@ -220,6 +242,53 @@ class KieuShopeeServiceTest extends TestCase
         $this->fetch();
 
         Http::assertSentCount(1);
+    }
+
+    /**
+     * Điểm chính của việc đưa tham số vào /admin/api-config: site nguồn deploy lại là
+     * next_action đổi, admin dán ID mới vào là chạy lại ngay, không cần sửa code + deploy.
+     */
+    public function test_admin_params_win_over_config_defaults(): void
+    {
+        Http::fake([self::ENDPOINT => Http::response($this->flightBody())]);
+        $this->storeAdminParams([
+            'next_action' => 'id-moi-dan-tu-admin',
+            'tool_id' => 'tool-moi',
+            'action_payload' => '["$K2"]',
+        ]);
+
+        $this->fetch();
+
+        Http::assertSent(function (Request $request) {
+            $body = $request->body();
+
+            return $request->hasHeader('Next-Action', 'id-moi-dan-tu-admin')
+                && str_contains($body, 'tool-moi')
+                && str_contains($body, '["$K2"]');
+        });
+    }
+
+    /** Ô để trống ở admin thì rơi về config, không gửi request rỗng. */
+    public function test_blank_admin_field_falls_back_to_config(): void
+    {
+        Http::fake([self::ENDPOINT => Http::response($this->flightBody())]);
+        $this->storeAdminParams(['next_action' => '', 'tool_id' => 'tool-moi']);
+
+        $this->fetch();
+
+        Http::assertSent(fn (Request $request) => $request->hasHeader('Next-Action', 'test-next-action')
+            && str_contains($request->body(), 'tool-moi'));
+    }
+
+    /** Tắt is_active = tạm ngưng dùng cấu hình admin, quay về giá trị trong code. */
+    public function test_inactive_admin_config_is_ignored(): void
+    {
+        Http::fake([self::ENDPOINT => Http::response($this->flightBody())]);
+        $this->storeAdminParams(['next_action' => 'id-moi-dan-tu-admin'], isActive: false);
+
+        $this->fetch();
+
+        Http::assertSent(fn (Request $request) => $request->hasHeader('Next-Action', 'test-next-action'));
     }
 
     public function test_bypasses_cache_when_asked(): void

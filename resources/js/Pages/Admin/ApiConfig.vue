@@ -31,6 +31,11 @@ function editConfig(config) {
             // auto_source là tên cũ thời salesoc (chọn 1 trong 4 loại mã). Giờ chỉ còn 1 link
             // nên nó là công tắc — đọc giá trị cũ để cấu hình đang chạy không mất tác dụng.
             auto_redirect_enabled: config.meta?.auto_redirect_enabled ?? !!config.meta?.auto_source,
+            // Tham số gọi kieushopee — next_action đổi mỗi lần site nguồn deploy lại.
+            next_action: config.meta?.next_action || '',
+            tool_id: config.meta?.tool_id || '',
+            action_payload: config.meta?.action_payload || '',
+            test_url: config.meta?.test_url || '',
         },
     })
 
@@ -105,8 +110,17 @@ async function testConfig(config) {
 
                 <div class="text-sm text-[var(--color-muted)] space-y-1">
                     <p><span class="font-medium text-[var(--color-ink)]">Endpoint:</span> {{ config.endpoint }}</p>
-                    <p><span class="font-medium text-[var(--color-ink)]">{{ config.platform === 'facebook' ? 'Page ID' : 'App ID' }}:</span> {{ config.app_id || '—' }}</p>
-                    <p><span class="font-medium text-[var(--color-ink)]">{{ config.platform === 'facebook' ? 'Page Access Token' : 'Secret' }}:</span> ••••••••</p>
+                    <template v-if="config.platform !== 'kieushopee'">
+                        <p><span class="font-medium text-[var(--color-ink)]">{{ config.platform === 'facebook' ? 'Page ID' : 'App ID' }}:</span> {{ config.app_id || '—' }}</p>
+                        <p><span class="font-medium text-[var(--color-ink)]">{{ config.platform === 'facebook' ? 'Page Access Token' : 'Secret' }}:</span> ••••••••</p>
+                    </template>
+
+                    <template v-if="config.platform === 'kieushopee'">
+                        <p class="font-mono text-xs break-all"><span class="font-sans font-medium text-[var(--color-ink)]">next-action:</span> {{ config.meta?.next_action || '—' }}</p>
+                        <p class="font-mono text-xs break-all"><span class="font-sans font-medium text-[var(--color-ink)]">1_toolId:</span> {{ config.meta?.tool_id || '—' }}</p>
+                        <p class="font-mono text-xs break-all"><span class="font-sans font-medium text-[var(--color-ink)]">field "0":</span> {{ config.meta?.action_payload || '—' }}</p>
+                    </template>
+
                     <template v-if="config.platform === 'facebook'">
                         <p><span class="font-medium text-[var(--color-ink)]">Target Post ID:</span> {{ config.meta?.target_post_id || '—' }}</p>
                         <p>
@@ -141,15 +155,58 @@ async function testConfig(config) {
                         <label class="block text-sm font-semibold text-[var(--color-ink)] mb-1">Endpoint URL</label>
                         <input v-model="editing.endpoint" type="url" class="w-full border border-[var(--color-line)] rounded-xl px-4 py-2.5 text-sm text-[var(--color-ink)] focus:outline-none focus:border-[var(--color-accent)] transition" />
                     </div>
-                    <div>
-                        <label class="block text-sm font-semibold text-[var(--color-ink)] mb-1">{{ editing.platform === 'facebook' ? 'Page ID' : 'App ID / Publisher ID' }}</label>
-                        <input v-model="editing.app_id" type="text" class="w-full border border-[var(--color-line)] rounded-xl px-4 py-2.5 text-sm text-[var(--color-ink)] focus:outline-none focus:border-[var(--color-accent)] transition" />
-                    </div>
-                    <div>
-                        <label class="block text-sm font-semibold text-[var(--color-ink)] mb-1">{{ editing.platform === 'facebook' ? 'Page Access Token' : 'App Secret / API Key' }}</label>
-                        <input v-model="editing.app_secret" type="text" placeholder="Nhập key mới (để trống = giữ nguyên)"
-                            class="w-full border border-[var(--color-line)] rounded-xl px-4 py-2.5 text-sm text-[var(--color-ink)] focus:outline-none focus:border-[var(--color-accent)] transition" />
-                    </div>
+                    <!-- kieushopee không dùng App ID/Secret — ẩn đi để khỏi tưởng phải điền. -->
+                    <template v-if="editing.platform !== 'kieushopee'">
+                        <div>
+                            <label class="block text-sm font-semibold text-[var(--color-ink)] mb-1">{{ editing.platform === 'facebook' ? 'Page ID' : 'App ID / Publisher ID' }}</label>
+                            <input v-model="editing.app_id" type="text" class="w-full border border-[var(--color-line)] rounded-xl px-4 py-2.5 text-sm text-[var(--color-ink)] focus:outline-none focus:border-[var(--color-accent)] transition" />
+                        </div>
+                        <div>
+                            <label class="block text-sm font-semibold text-[var(--color-ink)] mb-1">{{ editing.platform === 'facebook' ? 'Page Access Token' : 'App Secret / API Key' }}</label>
+                            <input v-model="editing.app_secret" type="text" placeholder="Nhập key mới (để trống = giữ nguyên)"
+                                class="w-full border border-[var(--color-line)] rounded-xl px-4 py-2.5 text-sm text-[var(--color-ink)] focus:outline-none focus:border-[var(--color-accent)] transition" />
+                        </div>
+                    </template>
+
+                    <template v-if="editing.platform === 'kieushopee'">
+                        <div class="rounded-xl bg-[var(--color-peach-soft)] border border-[var(--color-accent)]/25 px-3 py-2.5">
+                            <p class="text-xs text-[var(--color-accent-deep)] leading-relaxed">
+                                Site nguồn deploy lại là <b>next-action đổi</b> và tính năng lấy mã chết ngay.
+                                Lấy giá trị mới: mở tool trên sansale.kieushopee.com bằng trình duyệt máy tính →
+                                <b>F12 → tab Network</b> → bấm nút chuyển link → chọn request <span class="font-mono">POST</span> →
+                                copy header <span class="font-mono">next-action</span> và field <span class="font-mono">1_toolId</span> trong phần Payload.
+                                Lưu xong bấm <b>Kiểm tra kết nối</b> là biết ngay còn chạy không.
+                            </p>
+                        </div>
+
+                        <div>
+                            <label class="block text-sm font-semibold text-[var(--color-ink)] mb-1">Header <span class="font-mono">next-action</span></label>
+                            <input v-model="editing.meta.next_action" type="text" spellcheck="false"
+                                class="w-full border border-[var(--color-line)] rounded-xl px-4 py-2.5 text-sm font-mono text-[var(--color-ink)] focus:outline-none focus:border-[var(--color-accent)] transition" />
+                            <p class="text-xs text-[var(--color-muted)] mt-1">Thứ hay đổi nhất. Để trống = dùng giá trị mặc định trong code.</p>
+                        </div>
+
+                        <div>
+                            <label class="block text-sm font-semibold text-[var(--color-ink)] mb-1">Field <span class="font-mono">1_toolId</span></label>
+                            <input v-model="editing.meta.tool_id" type="text" spellcheck="false"
+                                class="w-full border border-[var(--color-line)] rounded-xl px-4 py-2.5 text-sm font-mono text-[var(--color-ink)] focus:outline-none focus:border-[var(--color-accent)] transition" />
+                            <p class="text-xs text-[var(--color-muted)] mt-1">ID của tool đang dùng trên site nguồn.</p>
+                        </div>
+
+                        <div>
+                            <label class="block text-sm font-semibold text-[var(--color-ink)] mb-1">Field <span class="font-mono">"0"</span></label>
+                            <input v-model="editing.meta.action_payload" type="text" spellcheck="false"
+                                class="w-full border border-[var(--color-line)] rounded-xl px-4 py-2.5 text-sm font-mono text-[var(--color-ink)] focus:outline-none focus:border-[var(--color-accent)] transition" />
+                            <p class="text-xs text-[var(--color-muted)] mt-1">Hiếm khi đổi. Chỉ đổi khi họ thêm/bớt tham số cho tool.</p>
+                        </div>
+
+                        <div>
+                            <label class="block text-sm font-semibold text-[var(--color-ink)] mb-1">Link Shopee để kiểm tra</label>
+                            <input v-model="editing.meta.test_url" type="url" spellcheck="false"
+                                class="w-full border border-[var(--color-line)] rounded-xl px-4 py-2.5 text-sm text-[var(--color-ink)] focus:outline-none focus:border-[var(--color-accent)] transition" />
+                            <p class="text-xs text-[var(--color-muted)] mt-1">Nút "Kiểm tra kết nối" gọi thử bằng link này. Đổi nếu sản phẩm cũ đã bị gỡ khỏi Shopee.</p>
+                        </div>
+                    </template>
                     <template v-if="editing.platform === 'facebook'">
                         <label class="flex items-center gap-2 text-sm font-semibold text-[var(--color-ink)] cursor-pointer">
                             <input v-model="editing.meta.comment_redirect_enabled" type="checkbox" class="w-4 h-4 accent-[var(--color-accent)]" />
