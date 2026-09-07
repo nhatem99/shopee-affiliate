@@ -11,9 +11,9 @@ on:
   workflow_dispatch:
     inputs:
       ref:
-        description: 'Nhánh muốn thử (vd: update-voucher)'
+        description: 'Nhánh muốn thử (vd: kieushopee-link)'
         required: true
-        default: update-voucher
+        default: kieushopee-link
       url:
         description: 'Link sản phẩm Shopee dùng để thử'
         required: true
