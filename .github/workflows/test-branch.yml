@@ -43,7 +43,10 @@ jobs:
             WT=/tmp/tietkiemvi-test
 
             cd "$APP"
-            git fetch --prune origin
+            # Refspec tường minh: repo deploy có thể được clone --single-branch (chỉ theo dõi
+            # main), khi đó `git fetch origin` không hề tạo ra origin/<nhánh-khác> và bước
+            # worktree bên dưới sẽ fail. Dạng này luôn tạo được ref, kể cả clone đầy đủ.
+            git fetch origin "+refs/heads/$TEST_REF:refs/remotes/origin/$TEST_REF"
 
             # Worktree dùng chung .git với production nhưng có thư mục làm việc riêng —
             # thư mục đang phục vụ khách không bị đổi một file nào.

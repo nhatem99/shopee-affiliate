@@ -36,7 +36,9 @@ jobs:
             cd /var/www/tietkiemvi.com
 
             echo "Deploying ref: $DEPLOY_REF"
-            git fetch --prune origin
+            # Refspec tường minh để deploy được cả nhánh không nằm trong refspec mặc định
+            # (repo deploy có thể là clone --single-branch chỉ theo dõi main).
+            git fetch origin "+refs/heads/$DEPLOY_REF:refs/remotes/origin/$DEPLOY_REF"
             git reset --hard "origin/$DEPLOY_REF"
 
             composer install --no-dev --optimize-autoloader --no-interaction
@@ -45,6 +47,7 @@ jobs:
             npm run build
 
             php8.4 artisan migrate --force
+            php8.4 artisan db:seed --class=ApiConfigSeeder --force
             php8.4 artisan optimize:clear
             php8.4 artisan optimize
 
