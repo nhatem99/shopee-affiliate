@@ -67,6 +67,10 @@ function resolveVoucher() {
     if (!voucherUrl.value.trim()) return
     resolving.value = true
     voucherError.value = null
+    // Xoá link đã lấy của lần quét trước: nút kết quả dùng chung key 'result', còn các dòng
+    // lịch sử đánh key theo chỉ số nên bị dịch đi khi có mục mới chèn lên đầu — không xoá là
+    // khách bấm phải comment của sản phẩm khác.
+    readyLinks.value = {}
 
     router.post('/voucher/resolve', { url: voucherUrl.value }, {
         preserveScroll: true,
@@ -108,9 +112,63 @@ const autoRedirecting = ref(false)
 
 // Nhãn nút phải nói đúng nơi nó dẫn tới. "Mua ngay" mà mở ra Facebook là khách tưởng lỗi.
 const ctaLabel = computed(() => {
-    if (shorteningKey.value === 'result') return 'Đang mở...'
-    return props.viaFacebookComment ? 'Mở Facebook để lấy mã' : 'Mua ngay (đã áp mã)'
+    if (shorteningKey.value === 'result') return props.viaFacebookComment ? 'Đang lấy mã...' : 'Đang mở...'
+    return props.viaFacebookComment ? 'Lấy mã qua Facebook' : 'Mua ngay (đã áp mã)'
 })
+
+// Link comment Facebook đã lấy xong, theo từng nút (key -> URL). Khi đã có, nút bấm được thay
+// bằng THẺ <a> THẬT — đây là điểm mấu chốt để mở được app Facebook:
+//  • iOS chỉ kích hoạt universal link khi khách CHẠM TRỰC TIẾP vào anchor. Điều hướng bằng JS
+//    (window.open rồi gán location.href) luôn bị Safari giữ lại trong trình duyệt.
+//  • Android cũng ưu tiên anchor thật, và anchor cho phép bọc intent:// (xem facebookAppLink).
+// Đổi lại khách phải chạm 2 nhịp: chạm để lấy mã → chạm để sang Facebook. Không gộp được vì
+// giữa hai nhịp có request đăng comment, xong request là mất "user gesture".
+const readyLinks = ref({})
+
+const ua = typeof navigator !== 'undefined' ? navigator.userAgent : ''
+const isAndroid = /Android/i.test(ua)
+// Đang ở trong webview của Facebook/Instagram/Zalo thì intent:// không mở được gì cả — giữ
+// nguyên URL https để webview tự xử lý.
+const isInAppBrowser = /FBAN|FBAV|FB_IAB|Instagram|Zalo|Line\//i.test(ua)
+
+// Đăng comment có thể thất bại (token lỗi, Facebook sập...) — khi đó server trả thẳng
+// /go/{code} về Shopee thay vì link comment. Nhãn nút phải đổi theo, nếu không khách bấm
+// "Mở Facebook ngay" mà lại ra Shopee thì tưởng hỏng.
+function isFacebookLink(url) {
+    return typeof url === 'string' && url.startsWith('https://www.facebook.com/')
+}
+
+/**
+ * Android: bọc URL Facebook thành intent:// trỏ thẳng vào package com.facebook.katana. Cần
+ * bước này vì Chrome chỉ tự mở app với App Link đã verify qua assetlinks.json, mà facebook.com
+ * không nằm trong nhóm đó — link https thường vì vậy luôn ở lại trình duyệt.
+ * browser_fallback_url giữ nguyên đường web cho máy chưa cài app.
+ *
+ * Khác hẳn vụ intent:// gây 502 trước đây (xem ShortLinkController::redirect): lần đó nó nằm ở
+ * Location header phía server nên bị proxy/CDN xử lý, còn ở đây nó chỉ là href trong trình
+ * duyệt của khách, không đi qua hạ tầng nào.
+ *
+ * iOS không có cơ chế tương đương — fb:// không trỏ được tới đúng comment (đã test, xem
+ * ShortLinkController::commentUrl) nên để nguyên https và trông cậy vào universal link.
+ */
+function facebookAppLink(url) {
+    if (!url || !isAndroid || isInAppBrowser) return url
+    if (!isFacebookLink(url)) return url
+
+    return `intent://${url.slice('https://'.length)}#Intent;scheme=https;package=com.facebook.katana;S.browser_fallback_url=${encodeURIComponent(url)};end`
+}
+
+// Đổi voucher_ref (token mờ) lấy short-link thật. Dùng chung cho mọi đường: bấm mở, tự chuyển
+// hướng, và copy link.
+async function fetchVoucherUrl(entry, productName = null, productImage = null) {
+    const { data } = await axios.post('/voucher/shorten', {
+        ref: entry.ref,
+        product_name: productName ?? props.voucherResult?.product?.product_name ?? null,
+        product_image: productImage ?? props.voucherResult?.product?.product_image ?? null,
+    })
+
+    return data.short_url
+}
 
 /**
  * Chế độ tự chuyển hướng: khách dán link xong là đi thẳng tới đích, không bấm nút nào nữa.
@@ -121,12 +179,18 @@ async function goStraightToVoucher() {
     autoRedirecting.value = true
 
     try {
-        const { data } = await axios.post('/voucher/shorten', {
-            ref: props.voucherResult.voucher_ref,
-            product_name: props.voucherResult?.product?.product_name ?? null,
-            product_image: props.voucherResult?.product?.product_image ?? null,
-        })
-        window.location.href = data.short_url
+        const url = await fetchVoucherUrl({ ref: props.voucherResult.voucher_ref })
+
+        // Chế độ Facebook: dừng ở đây và hiện anchor thay vì tự điều hướng — window.location
+        // sang facebook.com chỉ mở trình duyệt, không bật được app (xem readyLinks).
+        if (props.viaFacebookComment) {
+            readyLinks.value.result = url
+            autoRedirecting.value = false
+
+            return
+        }
+
+        window.location.href = url
     } catch (e) {
         autoRedirecting.value = false
         toast.error('Không thể tạo link, vui lòng thử lại.')
@@ -139,6 +203,21 @@ async function openVoucherLink(entry, productName = null, productImage = null) {
     if (!entry?.ref || shorteningKey.value) return
 
     shorteningKey.value = entry.key
+
+    // Chế độ Facebook: chỉ lấy link rồi hiện anchor, tuyệt đối không window.open/location.href
+    // — điều hướng bằng JS là lý do app Facebook không bao giờ được bật lên (xem readyLinks).
+    if (props.viaFacebookComment) {
+        try {
+            readyLinks.value[entry.key] = await fetchVoucherUrl(entry, productName, productImage)
+        } catch (e) {
+            toast.error('Không thể tạo link, vui lòng thử lại.')
+        } finally {
+            shorteningKey.value = null
+        }
+
+        return
+    }
+
     // Mở tab trắng NGAY trong lúc click (đồng bộ) để trình duyệt không chặn popup —
     // nếu đợi axios xong mới gọi window.open() thì đã mất "user gesture", dễ bị chặn.
     const newTab = window.open('', '_blank')
@@ -148,16 +227,12 @@ async function openVoucherLink(entry, productName = null, productImage = null) {
     newTab?.document.write('<!DOCTYPE html><html lang="vi"><head><meta charset="utf-8"><title>Đang tạo liên kết...</title><style>body{display:flex;align-items:center;justify-content:center;height:100vh;margin:0;font-family:system-ui,sans-serif;color:#666;background:#fafafa}</style></head><body>Đang tạo liên kết, vui lòng đợi giây lát...</body></html>')
 
     try {
-        const { data } = await axios.post('/voucher/shorten', {
-            ref: entry.ref,
-            product_name: productName ?? props.voucherResult?.product?.product_name ?? null,
-            product_image: productImage ?? props.voucherResult?.product?.product_image ?? null,
-        })
+        const url = await fetchVoucherUrl(entry, productName, productImage)
         if (newTab) {
-            newTab.location.href = data.short_url
+            newTab.location.href = url
         } else {
             // Popup bị chặn — điều hướng ngay tab hiện tại thay vì bỏ cuộc.
-            window.location.href = data.short_url
+            window.location.href = url
         }
     } catch (e) {
         newTab?.close()
@@ -176,12 +251,7 @@ async function copyVoucherLink(entry) {
 
     copyingKey.value = entry.key
     try {
-        const { data } = await axios.post('/voucher/shorten', {
-            ref: entry.ref,
-            product_name: props.voucherResult?.product?.product_name ?? null,
-            product_image: props.voucherResult?.product?.product_image ?? null,
-        })
-        await navigator.clipboard.writeText(data.short_url)
+        await navigator.clipboard.writeText(await fetchVoucherUrl(entry))
         toast.success('Đã sao chép link!')
     } catch (e) {
         toast.error('Không thể sao chép link, vui lòng thử lại.')
@@ -211,7 +281,7 @@ const filteredVouchers = computed(() => {
 
 const faqs = [
     { q: 'Công cụ này hoạt động như thế nào?', a: 'Bạn dán link sản phẩm Shopee vào ô ở đầu trang — hệ thống tự tìm mã giảm giá đang áp dụng cho sản phẩm đó và trả về một link đã gắn sẵn mã, không phải nhập mã thủ công.' },
-    { q: 'Vì sao bấm nút lại mở ra Facebook?', a: 'Vì đây là mã dành riêng cho người mua đến từ Facebook — Shopee chỉ áp mã khi bạn bấm vào link nằm trong bình luận trên Facebook. Nên quy trình là: bấm nút trên trang này → Facebook mở ra tại một bình luận → bấm tiếp link trong bình luận đó → về Shopee với mã đã được áp sẵn. Bỏ qua bước bình luận thì mã sẽ không có hiệu lực.' },
+    { q: 'Vì sao bấm nút lại mở ra Facebook?', a: 'Vì đây là mã dành riêng cho người mua đến từ Facebook — Shopee chỉ áp mã khi bạn bấm vào link nằm trong bình luận trên Facebook. Quy trình là: bấm "Lấy mã qua Facebook" → bấm tiếp "Mở Facebook ngay" (ứng dụng Facebook sẽ mở tại một bình luận) → bấm link trong bình luận đó → về Shopee với mã đã được áp sẵn. Bỏ qua bước bình luận thì mã sẽ không có hiệu lực.' },
     { q: 'Tôi có được hoàn tiền không?', a: 'Công cụ lấy mã giảm giá không tạo hoàn tiền — mục đích là giúp bạn được giảm giá ngay khi thanh toán trên Shopee.' },
     { q: 'Có mất phí không?', a: 'Hoàn toàn miễn phí, bạn không mất phí gì khi dùng công cụ lấy mã.' },
     { q: 'Hỗ trợ những sàn nào?', a: 'Ô dán link ở đầu trang hiện chỉ hỗ trợ Shopee. Riêng mục "Mã giảm giá gợi ý" bên dưới có thêm mã cho Lazada, TikTok Shop và Tiki.' },
@@ -300,7 +370,8 @@ const openFaq = ref(null)
                     <div v-else-if="viaFacebookComment && voucherResult.voucher_ref" class="mb-3 mt-3 rounded-xl border border-[#1877F2]/30 bg-[#1877F2]/5 px-4 py-3">
                         <p class="text-sm font-bold text-[var(--color-ink)] mb-2">Mã này nhận qua Facebook — làm 2 bước:</p>
                         <ol class="text-xs text-[var(--color-ink)] leading-relaxed space-y-1 list-decimal list-inside">
-                            <li>Bấm nút bên dưới → <b>Facebook sẽ mở ra</b> tại một bình luận.</li>
+                            <li v-if="!isFacebookLink(readyLinks.result)">Bấm nút bên dưới → hệ thống lấy mã và hiện nút <b>Mở Facebook ngay</b>.</li>
+                            <li v-else>Bấm <b>Mở Facebook ngay</b> → <b>Facebook sẽ mở ra</b> tại một bình luận.</li>
                             <li>Bấm tiếp vào <b>link trong bình luận đó</b> → về Shopee, mã đã áp sẵn.</li>
                         </ol>
                         <p class="text-xs text-[var(--color-muted)] mt-2">Phải đi qua bình luận thì mã mới có hiệu lực — đừng đóng Facebook giữa chừng nhé.</p>
@@ -308,7 +379,19 @@ const openFaq = ref(null)
 
                     <!-- Mã đã được áp sẵn trong link nên khách không phải chọn/nhập gì, chỉ bấm mở. -->
                     <div v-if="!autoRedirecting && voucherResult.voucher_ref" class="flex items-stretch gap-1.5 mb-4">
+                        <!-- Đã lấy được link comment: chuyển hẳn sang thẻ <a>. Cú chạm vào anchor
+                             thật là điều kiện bắt buộc để iOS bật app Facebook; không dùng
+                             target="_blank" vì tab mới cũng làm hỏng universal link. -->
+                        <a
+                            v-if="readyLinks.result"
+                            :href="facebookAppLink(readyLinks.result)"
+                            class="btn-fire flex-1 min-w-0 px-6 py-4 rounded-xl flex items-center justify-center gap-2 text-base animate-pulse-ring no-underline"
+                        >
+                            <span>{{ isFacebookLink(readyLinks.result) ? '👉' : '🛒' }}</span>
+                            <span class="truncate">{{ isFacebookLink(readyLinks.result) ? 'Mở Facebook ngay' : 'Mua ngay (đã áp mã)' }}</span>
+                        </a>
                         <button
+                            v-else
                             @click="openVoucherLink({ key: 'result', ref: voucherResult.voucher_ref })"
                             :disabled="shorteningKey === 'result'"
                             class="btn-fire flex-1 min-w-0 px-6 py-4 rounded-xl flex items-center justify-center gap-2 text-base animate-pulse-ring disabled:opacity-60"
@@ -356,14 +439,22 @@ const openFaq = ref(null)
                             </div>
                             <!-- Mục cũ (trước khi chuyển sang một mã duy nhất) không có h.ref nên
                                  không hiện nút — chúng tự trôi khỏi danh sách sau 5 lần quét mới. -->
+                            <a
+                                v-if="h.ref && readyLinks[`hist-${hi}`]"
+                                :href="facebookAppLink(readyLinks[`hist-${hi}`])"
+                                class="btn-fire px-4 py-2 rounded-lg text-xs inline-flex items-center gap-1.5 no-underline"
+                            >
+                                <span>{{ isFacebookLink(readyLinks[`hist-${hi}`]) ? '👉' : '🛒' }}</span>
+                                {{ isFacebookLink(readyLinks[`hist-${hi}`]) ? 'Mở Facebook ngay' : 'Mua ngay' }}
+                            </a>
                             <button
-                                v-if="h.ref"
+                                v-else-if="h.ref"
                                 @click="openVoucherLink({ key: `hist-${hi}`, ref: h.ref }, h.product_name, h.product_image)"
                                 :disabled="shorteningKey === `hist-${hi}`"
                                 class="btn-fire px-4 py-2 rounded-lg text-xs flex items-center gap-1.5 disabled:opacity-60"
                             >
                                 <span>{{ viaFacebookComment ? '👉' : '🛒' }}</span>
-                                {{ shorteningKey === `hist-${hi}` ? 'Đang mở...' : (viaFacebookComment ? 'Mở Facebook để lấy mã' : 'Mua ngay') }}
+                                {{ shorteningKey === `hist-${hi}` ? (viaFacebookComment ? 'Đang lấy mã...' : 'Đang mở...') : (viaFacebookComment ? 'Lấy mã qua Facebook' : 'Mua ngay') }}
                             </button>
                         </div>
                     </div>

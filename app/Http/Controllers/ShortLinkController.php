@@ -204,14 +204,20 @@ class ShortLinkController extends Controller
     }
 
     /**
-     * Ghép URL story.php trỏ tới đúng comment, thay cho permalink_url dạng
-     * /{actor_id}/posts/{post_id} mà Graph API trả về.
+     * Ghép URL canonical /{page_id}/posts/{story_fbid}?comment_id=... trỏ tới đúng comment,
+     * thay cho permalink_url dạng /{actor_id}/posts/{post_id} mà Graph API trả về.
      *
      * Đã test trên máy thật: mọi biến thể scheme fb:// (permalink.php, story, facewebmodal)
      * đều KHÔNG mở đúng comment — app Facebook chỉ mở ra trang chủ hoặc báo nội dung không
-     * hiển thị. Riêng URL web thường thì chạy đúng, nên bỏ hẳn hướng custom scheme (cũng không
-     * còn cần phân biệt mobile/desktop nữa). Dùng story.php vì nó ghép từ đúng Page ID trong
-     * cấu hình, không phụ thuộc actor_id lạ mà permalink_url hay trả về.
+     * hiển thị. Riêng URL web thường thì chạy đúng, nên bỏ hẳn hướng custom scheme.
+     *
+     * Dùng dạng /posts/ chứ không phải story.php: đây là dạng canonical mà Facebook khai báo
+     * trong universal link (iOS) / app link (Android), nên điện thoại mới có cơ hội bật thẳng
+     * app Facebook lên. story.php là dạng cũ, gần như luôn bị mở bằng trình duyệt. Cả hai đều
+     * ghép từ Page ID trong cấu hình nên không phụ thuộc actor_id lạ của permalink_url.
+     *
+     * Lưu ý: chỉ URL thôi là chưa đủ để mở được app — phía client khách phải CHẠM VÀO THẺ <a>
+     * thật thì iOS mới chịu kích hoạt universal link (xem openVoucherLink trong Home.vue).
      *
      * Nếu thiếu dữ liệu để ghép thì rơi về permalink_url gốc của Graph API.
      */
@@ -224,9 +230,7 @@ class ShortLinkController extends Controller
             return $posted['permalink_url'];
         }
 
-        return 'https://www.facebook.com/story.php?'.http_build_query([
-            'story_fbid' => $storyFbid,
-            'id' => $pageId,
+        return "https://www.facebook.com/{$pageId}/posts/{$storyFbid}?".http_build_query([
             'comment_id' => $commentId,
         ]);
     }
