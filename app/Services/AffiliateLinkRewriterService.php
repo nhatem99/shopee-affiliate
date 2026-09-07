@@ -108,15 +108,25 @@ class AffiliateLinkRewriterService
             $query['utm_source'] = $mmpPid;
         }
 
-        // KHÔNG gắn tên website vào URL. Trước đây chỗ này đặt utm_content = 'tietkiemvi',
-        // nghĩa là mọi đơn hàng đều tự khai với Shopee rằng traffic đến từ tietkiemvi.com —
-        // trong khi cả thiết kế (bọc qua comment Facebook) là để lượt click được tính là
-        // traffic từ Facebook. Xoá hẳn tham số thay vì để nguyên giá trị của nguồn cấp mã,
-        // vì giá trị đó cũng là một định danh không phải của mình.
+        // Nhãn nhận diện traffic của mình, lấy từ config chứ KHÔNG hard-code tên website.
+        // Trước đây chỗ này đặt cứng 'tietkiemvi', tức mọi đơn hàng đều tự khai với Shopee
+        // rằng traffic đến từ tietkiemvi.com — vừa lộ website, vừa nói ngược lại chính thiết
+        // kế bọc qua comment Facebook (vốn để lượt click được tính là traffic từ Facebook).
+        //
+        // Chỉ thay khi link gốc đã có sẵn utm_content — không tự thêm tham số mới vào URL,
+        // để không mở rộng thêm bề mặt thông tin gửi đi. Config để rỗng thì xoá hẳn tham số.
         //
         // An toàn: utm_* là tham số tracking độc lập, không nằm trong encrypted_payload /
-        // credential_token đã ký — bỏ đi không ảnh hưởng việc áp mã giảm giá.
-        unset($query['utm_content']);
+        // credential_token đã ký — đổi hay bỏ đều không ảnh hưởng việc áp mã giảm giá.
+        if (isset($query['utm_content'])) {
+            $utmContent = (string) config('services.shopee_affiliate.utm_content');
+
+            if ($utmContent === '') {
+                unset($query['utm_content']);
+            } else {
+                $query['utm_content'] = $utmContent;
+            }
+        }
 
         $base = ($parts['scheme'] ?? 'https').'://'.($parts['host'] ?? '').($parts['path'] ?? '');
 

@@ -47,7 +47,40 @@ class AffiliateLinkRewriterTest extends TestCase
         $result = $this->rewrite('https://shopee.vn/product-i.1.2?mmp_pid=x&utm_content=kieushopee&utm_source=x');
 
         $this->assertStringNotContainsString('tietkiemvi', $result);
-        // Xoá hẳn thay vì giữ giá trị của nguồn cấp mã — đó cũng là định danh không phải của mình.
+        // Giá trị của nguồn cấp mã cũng không được giữ lại — đó là định danh không phải của mình.
+        $this->assertStringNotContainsString('kieushopee', $result);
+        $this->assertStringContainsString('utm_content=fb', $result);
+    }
+
+    /** Đổi nhãn chỉ bằng config, không phải sửa code. */
+    public function test_utm_content_label_comes_from_config(): void
+    {
+        Http::fake();
+        config(['services.shopee_affiliate.utm_content' => 'ch7']);
+
+        $result = $this->rewrite('https://shopee.vn/product-i.1.2?mmp_pid=x&utm_content=kieushopee');
+
+        $this->assertStringContainsString('utm_content=ch7', $result);
+    }
+
+    /** Config để rỗng = xoá hẳn tham số, không gửi nhãn nào cho Shopee. */
+    public function test_empty_config_removes_the_label_entirely(): void
+    {
+        Http::fake();
+        config(['services.shopee_affiliate.utm_content' => '']);
+
+        $result = $this->rewrite('https://shopee.vn/product-i.1.2?mmp_pid=x&utm_content=kieushopee');
+
+        $this->assertStringNotContainsString('utm_content', $result);
+    }
+
+    /** Không tự thêm utm_content vào link vốn không có — tránh mở rộng thông tin gửi đi. */
+    public function test_does_not_add_the_label_to_links_that_had_none(): void
+    {
+        Http::fake();
+
+        $result = $this->rewrite('https://shopee.vn/product-i.1.2?mmp_pid=x');
+
         $this->assertStringNotContainsString('utm_content', $result);
     }
 
@@ -87,6 +120,7 @@ class AffiliateLinkRewriterTest extends TestCase
 
         $this->assertStringStartsWith('https://shopee.vn/product-i.1.2?', $result);
         $this->assertStringContainsString('mmp_pid='.self::MY_PID, $result);
-        $this->assertStringNotContainsString('utm_content', $result);
+        // Nhãn của nguồn cấp mã bị thay bằng nhãn trong config, không đi tiếp tới Shopee.
+        $this->assertStringNotContainsString('kieushopee', $result);
     }
 }

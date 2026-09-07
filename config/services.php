@@ -52,6 +52,15 @@ return [
     'shopee_affiliate' => [
         // mmp_pid dùng để gắn hoa hồng đơn hàng về tài khoản affiliate Shopee của mình.
         'mmp_pid' => env('SHOPEE_MMP_PID', 'an_17332410386'),
+
+        // Nhãn utm_content gắn vào URL cuối gửi tới Shopee, để nhận ra traffic của mình trong
+        // báo cáo affiliate. Giá trị này Shopee ĐỌC ĐƯỢC và khách cũng thấy trên thanh địa chỉ,
+        // nên TUYỆT ĐỐI không đặt tên miền/tên thương hiệu của website vào đây — trước đây chỗ
+        // này để 'tietkiemvi', tức tự khai website nguồn cho Shopee.
+        //
+        // Đổi thoải mái, chỉ cần không suy ra được tên miền. Để chuỗi rỗng thì tham số bị xoá
+        // hẳn khỏi URL (kín nhất, nhưng mất luôn khả năng tự nhận diện traffic của mình).
+        'utm_content' => env('SHOPEE_UTM_CONTENT', 'fb'),
     ],
 
     // Nguồn lấy link đã áp mã giảm giá — thay cho salesoc.vn (đã bỏ hẳn).
