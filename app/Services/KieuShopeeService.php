@@ -159,10 +159,17 @@ class KieuShopeeService
     }
 
     /**
-     * `productInfo` là dữ liệu sản phẩm bên nguồn kèm theo để khỏi phải gọi Shopee lần nữa,
-     * nhưng shape của nó do họ quyết và có thể đổi bất kỳ lúc nào. Nên nhận diện rộng tay
-     * (cả shape thô của Shopee lẫn shape đã chuẩn hoá) và trả null nếu không chắc — khi đó
-     * ShopeeVoucherController tự rơi về ShopeeLinkResolverService::fetchProductInfo().
+     * `productInfo` là dữ liệu sản phẩm bên nguồn kèm theo để khỏi phải gọi Shopee lần nữa.
+     *
+     * Shape THẬT đo được từ server production ngày 2026-09-07 (giá là VND thật, ảnh là URL
+     * đầy đủ, key camelCase):
+     *   {"itemId":"...","shopId":"...","name":"Áo Hoodie ...","currency":"VND",
+     *    "image":"https://down-vn.img.susercontent.com/file/vn-...",
+     *    "price":78000,"priceBeforeDiscount":200000,"priceMin":78000,"priceMax":78000}
+     *
+     * Vẫn nhận diện rộng tay (kể cả shape thô của Shopee: snake_case + giá micro + hash ảnh)
+     * vì shape do họ quyết và có thể đổi; không chắc thì trả null để ShopeeVoucherController
+     * tự rơi về ShopeeLinkResolverService::fetchProductInfo().
      *
      * Kết quả giữ ĐÚNG shape của ShopeeLinkResolverService::fetchProductInfo() để hai bên
      * dùng thay thế được cho nhau ở phía controller/frontend.
@@ -177,7 +184,8 @@ class KieuShopeeService
 
         // API item của Shopee trả giá ở đơn vị "micro" (×100.000). Nhận diện bằng KEY đặc
         // trưng của shape đó chứ không bằng độ lớn con số — 100.000.000 vừa có thể là 1.000₫
-        // dạng micro, vừa có thể là một sản phẩm giá 100 triệu thật.
+        // dạng micro, vừa có thể là một sản phẩm giá 100 triệu thật. Shape thật của kieushopee
+        // dùng camelCase nên không rơi vào nhánh này (đúng: 78000 là 78.000₫).
         $isMicro = array_key_exists('itemid', $info) || array_key_exists('price_before_discount', $info);
 
         $current = $this->firstPrice($info, ['price', 'priceMin', 'price_min', 'discountedPrice', 'discounted_price'], $isMicro);
@@ -188,10 +196,27 @@ class KieuShopeeService
             'product_image' => $this->imageUrl($info),
             'original_price' => $original ?? $current,
             'discounted_price' => $current,
-            'discount_percent' => (int) ($info['raw_discount'] ?? $info['discount'] ?? 0),
+            'discount_percent' => $this->discountPercent($info, $original, $current),
             'sold_count' => (int) ($info['sold'] ?? $info['historical_sold'] ?? $info['sold_count'] ?? 0),
             'rating' => (float) ($info['item_rating']['rating_star'] ?? $info['rating'] ?? 0),
         ];
+    }
+
+    /**
+     * kieushopee không trả sẵn % giảm (khác Shopee có `raw_discount`), nhưng trả cả giá gốc
+     * lẫn giá sau giảm nên tự tính được — thiếu nó thì mọi sản phẩm đều hiện "giảm 0%".
+     */
+    private function discountPercent(array $info, ?float $original, ?float $current): int
+    {
+        if (isset($info['raw_discount']) || isset($info['discount'])) {
+            return (int) ($info['raw_discount'] ?? $info['discount']);
+        }
+
+        if (! $original || ! $current || $original <= $current) {
+            return 0;
+        }
+
+        return (int) round(($original - $current) / $original * 100);
     }
 
     private function firstString(array $info, array $keys): ?string

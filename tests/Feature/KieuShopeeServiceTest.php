@@ -35,16 +35,77 @@ class KieuShopeeServiceTest extends TestCase
     }
 
     /**
-     * Response thật rút gọn: dòng "0:" là khung của React, dữ liệu nằm ở dòng "1:".
-     * productInfo ở đây dùng shape THÔ của Shopee (snake_case + giá micro + hash ảnh).
+     * Payload THẬT, chép nguyên từ một lần gọi trên server production ngày 2026-09-07
+     * (workflow "Probe voucher source from VPS"). Giữ đúng từng key/kiểu dữ liệu của họ —
+     * đây là hợp đồng duy nhất mình có với nguồn này, đoán sai là hỏng trên production.
      */
     private function flightBody(array $overrides = []): string
     {
         $payload = array_replace([
             'success' => true,
             'results' => [
-                ['link' => 'https://shope.ee/abc123', 'shopId' => '564687320', 'itemId' => '29261186260'],
+                [
+                    'groupName' => '',
+                    'link' => 'https://s.afp.ad/neY9ZSQImwTHq9zSrnyT2g',
+                    'shortUrl' => null,
+                    'affiliateId' => '17354810621',
+                    'shopId' => '564687320',
+                    'itemId' => '29261186260',
+                ],
             ],
+            'cached' => false,
+            'productInfo' => [
+                'itemId' => '29261186260',
+                'shopId' => '564687320',
+                'name' => 'Áo Hoodie Zip Feeling Cinder, Áo Khoác Nam Nữ Form Rộng Local Brand Chính Hãng',
+                'image' => 'https://down-vn.img.susercontent.com/file/vn-11134207-7r98o-m04gtmha7b3h23',
+                'currency' => 'VND',
+                'price' => 78000,
+                'priceBeforeDiscount' => 200000,
+                'priceMin' => 78000,
+                'priceMax' => 78000,
+                'priceMinBeforeDiscount' => 200000,
+                'priceMaxBeforeDiscount' => 200000,
+            ],
+        ], $overrides);
+
+        return '0:{"a":"$@1","f":"","q":"","i":false,"b":"yHOPvt6E6MFlOJ8qN5jHn"}'."\n"
+            .'1:'.json_encode($payload, JSON_UNESCAPED_UNICODE)."\n";
+    }
+
+    private function fetch(): ?array
+    {
+        return app(KieuShopeeService::class)->fetchProductAndVoucherLink(self::SHOPEE_URL);
+    }
+
+    public function test_parses_real_production_response(): void
+    {
+        Http::fake([self::ENDPOINT => Http::response($this->flightBody())]);
+
+        $result = $this->fetch();
+
+        // s.afp.ad phải nằm trong UrlValidationService::$allowedRedirectDomains và
+        // AffiliateLinkRewriterService::HOPS_TO_FOLLOW, nếu không khách bấm mua sẽ ăn 422.
+        $this->assertSame('https://s.afp.ad/neY9ZSQImwTHq9zSrnyT2g', $result['voucher_link']);
+        $this->assertSame('564687320', $result['shop_id']);
+        $this->assertSame('29261186260', $result['item_id']);
+        $this->assertStringStartsWith('Áo Hoodie Zip Feeling Cinder', $result['product']['product_name']);
+        // Ảnh đã là URL đầy đủ — KHÔNG được ghép thêm tiền tố CDN vào.
+        $this->assertSame(
+            'https://down-vn.img.susercontent.com/file/vn-11134207-7r98o-m04gtmha7b3h23',
+            $result['product']['product_image'],
+        );
+        // 78000 là 78.000₫ thật, không phải đơn vị micro của Shopee — không được chia 100.000.
+        $this->assertSame(78000.0, $result['product']['discounted_price']);
+        $this->assertSame(200000.0, $result['product']['original_price']);
+        // Họ không trả % giảm, phải tự tính từ 200.000 → 78.000.
+        $this->assertSame(61, $result['product']['discount_percent']);
+    }
+
+    /** Shape thô của Shopee (snake_case + giá micro + hash ảnh) vẫn phải đọc được. */
+    public function test_parses_raw_shopee_product_shape(): void
+    {
+        Http::fake([self::ENDPOINT => Http::response($this->flightBody([
             'productInfo' => [
                 'itemid' => 29261186260,
                 'name' => 'Áo Hoodie Nỉ Bông',
@@ -55,34 +116,19 @@ class KieuShopeeServiceTest extends TestCase
                 'sold' => 1200,
                 'item_rating' => ['rating_star' => 4.75],
             ],
-        ], $overrides);
+        ]))]);
 
-        return '0:{"a":"$@1","f":"","b":"build"}'."\n".'1:'.json_encode($payload, JSON_UNESCAPED_UNICODE)."\n";
-    }
+        $product = $this->fetch()['product'];
 
-    private function fetch(): ?array
-    {
-        return app(KieuShopeeService::class)->fetchProductAndVoucherLink(self::SHOPEE_URL);
-    }
-
-    public function test_parses_link_ids_and_product_from_flight_stream(): void
-    {
-        Http::fake([self::ENDPOINT => Http::response($this->flightBody())]);
-
-        $result = $this->fetch();
-
-        $this->assertSame('https://shope.ee/abc123', $result['voucher_link']);
-        $this->assertSame('564687320', $result['shop_id']);
-        $this->assertSame('29261186260', $result['item_id']);
-        $this->assertSame('Áo Hoodie Nỉ Bông', $result['product']['product_name']);
         // Hash ảnh phải được ghép thành URL CDN mới hiển thị được ở frontend.
-        $this->assertSame('https://cf.shopee.vn/file/vn-11134207-7r98o-abcdef', $result['product']['product_image']);
-        // Giá micro của Shopee (×100.000) phải quy về VND, nếu không sẽ hiện ₫15.900.000.000.
-        $this->assertSame(159000.0, $result['product']['discounted_price']);
-        $this->assertSame(250000.0, $result['product']['original_price']);
-        $this->assertSame(36, $result['product']['discount_percent']);
-        $this->assertSame(1200, $result['product']['sold_count']);
-        $this->assertSame(4.75, $result['product']['rating']);
+        $this->assertSame('https://cf.shopee.vn/file/vn-11134207-7r98o-abcdef', $product['product_image']);
+        // Giá micro (×100.000) phải quy về VND, nếu không sẽ hiện ₫15.900.000.000.
+        $this->assertSame(159000.0, $product['discounted_price']);
+        $this->assertSame(250000.0, $product['original_price']);
+        // Có raw_discount thì dùng số của Shopee, không tự tính lại.
+        $this->assertSame(36, $product['discount_percent']);
+        $this->assertSame(1200, $product['sold_count']);
+        $this->assertSame(4.75, $product['rating']);
     }
 
     public function test_sends_server_action_headers_and_multipart_fields(): void
@@ -132,7 +178,7 @@ class KieuShopeeServiceTest extends TestCase
 
         $result = $this->fetch();
 
-        $this->assertSame('https://shope.ee/abc123', $result['voucher_link']);
+        $this->assertSame('https://s.afp.ad/neY9ZSQImwTHq9zSrnyT2g', $result['voucher_link']);
         $this->assertNull($result['product']);
     }
 
