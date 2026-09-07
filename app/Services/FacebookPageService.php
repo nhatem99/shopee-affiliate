@@ -4,6 +4,7 @@ namespace App\Services;
 
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Str;
 
 /**
  * Đăng comment lên bài viết có sẵn trên fanpage Facebook qua Graph API, dùng Page Access
@@ -36,8 +37,8 @@ class FacebookPageService
     /**
      * Đăng comment rồi trả về ['permalink_url' => ..., 'comment_id' => ...] (null nếu thất bại).
      * comment_id trả về là phần số riêng của comment (không kèm tiền tố post_id) — dùng để
-     * ghép URL dạng story.php/fb://story ở ShortLinkController, chính xác hơn permalink_url
-     * dạng /{actor_id}/posts/{post_id} với app Facebook trên 1 số thiết bị.
+     * ghép URL ?comment_id=... ở ShortLinkController, chính xác hơn permalink_url dạng
+     * /{actor_id}/posts/{post_id} với app Facebook trên 1 số thiết bị.
      *
      * Xin luôn `permalink_url` ngay trong response của lệnh POST (Graph API hỗ trợ `fields`
      * trên các endpoint tạo object) để tránh phải gọi thêm 1 request GET riêng — bước GET
@@ -69,8 +70,13 @@ class FacebookPageService
                 return null;
             }
 
+            // Graph trả id comment dạng {page_id}_{story_fbid}_{comment_id}, nên phần số riêng
+            // của comment là đoạn CUỐI. Trước đây cắt bằng explode('_', $id, 2)[1] nên còn dính
+            // tiền tố story ("333444_999") — Facebook không nhận giá trị đó, mở link ra chỉ tới
+            // bài viết chứ không nhảy xuống đúng bình luận. Lấy đoạn cuối cũng đúng luôn với
+            // dạng 2 phần {post_id}_{comment_id}.
             $fullCommentId = $response->json('id');
-            $commentId = $fullCommentId ? (explode('_', $fullCommentId, 2)[1] ?? $fullCommentId) : null;
+            $commentId = $fullCommentId ? Str::afterLast($fullCommentId, '_') : null;
 
             $permalink = $response->json('permalink_url')
                 ?? $this->fetchPermalink($fullCommentId)

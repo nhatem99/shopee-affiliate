@@ -101,17 +101,16 @@ class VoucherShortenTest extends TestCase
 
         $shortUrl = $this->shorten()->assertOk()->json('short_url');
 
-        // story.php ghép từ Page ID trong cấu hình + comment id, không dùng permalink_url gốc.
-        $this->assertStringContainsString('https://www.facebook.com/story.php?', $shortUrl);
-        $this->assertStringContainsString('story_fbid=333444', $shortUrl);
-        $this->assertStringContainsString('id=111222', $shortUrl);
+        // URL canonical /{page_id}/posts/{story_fbid} ghép từ Page ID trong cấu hình, không
+        // dùng permalink_url gốc. Dạng /posts/ (thay cho story.php cũ) là dạng Facebook khai
+        // báo trong universal link/app link nên điện thoại mới có cơ hội mở thẳng app.
+        $this->assertStringContainsString('https://www.facebook.com/111222/posts/333444?', $shortUrl);
 
-        // Graph API trả comment id đầy đủ dạng {page}_{story}_{comment} = 111222_333444_999.
-        // FacebookPageService cắt bằng explode('_', $id, 2)[1] nên còn "333444_999" — tức là
-        // VẪN CÒN tiền tố story, trái với docblock của chính nó ("phần số riêng của comment").
-        // Đây là hành vi có sẵn từ main, merge này không đụng tới; test khoá nguyên trạng để
-        // nếu ai sửa thì thấy ngay, chứ không khẳng định giá trị này là đúng với Facebook.
-        $this->assertStringContainsString('comment_id=333444_999', $shortUrl);
+        // Graph API trả comment id đầy đủ dạng {page}_{story}_{comment} = 111222_333444_999;
+        // phần số riêng của comment là ĐOẠN CUỐI. Ghép sai (còn tiền tố story) thì Facebook
+        // bỏ qua param, link chỉ mở tới bài viết chứ không nhảy xuống đúng bình luận.
+        $this->assertStringContainsString('comment_id=999', $shortUrl);
+        $this->assertStringNotContainsString('comment_id=333444', $shortUrl);
     }
 
     /** Cùng sản phẩm bấm nhiều lần trong 20 phút chỉ được đăng đúng 1 comment (chống spam). */
