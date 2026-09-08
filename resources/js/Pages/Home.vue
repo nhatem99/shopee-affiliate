@@ -1,11 +1,12 @@
 ﻿<script setup>
-import { ref, computed, nextTick } from 'vue'
+import { ref, computed, nextTick, onMounted, onUnmounted } from 'vue'
 import { Head } from '@inertiajs/vue3'
 import { router } from '@inertiajs/vue3'
 import axios from 'axios'
 import { useLocalStorage } from '@vueuse/core'
 import AppLayout from '@/Layouts/AppLayout.vue'
 import CouponTicket from '@/Components/CouponTicket.vue'
+import RestockSchedule from '@/Components/RestockSchedule.vue'
 import { useToast } from '@/composables/useToast'
 
 const props = defineProps({
@@ -290,11 +291,43 @@ const filteredVouchers = computed(() => {
 const faqs = [
     { q: 'Công cụ này hoạt động như thế nào?', a: 'Bạn dán link sản phẩm Shopee vào ô ở đầu trang — hệ thống tự tìm mã giảm giá đang áp dụng cho sản phẩm đó và trả về một link đã gắn sẵn mã, không phải nhập mã thủ công.' },
     { q: 'Vì sao bấm nút lại mở ra Facebook?', a: 'Vì đây là mã dành riêng cho người mua đến từ Facebook — Shopee chỉ áp mã khi bạn bấm vào link nằm trên Facebook. Quy trình là: bấm "Lấy mã qua Facebook" → bấm tiếp "Mở Facebook ngay" (ứng dụng Facebook sẽ mở ra) → bấm link hiện ở đó → về Shopee với mã đã được áp sẵn. Bỏ qua bước này thì mã sẽ không có hiệu lực.' },
+    { q: 'Mấy giờ thì có mã mới (back mã)?', a: 'Mã YouTube được nạp lại lượt vào 0h, 9h, 12h và 18h. Mã IG – FB nạp lại vào 0h, 9h, 15h và 20h (giờ Việt Nam). Mã có số lượng giới hạn nên thường hết rất nhanh — nếu Shopee báo hết lượt, bạn quay lại đúng khung giờ trên để lấy mã mới.' },
     { q: 'Tôi có được hoàn tiền không?', a: 'Công cụ lấy mã giảm giá không tạo hoàn tiền — mục đích là giúp bạn được giảm giá ngay khi thanh toán trên Shopee.' },
     { q: 'Có mất phí không?', a: 'Hoàn toàn miễn phí, bạn không mất phí gì khi dùng công cụ lấy mã.' },
     { q: 'Hỗ trợ những sàn nào?', a: 'Ô dán link ở đầu trang hiện chỉ hỗ trợ Shopee. Riêng mục "Mã giảm giá gợi ý" bên dưới có thêm mã cho Lazada, TikTok Shop và Tiki.' },
 ]
 const openFaq = ref(null)
+
+// Khung dán link dính lên đầu trang khi cuộn (sticky) để khách lúc nào cũng dán được link.
+// Lúc đã dính thì thu gọn tiêu đề lại, nếu không khung chiếm gần hết màn hình điện thoại.
+// Đo bằng vị trí thật của khung chứ không bằng scrollY: phía trên nó còn banner khung giờ
+// back mã, lấy mốc scrollY cố định sẽ thu gọn sớm và làm nội dung giật một nhịp.
+const HEADER_HEIGHT = 64 // AppLayout: header sticky h-16
+const stickyEl = ref(null)
+const stuck = ref(false)
+let scrollTicking = false
+
+function measureStuck() {
+    scrollTicking = false
+    const top = stickyEl.value?.getBoundingClientRect().top
+    stuck.value = top !== undefined && top <= HEADER_HEIGHT + 0.5
+}
+
+function onScroll() {
+    if (scrollTicking) return
+    scrollTicking = true
+    requestAnimationFrame(measureStuck)
+}
+
+onMounted(() => {
+    window.addEventListener('scroll', onScroll, { passive: true })
+    window.addEventListener('resize', onScroll, { passive: true })
+    measureStuck()
+})
+onUnmounted(() => {
+    window.removeEventListener('scroll', onScroll)
+    window.removeEventListener('resize', onScroll)
+})
 </script>
 
 <template>
@@ -306,54 +339,72 @@ const openFaq = ref(null)
         <!-- Công cụ chính: hiện ngay khi vào trang, không cần mô tả dài trước đó -->
         <section id="voucher-tool" class="px-4 pt-6 pb-4">
             <div class="max-w-3xl mx-auto">
-                <div v-if="canUseVoucherTool" class="rounded-3xl p-6 md:p-8 bg-gradient-to-br from-[var(--color-peach)] via-[var(--color-peach-soft)] to-[var(--color-green-soft)] border border-[var(--color-line)]">
-                    <h1 class="text-xl md:text-2xl font-extrabold text-[var(--color-ink)] mb-1">
-                        Dán link sản phẩm Shopee để lấy mã giảm giá
-                    </h1>
-                    <p class="text-sm text-[var(--color-muted)] mb-4">Nhận ngay link đã áp sẵn mã giảm giá — không cần nhập mã, miễn phí.</p>
+                <!-- Khung giờ back mã: đặt trên cùng để khách vừa vào trang là biết ngay
+                     lúc nào nguồn cấp mã nạp lại lượt, trước cả ô dán link. -->
+                <RestockSchedule class="mb-4" />
 
-                    <div class="flex flex-col md:flex-row gap-3">
-                        <div class="relative flex-1">
-                            <span class="absolute left-4 top-1/2 -translate-y-1/2 text-[var(--color-muted)]">🔗</span>
-                            <input
-                                ref="voucherUrlInput"
-                                v-model="voucherUrl"
-                                type="url"
-                                @keydown.enter="resolveVoucher"
-                                @paste="onVoucherUrlPaste"
-                                placeholder="Dán link Shopee (shopee.vn hoặc s.shopee.vn)..."
-                                class="w-full pl-10 pr-20 py-4 border border-[var(--color-line)] rounded-xl text-sm bg-[var(--color-surface)] focus:outline-none focus:border-[var(--color-accent)] focus:ring-2 focus:ring-[var(--color-peach)] transition"
-                            />
-                            <button
-                                @click="pasteVoucherUrl"
-                                type="button"
-                                class="absolute right-1.5 top-1/2 -translate-y-1/2 text-xs font-bold text-[var(--color-accent)] bg-[var(--color-peach-soft)] hover:bg-[var(--color-peach)] border border-[var(--color-accent)]/30 rounded-lg px-3 py-1.5 transition"
-                            >Dán</button>
+                <!-- top-16 = chiều cao header sticky của AppLayout (h-16). Nền đặc + blur chỉ
+                     bật khi đã dính, để lúc chưa cuộn khung vẫn phẳng với nền trang.
+                     -mx-4 px-4 kéo nền ra sát mép để nội dung cuộn phía dưới không lòi ra hai bên. -->
+                <div
+                    ref="stickyEl"
+                    class="sticky top-16 z-30 -mx-4 px-4 pt-2 pb-3 transition-shadow duration-200"
+                    :class="stuck ? 'bg-[var(--color-bg)]/95 backdrop-blur-md shadow-[0_10px_24px_rgba(0,0,0,.12)]' : ''"
+                >
+                    <div v-if="canUseVoucherTool" class="rounded-3xl bg-gradient-to-br from-[var(--color-peach)] via-[var(--color-peach-soft)] to-[var(--color-green-soft)] border border-[var(--color-line)] transition-all duration-200" :class="stuck ? 'p-4' : 'p-6 md:p-8'">
+                        <!-- Giữ h1 trong DOM (chỉ thu chiều cao) để không mất thẻ h1 của trang. -->
+                        <div class="overflow-hidden transition-all duration-200" :class="stuck ? 'max-h-0 opacity-0' : 'max-h-40 opacity-100 mb-4'">
+                            <h1 class="text-xl md:text-2xl font-extrabold text-[var(--color-ink)] mb-1">
+                                Dán link sản phẩm Shopee để lấy mã giảm giá
+                            </h1>
+                            <p class="text-sm text-[var(--color-muted)]">Nhận ngay link đã áp sẵn mã giảm giá — không cần nhập mã, miễn phí.</p>
                         </div>
-                        <button
-                            @click="resolveVoucher"
-                            :disabled="resolving || !voucherUrl.trim()"
-                            class="btn-fire px-8 py-4 rounded-xl flex items-center justify-center gap-2 whitespace-nowrap"
-                        >
-                            <svg v-if="resolving" class="w-4 h-4 animate-spin" viewBox="0 0 24 24" fill="none">
-                                <circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" stroke-dasharray="30 70" />
-                            </svg>
-                            <span v-else>🔍</span>
-                            {{ resolving ? 'Đang xử lý...' : 'Tìm mã ngay' }}
-                        </button>
-                    </div>
-                    <p v-if="voucherError" class="text-red-500 text-sm mt-2">{{ voucherError }}</p>
-                </div>
 
-                <!-- Máy tính (không phải admin): ẩn khung tìm mã, chỉ hiện thông báo dùng điện thoại -->
-                <div v-else class="rounded-3xl p-6 md:p-8 bg-gradient-to-br from-[var(--color-peach)] via-[var(--color-peach-soft)] to-[var(--color-green-soft)] border border-[var(--color-line)] text-center">
-                    <p class="text-2xl mb-2">📱</p>
-                    <p class="font-semibold text-[var(--color-ink)]">Chức năng lấy mã chỉ dùng được trên điện thoại.</p>
-                    <p class="text-sm text-[var(--color-muted)] mt-1">Vui lòng mở tietkiemvi.com bằng trình duyệt trên điện thoại.</p>
+                        <div class="flex flex-col md:flex-row gap-3">
+                            <div class="relative flex-1">
+                                <span class="absolute left-4 top-1/2 -translate-y-1/2 text-[var(--color-muted)]">🔗</span>
+                                <input
+                                    ref="voucherUrlInput"
+                                    v-model="voucherUrl"
+                                    type="url"
+                                    @keydown.enter="resolveVoucher"
+                                    @paste="onVoucherUrlPaste"
+                                    placeholder="Dán link Shopee (shopee.vn hoặc s.shopee.vn)..."
+                                    class="w-full pl-10 pr-20 border border-[var(--color-line)] rounded-xl text-sm bg-[var(--color-surface)] focus:outline-none focus:border-[var(--color-accent)] focus:ring-2 focus:ring-[var(--color-peach)] transition-all duration-200"
+                                    :class="stuck ? 'py-3' : 'py-4'"
+                                />
+                                <button
+                                    @click="pasteVoucherUrl"
+                                    type="button"
+                                    class="absolute right-1.5 top-1/2 -translate-y-1/2 text-xs font-bold text-[var(--color-accent)] bg-[var(--color-peach-soft)] hover:bg-[var(--color-peach)] border border-[var(--color-accent)]/30 rounded-lg px-3 py-1.5 transition"
+                                >Dán</button>
+                            </div>
+                            <button
+                                @click="resolveVoucher"
+                                :disabled="resolving || !voucherUrl.trim()"
+                                class="btn-fire rounded-xl flex items-center justify-center gap-2 whitespace-nowrap transition-all duration-200"
+                                :class="stuck ? 'px-6 py-3' : 'px-8 py-4'"
+                            >
+                                <svg v-if="resolving" class="w-4 h-4 animate-spin" viewBox="0 0 24 24" fill="none">
+                                    <circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" stroke-dasharray="30 70" />
+                                </svg>
+                                <span v-else>🔍</span>
+                                {{ resolving ? 'Đang xử lý...' : 'Tìm mã ngay' }}
+                            </button>
+                        </div>
+                        <p v-if="voucherError" class="text-red-500 text-sm mt-2">{{ voucherError }}</p>
+                    </div>
+
+                    <!-- Máy tính (không phải admin): ẩn khung tìm mã, chỉ hiện thông báo dùng điện thoại -->
+                    <div v-else class="rounded-3xl p-6 md:p-8 bg-gradient-to-br from-[var(--color-peach)] via-[var(--color-peach-soft)] to-[var(--color-green-soft)] border border-[var(--color-line)] text-center">
+                        <p class="text-2xl mb-2">📱</p>
+                        <p class="font-semibold text-[var(--color-ink)]">Chức năng lấy mã chỉ dùng được trên điện thoại.</p>
+                        <p class="text-sm text-[var(--color-muted)] mt-1">Vui lòng mở tietkiemvi.com bằng trình duyệt trên điện thoại.</p>
+                    </div>
                 </div>
 
                 <!-- Kết quả -->
-                <div v-if="canUseVoucherTool && voucherResult" ref="voucherResultEl" class="mt-4 card-glass rounded-2xl p-5 scroll-mt-24">
+                <div v-if="canUseVoucherTool && voucherResult" ref="voucherResultEl" class="mt-4 card-glass rounded-2xl p-5 scroll-mt-48">
                     <div v-if="voucherResult.product" class="flex gap-4 items-start mb-5">
                         <div class="w-16 h-16 rounded-xl bg-[var(--color-peach-soft)] flex-none overflow-hidden">
                             <img v-if="voucherResult.product.product_image" :src="voucherResult.product.product_image" :alt="voucherResult.product.product_name" class="w-full h-full object-cover" />

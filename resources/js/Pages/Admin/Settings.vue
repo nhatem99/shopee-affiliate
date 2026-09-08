@@ -7,6 +7,7 @@ import { useToast } from '@/composables/useToast'
 const props = defineProps({
     customerAuthEnabled: { type: Boolean, required: true },
     maintenanceMode: { type: Boolean, required: true },
+    communityUrl: { type: String, default: '' },
 })
 
 const toast = useToast()
@@ -14,10 +15,13 @@ const customerAuthEnabled = ref(props.customerAuthEnabled)
 const maintenanceMode = ref(props.maintenanceMode)
 const savingCustomerAuth = ref(false)
 const savingMaintenance = ref(false)
+const communityUrl = ref(props.communityUrl)
+const savingCommunityUrl = ref(false)
 
 // Đồng bộ lại nếu server trả về giá trị khác (ví dụ sau khi lưu xong)
 watch(() => props.customerAuthEnabled, (v) => { customerAuthEnabled.value = v })
 watch(() => props.maintenanceMode, (v) => { maintenanceMode.value = v })
+watch(() => props.communityUrl, (v) => { communityUrl.value = v })
 
 function toggleCustomerAuth() {
     const next = !customerAuthEnabled.value
@@ -48,6 +52,19 @@ function toggleMaintenance() {
             toast.error('Không lưu được cài đặt, vui lòng thử lại.')
         },
         onFinish: () => { savingMaintenance.value = false },
+    })
+}
+
+function saveCommunityUrl() {
+    savingCommunityUrl.value = true
+
+    router.post('/admin/settings', { community_url: communityUrl.value.trim() || null }, {
+        preserveScroll: true,
+        onSuccess: () => toast.success(communityUrl.value.trim()
+            ? 'Đã lưu link cộng đồng săn sale.'
+            : 'Đã bỏ link cộng đồng — banner sẽ ẩn dòng đó đi.'),
+        onError: (errors) => toast.error(errors.community_url || 'Không lưu được link, vui lòng thử lại.'),
+        onFinish: () => { savingCommunityUrl.value = false },
     })
 }
 </script>
@@ -127,6 +144,31 @@ function toggleMaintenance() {
                     <span class="text-[var(--color-ink)] font-medium">
                         {{ maintenanceMode ? 'Đang bảo trì — khách không vào được trang, admin vẫn dùng bình thường.' : 'Đang tắt — trang hoạt động bình thường.' }}
                     </span>
+                </div>
+            </div>
+
+            <div class="bg-[var(--color-surface)] rounded-2xl border border-[var(--color-line)] p-6">
+                <h2 class="font-bold text-[var(--color-ink)] mb-1">Link cộng đồng săn sale</h2>
+                <p class="text-sm text-[var(--color-muted)] leading-relaxed mb-4">
+                    Hiện ở dòng cuối banner <strong class="text-[var(--color-ink)]">"Săn sale mỗi ngày"</strong> (khung giờ back mã)
+                    trên trang chủ và trang kết quả. Dán link nhóm Zalo, Telegram hoặc Facebook đều được.
+                    Để trống thì banner tự ẩn dòng link đi.
+                </p>
+
+                <div class="flex flex-col sm:flex-row gap-2">
+                    <input
+                        v-model="communityUrl"
+                        type="url"
+                        placeholder="https://zalo.me/g/..."
+                        @keydown.enter="saveCommunityUrl"
+                        class="flex-1 min-w-0 px-4 py-2.5 rounded-xl border border-[var(--color-line)] bg-[var(--color-bg)] text-sm text-[var(--color-ink)] focus:outline-none focus:border-[var(--color-accent)]"
+                    />
+                    <button
+                        type="button"
+                        @click="saveCommunityUrl"
+                        :disabled="savingCommunityUrl"
+                        class="btn-fire px-6 py-2.5 rounded-xl text-sm whitespace-nowrap disabled:opacity-60"
+                    >{{ savingCommunityUrl ? 'Đang lưu...' : 'Lưu link' }}</button>
                 </div>
             </div>
         </div>

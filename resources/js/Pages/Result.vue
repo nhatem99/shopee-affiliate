@@ -4,6 +4,7 @@ import AppLayout from '@/Layouts/AppLayout.vue'
 import CouponTicket from '@/Components/CouponTicket.vue'
 import SavingsSummary from '@/Components/SavingsSummary.vue'
 import Disclaimer from '@/Components/Disclaimer.vue'
+import RestockSchedule from '@/Components/RestockSchedule.vue'
 
 const props = defineProps({
     product: Object,
@@ -30,6 +31,9 @@ const platformLabels = {
     <Head title="Kết quả — Mã giảm giá" />
     <AppLayout>
         <div class="max-w-5xl mx-auto px-4 py-10">
+            <!-- Khung giờ back mã: đặt trên cùng, giống trang chủ -->
+            <RestockSchedule class="mb-6" />
+
             <!-- Success banner -->
             <div class="bg-[var(--color-green-soft)] border border-[var(--color-brand-green)]/20 rounded-2xl px-6 py-4 flex items-center gap-3 mb-8">
                 <span class="text-2xl">✅</span>
