@@ -18,8 +18,14 @@ use Illuminate\Support\Facades\Log;
  */
 class VoucherSourceResolver
 {
-    /** Thứ tự cũng là thứ tự ưu tiên khi admin lỡ bật cả hai — xem activeSource(). */
-    public const SOURCES = [GanmaService::SOURCE, KieuShopeeService::SOURCE];
+    /**
+     * Thứ tự cũng là thứ tự ưu tiên khi dữ liệu lệch (bật cả hai) — xem activeSource().
+     *
+     * kieushopee đứng trước vì nó là nguồn đang phục vụ khách và nhận MỌI dạng link Shopee.
+     * Để ganma trước thì một lần lệch dữ liệu sẽ đẩy toàn bộ khách sang nguồn chỉ nhận link
+     * ngắn từ app — tức phần lớn khách dán link thường sẽ bị từ chối thẳng.
+     */
+    public const SOURCES = [KieuShopeeService::SOURCE, GanmaService::SOURCE];
 
     public function activeSource(): string
     {
@@ -50,6 +56,24 @@ class VoucherSourceResolver
             }
         }
 
+        // Không có nhánh return nào sau vòng lặp: truy vấn đã lọc whereIn(SOURCES) nên $active
+        // khác rỗng thì chắc chắn khớp một phần tử của SOURCES và đã return ở trên.
         return KieuShopeeService::SOURCE;
+    }
+
+    /**
+     * Bật một nguồn thì tắt mọi nguồn còn lại — nửa GHI của cùng cái bất biến mà activeSource()
+     * đọc. Để ở đây thay vì trong ApiConfigController vì đây là quy tắc nghiệp vụ (CLAUDE.md:
+     * "Services handle all logic"), và vì tách hai nửa ra hai file là chúng sớm muộn lệch nhau.
+     */
+    public function makeExclusive(ApiConfig $config): void
+    {
+        if (! $config->is_active || ! in_array($config->platform, self::SOURCES, true)) {
+            return;
+        }
+
+        ApiConfig::whereIn('platform', self::SOURCES)
+            ->where('id', '!=', $config->id)
+            ->update(['is_active' => false]);
     }
 }

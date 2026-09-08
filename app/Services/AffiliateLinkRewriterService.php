@@ -24,6 +24,17 @@ class AffiliateLinkRewriterService
             $resolved = $this->followToShopee($url);
             $rewritten = $this->swapMmpPid($resolved) ?? $resolved;
 
+            // Không lần được tới shopee.vn thì link đi tới khách VẪN NGUYÊN của nguồn: hoa hồng
+            // về túi họ, và định danh của họ nằm luôn trong cột Sub_id của mình. Cố ý vẫn trả
+            // link đó (khách còn giữ được mã giảm giá — mất mã đắt hơn mất một lượt hoa hồng),
+            // nhưng phải kêu to, nếu không đây là kiểu hỏng âm thầm không bao giờ ai phát hiện.
+            if ($rewritten === $url && $this->hostOf($url) !== 'shopee.vn') {
+                Log::warning('AffiliateLinkRewriterService: KHÔNG đổi được affiliate — link giữ nguyên của nguồn, lượt này mất hoa hồng', [
+                    'input_url' => $url,
+                    'resolved_url' => $resolved,
+                ]);
+            }
+
             Log::info('AffiliateLinkRewriterService: rewrite hoàn tất', [
                 'input_url' => $url,
                 'resolved_url' => $resolved,

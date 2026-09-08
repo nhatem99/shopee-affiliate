@@ -55,6 +55,10 @@ class UrlValidationService
         'shopee.vn',
         's.shopee.vn',
         'shp.ee',
+        // App Shopee cũng phát ra link shope.ee. Thiếu nó thì khách dán đúng thứ mà chính giao
+        // diện admin bảo họ dán (GanmaService::testConnection) lại bị chặn ngay từ cửa với
+        // thông báo "Chỉ hỗ trợ link sản phẩm Shopee".
+        'shope.ee',
     ];
 
     public function validateShopeeOnly(string $url): void
@@ -120,7 +124,12 @@ class UrlValidationService
         // Pattern: /product/SHOP_ID/ITEM_ID — dạng Shopee dùng cho link chia sẻ từ ứng dụng, và
         // cũng là dạng mà chuỗi redirect của link voucher hay kết thúc ở đó. Thiếu dạng này thì
         // mọi thứ nhận diện sản phẩm qua id đều mù trước đúng loại link khách hay dán nhất.
-        if (preg_match('#/product/(\d+)/(\d+)#', $url, $m)) {
+        //
+        // /opaanlp/ là trang landing áp mã của chương trình affiliate — đích của link nguồn
+        // ganma. Thiếu nó thì productKey() (ShortLinkController) không đọc được id, phải rơi
+        // xuống băm URL đích; mà Shopee cấp credential_token mới sau mỗi lượt bấm nên URL đó
+        // khác nhau mỗi lần → mỗi lượt bấm lại đăng một comment / thuê một reel mới.
+        if (preg_match('#/(?:product|opaanlp)/(\d+)/(\d+)#', $url, $m)) {
             return ['shop_id' => $m[1], 'item_id' => $m[2]];
         }
 

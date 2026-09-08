@@ -25,8 +25,10 @@ class GanmaServiceTest extends TestCase
     {
         parent::setUp();
 
-        // Không có dòng này thì mỗi test đứng chờ thật đúng bằng nhịp hỏi lại.
-        Sleep::fake();
+        // syncWithCarbon: nhịp ngủ giả lập phải đẩy luôn đồng hồ Carbon, vì waitForJob()
+        // đo ngân sách bằng now() chứ không cộng dồn nhịp ngủ. Thiếu nó thì đồng hồ đứng
+        // yên và vòng lặp chạy vô tận cho tới khi hết bộ nhớ.
+        Sleep::fake(syncWithCarbon: true);
 
         config([
             'services.ganma.poll_interval_seconds' => 3,
@@ -126,8 +128,29 @@ class GanmaServiceTest extends TestCase
 
         $this->assertNull($this->service()->fetchProductAndVoucherLink(self::SHORT_URL, useCache: false));
 
-        // 9 giây chờ / nhịp 3 giây = đúng 3 lần hỏi, không phải một vòng lặp vô tận.
-        Http::assertSentCount(4);
+        // 1 request tạo job + 2 lần hỏi. Vòng thứ 3 dừng trước khi gửi vì ngân sách còn 0 —
+        // gửi thêm một request 20 giây ở đúng lúc hết giờ là cách chắc chắn nhất để vượt
+        // ngưỡng nginx. Điều được khoá lại ở đây là: có trần thật, không phải vòng lặp vô tận.
+        Http::assertSentCount(3);
+    }
+
+    /**
+     * Trục trặc mạng KHÁC lỗi nghiệp vụ: bỏ cuộc ở một cú 502 nghĩa là vứt một job có khi đã
+     * chạy gần xong, rồi bắt khách đợi lại từ đầu thêm 20-45 giây nữa.
+     */
+    public function test_a_transient_network_failure_does_not_abandon_the_job(): void
+    {
+        Http::fake([
+            '*/yt/request-conversion' => Http::response(['job_id' => 'job-5', 'status' => 'pending']),
+            '*/yt/check-status*' => Http::sequence()
+                ->push($this->statusBody('processing'))
+                ->pushStatus(502)
+                ->push($this->statusBody('complete', ['youtube_link' => self::YOUTUBE_LINK])),
+        ]);
+
+        $result = $this->service()->fetchProductAndVoucherLink(self::SHORT_URL, useCache: false);
+
+        $this->assertSame(self::YOUTUBE_LINK, $result['voucher_link']);
     }
 
     /**

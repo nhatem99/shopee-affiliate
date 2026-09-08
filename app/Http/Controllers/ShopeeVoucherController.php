@@ -52,12 +52,17 @@ class ShopeeVoucherController extends Controller
             return back()->withErrors(['voucher_url' => $e->getMessage()]);
         }
 
-        $canonicalUrl = $this->resolver->resolveCanonicalUrl($url);
-
         // Nguồn mã trả về ĐÚNG MỘT link đã áp mã (kèm thông tin sản phẩm nếu đọc được). Link đó
         // thuộc affiliate account của nguồn; affiliate được đổi về của mình khi người dùng bấm
         // "Mua ngay" — xem AffiliateLinkRewriterService.
         $source = $this->sources->activeSource();
+
+        // resolveCanonicalUrl() đi một vòng HTTP thật (timeout 10s) để bung link ngắn. Nhánh
+        // ganma cố tình KHÔNG dùng kết quả đó, nên gọi nó ở đây là cộng thẳng tới 10 giây chờ
+        // vào một request vốn đã ngốn 20-45 giây và bị nginx chặn ở 60. Chỉ gọi khi cần.
+        $canonicalUrl = $source === GanmaService::SOURCE
+            ? $url
+            : $this->resolver->resolveCanonicalUrl($url);
 
         if ($source === GanmaService::SOURCE) {
             // Ganma CHỈ nhận link ngắn từ app Shopee, nên cố tình truyền $url GỐC chứ không

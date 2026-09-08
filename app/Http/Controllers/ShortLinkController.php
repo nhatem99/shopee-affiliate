@@ -106,6 +106,7 @@ class ShortLinkController extends Controller
             $validated['product_name'] ?? null,
             $targetUrl,
             $shortUrl,
+            $source,
         );
 
         $this->tracking->log('voucher_select', $request, [
@@ -179,7 +180,7 @@ class ShortLinkController extends Controller
      * Nếu đăng comment thất bại (chưa cấu hình, token lỗi, Facebook sập...) thì trả về
      * $fallbackUrl để không chặn đường mua hàng của khách.
      */
-    private function facebookCommentRedirectUrl(?string $productName, string $targetUrl, string $fallbackUrl): string
+    private function facebookCommentRedirectUrl(?string $productName, string $targetUrl, string $fallbackUrl, string $source): string
     {
         $config = ApiConfig::where('platform', 'facebook')->where('is_active', true)->first();
 
@@ -213,7 +214,10 @@ class ShortLinkController extends Controller
             return $fallbackUrl;
         }
 
-        $cacheKey = 'fb_comment_link:'.KieuShopeeService::SOURCE.":{$productKey}";
+        // Khoá theo CẢ NGUỒN: hai nguồn cho ra link đích khác nhau (mã khác nhau) cho cùng
+        // một sản phẩm. Dùng chung khoá thì ngay sau khi admin đổi nguồn, lượt bấm mới sẽ
+        // tái dùng comment cũ và đẩy khách tới link của nguồn trước đó.
+        $cacheKey = "fb_comment_link:{$source}:{$productKey}";
 
         if ($cached = Cache::get($cacheKey)) {
             return $this->cachedCommentUrl($cached, $pool);

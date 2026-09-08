@@ -38,6 +38,11 @@ class GanmaService
     /** Domain link ngắn của Shopee mà ganma chấp nhận — đo thật, cả ba đều tạo được job. */
     private const ACCEPTED_HOSTS = ['vn.shp.ee', 'shp.ee', 'shope.ee', 's.shopee.vn'];
 
+    /** Ghi nhớ trong một request — xem endpoint(). */
+    private ?string $endpoint = null;
+
+    public function __construct(private UrlValidationService $urlValidator) {}
+
     /**
      * Nguồn này chỉ làm việc được với link chia sẻ từ ứng dụng Shopee. Kiểm tra TRƯỚC khi gọi
      * để khỏi đốt một round-trip chỉ để nhận về lỗi biết trước, và để phía gọi còn kịp chuyển
@@ -215,7 +220,16 @@ class GanmaService
     {
         $interval = max(1, $this->config('poll_interval_seconds'));
         $deadline = $this->config('max_wait_seconds');
-        $waited = 0;
+
+        // ĐO BẰNG ĐỒNG HỒ, không cộng dồn nhịp ngủ. Mỗi vòng còn có một request check-status;
+        // chỉ đếm nhịp ngủ thì 15 vòng × (3s ngủ + 2s mạng) = 75s, vượt ngưỡng 60s của nginx và
+        // khách ăn 504 trong khi worker PHP-FPM vẫn bị giữ.
+        //
+        // Dùng now() của Carbon chứ không phải microtime(): Sleep::fake(syncWithCarbon: true)
+        // đẩy Carbon theo nhịp ngủ giả lập, nên test chạy tức thì mà vẫn đi đúng số vòng. Với
+        // microtime thì đồng hồ thật không nhúc nhích và vòng lặp chạy vô tận.
+        $start = now();
+        $elapsed = fn (): float => $start->diffInMilliseconds(now()) / 1000;
 
         // PHP-FPM trên production đặt max_execution_time = 30 (đo 08-09-2026), thấp hơn thời
         // gian chờ ở đây. Trên Unix thì sleep() và chờ I/O KHÔNG bị tính vào hạn mức đó, nên
@@ -226,31 +240,41 @@ class GanmaService
             @set_time_limit($deadline + 15);
         }
 
-        while ($waited < $deadline) {
+        while ($elapsed() < $deadline) {
             // Sleep của Laravel chứ không phải sleep() thuần: test giả lập được (Sleep::fake())
             // nên bộ test không phải đứng chờ thật hàng chục giây.
             Sleep::for($interval)->seconds();
-            $waited += $interval;
+
+            // Timeout của từng request bị bó theo phần ngân sách CÒN LẠI — nếu không, một
+            // request treo 20s ở vòng cuối vẫn đủ đẩy tổng thời gian vượt ngưỡng nginx.
+            $conLai = (int) ceil($deadline - $elapsed());
+
+            if ($conLai < 1) {
+                break;
+            }
 
             try {
                 $response = Http::withHeaders($this->headers())
-                    ->timeout($this->config('request_timeout_seconds'))
+                    ->timeout(min($this->config('request_timeout_seconds'), $conLai))
                     ->get($this->endpoint().'/yt/check-status', ['job_id' => $jobId]);
             } catch (\Exception $e) {
-                Log::error('GanmaService: lỗi kết nối khi hỏi trạng thái: '.$e->getMessage(), [
+                // Trục trặc mạng là TẠM THỜI, khác hẳn status 'error' của nghiệp vụ. Bỏ cuộc ở
+                // đây nghĩa là vứt một job có khi đã chạy gần xong, rồi khách phải đợi lại từ
+                // đầu thêm 20-45 giây nữa. Thử lại cho tới khi hết ngân sách.
+                Log::warning('GanmaService: lỗi mạng khi hỏi trạng thái, thử lại: '.$e->getMessage(), [
                     'job_id' => $jobId,
                 ]);
 
-                return null;
+                continue;
             }
 
             if (! $response->successful()) {
-                Log::error('GanmaService: hỏi trạng thái bị từ chối', [
+                Log::warning('GanmaService: hỏi trạng thái bị từ chối, thử lại', [
                     'status' => $response->status(),
                     'job_id' => $jobId,
                 ]);
 
-                return null;
+                continue;
             }
 
             $data = $response->json();
@@ -287,7 +311,7 @@ class GanmaService
         Log::warning('GanmaService: hết thời gian chờ job', [
             'job_id' => $jobId,
             'shopee_url' => $shopeeUrl,
-            'da_cho_giay' => $waited,
+            'da_cho_giay' => round($elapsed(), 1),
         ]);
 
         return null;
@@ -306,11 +330,9 @@ class GanmaService
 
         $origin = (string) ($query['origin_link'] ?? '');
 
-        if ($origin !== '' && preg_match('#/product/(\d+)/(\d+)#', $origin, $m)) {
-            return ['shop_id' => $m[1], 'item_id' => $m[2]];
-        }
-
-        return [];
+        // Dùng lại helper chung thay vì tự viết regex: nó đỡ được cả dạng "-i.SHOP.ITEM" mà
+        // Shopee dùng cho link sản phẩm trên web, không chỉ dạng "/product/SHOP/ITEM".
+        return $origin !== '' ? $this->urlValidator->extractShopeeIds($origin) : [];
     }
 
     /**
@@ -368,13 +390,20 @@ class GanmaService
     /**
      * Endpoint ưu tiên bản ghi ở /admin/api-config rồi mới tới config/services.php — cùng lý do
      * với kieushopee: đổi được ngay từ trang admin khi nguồn đổi domain, không phải deploy.
+     *
+     * CỐ Ý KHÔNG lọc is_active: quy trình admin là "sửa endpoint → bấm Kiểm tra kết nối → thấy
+     * chạy mới bật nguồn". Lọc is_active thì đúng lúc kiểm tra, bản ghi còn tắt nên endpoint vừa
+     * nhập bị bỏ qua, nút báo hỏng cho một cấu hình thật ra đúng — và admin không bao giờ dám bật.
+     *
+     * Nhớ lại kết quả vì một lượt lấy mã gọi hàm này tới ~32 lần (mỗi vòng hỏi trạng thái gọi 2
+     * lần), trong khi giá trị không thể đổi giữa chừng một request.
      */
     private function endpoint(): string
     {
-        $row = ApiConfig::where('platform', self::SOURCE)->where('is_active', true)->first();
-        $fromDb = trim((string) ($row->endpoint ?? ''));
-
-        return rtrim($fromDb !== '' ? $fromDb : (string) config('services.ganma.endpoint'), '/');
+        return $this->endpoint ??= rtrim(
+            trim((string) (ApiConfig::where('platform', self::SOURCE)->value('endpoint') ?? '')) ?: (string) config('services.ganma.endpoint'),
+            '/',
+        );
     }
 
     private function config(string $key): int

@@ -4,9 +4,11 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use App\Services\AffiliateLinkRewriterService;
+use App\Services\GanmaService;
 use App\Services\KieuShopeeService;
 use App\Services\ShopeeLinkResolverService;
 use App\Services\ShortLinkService;
+use App\Services\VoucherSourceResolver;
 use App\Services\ZaloOaService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -23,6 +25,8 @@ class ZaloWebhookController extends Controller
     public function __construct(
         private ShopeeLinkResolverService $resolver,
         private KieuShopeeService $kieuShopee,
+        private GanmaService $ganma,
+        private VoucherSourceResolver $sources,
         private AffiliateLinkRewriterService $rewriter,
         private ShortLinkService $shortLinks,
         private ZaloOaService $zalo,
@@ -82,8 +86,20 @@ class ZaloWebhookController extends Controller
             return response()->json(['ok' => true]);
         }
 
-        $canonicalUrl = $this->resolver->resolveCanonicalUrl($url);
-        $data = $this->kieuShopee->fetchProductAndVoucherLink($canonicalUrl);
+        // Bot Zalo phải đi qua ĐÚNG nguồn mà admin đang chọn ở /admin/api-config. Trước đây nó
+        // gọi thẳng kieushopee: bật ganma lên là bản ghi kieushopee bị tắt, KieuShopeeService
+        // không còn tìm thấy hàng is_active nên âm thầm rơi về next_action mặc định trong code —
+        // đúng cái ID mà migration của nó ghi rõ là hết hạn mỗi lần nguồn deploy lại.
+        $source = $this->sources->activeSource();
+
+        if ($source === GanmaService::SOURCE) {
+            // Ganma chỉ nhận link ngắn từ app Shopee, nên truyền link GỐC trong tin nhắn chứ
+            // không phải link đã bung. Không phải dạng đó thì im lặng bỏ qua — nhóm chat không
+            // phải chỗ để giải thích chuyện cấu hình nguồn.
+            $data = $this->ganma->canHandle($url) ? $this->ganma->fetchProductAndVoucherLink($url) : null;
+        } else {
+            $data = $this->kieuShopee->fetchProductAndVoucherLink($this->resolver->resolveCanonicalUrl($url));
+        }
 
         if (! $data) {
             return response()->json(['ok' => true]);
@@ -93,7 +109,7 @@ class ZaloWebhookController extends Controller
 
         $this->zalo->sendGroupText($groupId, $this->buildGroupReply(
             $productName,
-            $this->buildShortLink($data['voucher_link'], $productName)
+            $this->buildShortLink($data['voucher_link'], $productName, $source)
         ));
 
         return response()->json(['ok' => true]);
@@ -123,10 +139,10 @@ class ZaloWebhookController extends Controller
         ]);
     }
 
-    private function buildShortLink(string $voucherUrl, string $productName): string
+    private function buildShortLink(string $voucherUrl, string $productName, string $source): string
     {
         $targetUrl = $this->rewriter->rewriteToOwnAffiliate($voucherUrl);
-        $link = $this->shortLinks->create($targetUrl, KieuShopeeService::SOURCE, $productName);
+        $link = $this->shortLinks->create($targetUrl, $source, $productName);
 
         return url('/go/'.$link->code);
     }

@@ -46,7 +46,10 @@ class ApiConfigController extends Controller
             // Ô nhập token/secret ở form edit luôn để trống với nghĩa "giữ nguyên giá trị cũ" —
             // chỉ bắt buộc khi tạo mới (chưa có bản ghi nào cho platform này).
             'app_secret' => ['nullable', 'string'],
-            'is_active' => ['boolean'],
+            // BẮT BUỘC: quy tắc 'boolean' không chạy khi thiếu key, nên gửi thiếu is_active thì
+            // updateOrCreate bỏ qua cột và DB lấy default true — hai nguồn mã cùng bật, mà
+            // makeExclusive() cũng không chạy vì $config->is_active còn null trong bộ nhớ.
+            'is_active' => ['required', 'boolean'],
             'platform' => ['required', 'in:shopee,lazada,tiktok,accesstrade,facebook,kieushopee,ganma'],
             'meta' => ['nullable', 'array'],
             'meta.target_post_id' => ['nullable', 'string', 'max:255'],
@@ -89,13 +92,8 @@ class ApiConfigController extends Controller
         );
 
         // Hai nguồn lấy mã loại trừ nhau: bật cái này thì tắt cái kia. Cho phép bật cả hai là
-        // sinh ra câu hỏi "vậy khách đang dùng nguồn nào" mà nhìn giao diện không trả lời được
-        // — xem VoucherSourceResolver::activeSource().
-        if ($config->is_active && in_array($config->platform, VoucherSourceResolver::SOURCES, true)) {
-            ApiConfig::whereIn('platform', VoucherSourceResolver::SOURCES)
-                ->where('id', '!=', $config->id)
-                ->update(['is_active' => false]);
-        }
+        // sinh ra câu hỏi "vậy khách đang dùng nguồn nào" mà nhìn giao diện không trả lời được.
+        app(VoucherSourceResolver::class)->makeExclusive($config);
 
         return back()->with('success', 'Cấu hình API đã được lưu.');
     }

@@ -50,6 +50,18 @@ class VoucherSourceSelectionTest extends TestCase
         return app(VoucherSourceResolver::class);
     }
 
+    /**
+     * Bật đúng một nguồn, tắt hẳn nguồn kia — đúng trạng thái mà makeExclusive() tạo ra khi
+     * admin lưu cấu hình. Migration tạo sẵn CẢ HAI bản ghi (kieushopee bật), nên chỉ bật ganma
+     * mà quên tắt kieushopee là rơi vào nhánh tie-break chứ không phải nhánh đang muốn kiểm tra.
+     */
+    private function useSource(string $platform): void
+    {
+        foreach (VoucherSourceResolver::SOURCES as $source) {
+            $this->sourceConfig($source, $source === $platform);
+        }
+    }
+
     // --- Tầng resolver ---
 
     /** Chưa cấu hình gì thì vẫn phải chạy được bằng nguồn vốn có, không được sập. */
@@ -84,7 +96,9 @@ class VoucherSourceSelectionTest extends TestCase
         $this->sourceConfig(KieuShopeeService::SOURCE, true);
         $this->sourceConfig(GanmaService::SOURCE, true);
 
-        $this->assertSame(GanmaService::SOURCE, $this->resolver()->activeSource());
+        // Nghiêng về kieushopee: nó nhận MỌI dạng link Shopee, còn ganma từ chối link đầy đủ.
+        // Lệch dữ liệu mà rơi vào ganma thì phần lớn khách bị từ chối ngay từ cửa.
+        $this->assertSame(KieuShopeeService::SOURCE, $this->resolver()->activeSource());
     }
 
     // --- Bật một nguồn thì tắt nguồn kia ---
@@ -137,7 +151,7 @@ class VoucherSourceSelectionTest extends TestCase
 
     public function test_ganma_receives_the_original_short_link_not_the_canonical_one(): void
     {
-        $this->sourceConfig(GanmaService::SOURCE, true);
+        $this->useSource(GanmaService::SOURCE);
         [$kieu, $ganma] = $this->mockSources();
 
         $kieu->shouldNotReceive('fetchProductAndVoucherLink');
@@ -160,7 +174,7 @@ class VoucherSourceSelectionTest extends TestCase
      */
     public function test_explains_what_to_do_when_ganma_cannot_handle_the_link(): void
     {
-        $this->sourceConfig(GanmaService::SOURCE, true);
+        $this->useSource(GanmaService::SOURCE);
         [$kieu, $ganma] = $this->mockSources();
 
         $kieu->shouldNotReceive('fetchProductAndVoucherLink');
@@ -174,7 +188,7 @@ class VoucherSourceSelectionTest extends TestCase
     /** Nguồn mặc định vẫn phải chạy y như trước khi có ganma. */
     public function test_kieushopee_still_receives_the_canonical_url(): void
     {
-        $this->sourceConfig(KieuShopeeService::SOURCE, true);
+        $this->useSource(KieuShopeeService::SOURCE);
         [$kieu, $ganma] = $this->mockSources();
 
         $ganma->shouldNotReceive('fetchProductAndVoucherLink');
