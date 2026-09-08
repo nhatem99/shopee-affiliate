@@ -11,6 +11,7 @@ use App\Services\ShopeeApiService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Str;
 use Inertia\Inertia;
 use Inertia\Response;
 
@@ -112,14 +113,40 @@ class ApiConfigController extends Controller
         }
     }
 
+    /**
+     * Danh sách bài để admin tick ở form sửa cấu hình Facebook, tách sẵn thành hai nhóm vì hai
+     * nhóm dùng vào hai việc khác nhau: bài thường để đăng comment, reel để đổi caption.
+     *
+     * Phải gọi hai edge vì Graph API không trả reels ở /posts (xem FacebookPageService::listReels).
+     */
     public function facebookPosts(ApiConfig $config): JsonResponse
     {
         if ($config->platform !== 'facebook') {
             return response()->json(['message' => 'Config này không phải Facebook.'], 422);
         }
 
-        $posts = (new FacebookPageService($config->app_id, $config->app_secret))->listRecentPosts();
+        $service = new FacebookPageService($config->app_id, $config->app_secret);
 
-        return response()->json(['posts' => $posts]);
+        $reels = $service->listReels();
+        $reelIds = array_flip(array_column($reels, 'id'));
+
+        // Reel đăng thẳng lên feed thì lọt vào cả /posts. Loại nó khỏi nhóm bài thường để một
+        // reel không hiện hai lần ở hai chỗ với hai ý nghĩa khác nhau.
+        $posts = array_values(array_filter(
+            $service->listRecentPosts(),
+            fn (array $post) => ! isset($reelIds[Str::afterLast($post['id'] ?? '', '_')]),
+        ));
+
+        return response()->json([
+            'posts' => $posts,
+            // Reel dùng field `description` cho caption — đổi tên thành `message` để phía Vue
+            // hiển thị hai nhóm bằng cùng một khuôn.
+            'reels' => array_map(fn (array $reel) => [
+                'id' => $reel['id'] ?? '',
+                'message' => $reel['description'] ?? null,
+                'created_time' => $reel['created_time'] ?? null,
+                'permalink_url' => $reel['permalink_url'] ?? null,
+            ], $reels),
+        ]);
     }
 }
