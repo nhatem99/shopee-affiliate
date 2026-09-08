@@ -44,9 +44,19 @@ class ShortLinkController extends Controller
             'product_image' => ['nullable', 'url', 'max:2000'],
         ]);
 
-        $url = Cache::get("voucher_ref:{$validated['ref']}");
+        $cached = Cache::get("voucher_ref:{$validated['ref']}");
 
-        if (! $url) {
+        if (! $cached) {
+            return response()->json(['message' => 'Link đã hết hạn, vui lòng tải lại trang và thử lại.'], 422);
+        }
+
+        // Từ khi có nguồn thứ hai (ganma), ref lưu cả URL lẫn nguồn đã sinh ra nó. Ref phát ra
+        // TRƯỚC bản deploy này vẫn còn sống tới 7 ngày và chỉ là chuỗi URL trần — đọc được cả
+        // hai dạng để khách đang giữ tab cũ không bị gãy nút "Mua ngay".
+        $url = is_array($cached) ? ($cached['url'] ?? null) : $cached;
+        $source = is_array($cached) ? ($cached['source'] ?? KieuShopeeService::SOURCE) : KieuShopeeService::SOURCE;
+
+        if (! is_string($url) || $url === '') {
             return response()->json(['message' => 'Link đã hết hạn, vui lòng tải lại trang và thử lại.'], 422);
         }
 
@@ -71,11 +81,12 @@ class ShortLinkController extends Controller
 
         $targetUrl = $this->rewriter->rewriteToOwnAffiliate($url);
 
-        // Chỉ còn một nguồn mã duy nhất nên source là hằng số phía server, không nhận từ
-        // client nữa (trước đây client gửi lên facebook/zalo/... vì salesoc trả nhiều kênh).
+        // Source vẫn do PHÍA SERVER quyết định, không nhận từ client (trước đây client gửi lên
+        // facebook/zalo/... vì salesoc trả nhiều kênh). Khác trước ở chỗ giờ có hai nguồn nên
+        // giá trị lấy từ ref đã lưu lúc lấy mã, chứ không còn là hằng số.
         $link = $this->shortLinks->create(
             $targetUrl,
-            KieuShopeeService::SOURCE,
+            $source,
             $validated['product_name'] ?? null,
             $validated['product_image'] ?? null,
         );
@@ -99,7 +110,7 @@ class ShortLinkController extends Controller
 
         $this->tracking->log('voucher_select', $request, [
             'url' => $targetUrl,
-            'source' => KieuShopeeService::SOURCE,
+            'source' => $source,
             'product_name' => $validated['product_name'] ?? null,
         ]);
 

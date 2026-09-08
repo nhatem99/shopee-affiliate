@@ -6,8 +6,10 @@ use App\Http\Controllers\Controller;
 use App\Models\ApiConfig;
 use App\Services\AccessTradeService;
 use App\Services\FacebookPageService;
+use App\Services\GanmaService;
 use App\Services\KieuShopeeService;
 use App\Services\ShopeeApiService;
+use App\Services\VoucherSourceResolver;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -45,7 +47,7 @@ class ApiConfigController extends Controller
             // chỉ bắt buộc khi tạo mới (chưa có bản ghi nào cho platform này).
             'app_secret' => ['nullable', 'string'],
             'is_active' => ['boolean'],
-            'platform' => ['required', 'in:shopee,lazada,tiktok,accesstrade,facebook,kieushopee'],
+            'platform' => ['required', 'in:shopee,lazada,tiktok,accesstrade,facebook,kieushopee,ganma'],
             'meta' => ['nullable', 'array'],
             'meta.target_post_id' => ['nullable', 'string', 'max:255'],
             // Nhóm bài viết nhận comment. Nhiều bài để comment của các sản phẩm khác nhau rải
@@ -62,6 +64,9 @@ class ApiConfigController extends Controller
             'meta.next_action' => ['nullable', 'string', 'max:255'],
             'meta.tool_id' => ['nullable', 'string', 'max:255'],
             'meta.action_payload' => ['nullable', 'string', 'max:255'],
+            // Link dùng cho nút "Kiểm tra kết nối" của cả kieushopee lẫn ganma. Với ganma bắt
+            // buộc là link ngắn từ app Shopee — xem GanmaService::testConnection().
+            'meta.test_url' => ['nullable', 'string', 'max:2000'],
             'meta.comment_redirect_enabled' => ['nullable', 'boolean'],
             // Thời salesoc đây là DANH SÁCH chọn loại mã (meta.auto_source) vì một sản phẩm có
             // nhiều mã. kieushopee chỉ trả một link nên không còn gì để chọn — thành công tắc.
@@ -78,10 +83,19 @@ class ApiConfigController extends Controller
             unset($validated['app_secret']);
         }
 
-        ApiConfig::updateOrCreate(
+        $config = ApiConfig::updateOrCreate(
             ['platform' => $validated['platform']],
             $validated
         );
+
+        // Hai nguồn lấy mã loại trừ nhau: bật cái này thì tắt cái kia. Cho phép bật cả hai là
+        // sinh ra câu hỏi "vậy khách đang dùng nguồn nào" mà nhìn giao diện không trả lời được
+        // — xem VoucherSourceResolver::activeSource().
+        if ($config->is_active && in_array($config->platform, VoucherSourceResolver::SOURCES, true)) {
+            ApiConfig::whereIn('platform', VoucherSourceResolver::SOURCES)
+                ->where('id', '!=', $config->id)
+                ->update(['is_active' => false]);
+        }
 
         return back()->with('success', 'Cấu hình API đã được lưu.');
     }
@@ -93,6 +107,15 @@ class ApiConfigController extends Controller
             // ok/không — đây là nguồn hay chết nhất nên thông báo phải chỉ thẳng việc cần làm.
             if ($config->platform === KieuShopeeService::SOURCE) {
                 $result = app(KieuShopeeService::class)->testConnection();
+
+                return response()->json($result, $result['ok'] ? 200 : 422);
+            }
+
+            // Ganma cũng trả kèm lý do hỏng cụ thể. Lưu ý test này chạy trọn một job thật nên
+            // mất ~20 giây — không có health-check nào rẻ hơn, mà chỉ tạo job rồi bỏ thì không
+            // phát hiện được ca hay gặp nhất: job chạy xong nhưng sản phẩm không có mã.
+            if ($config->platform === GanmaService::SOURCE) {
+                $result = app(GanmaService::class)->testConnection();
 
                 return response()->json($result, $result['ok'] ? 200 : 422);
             }

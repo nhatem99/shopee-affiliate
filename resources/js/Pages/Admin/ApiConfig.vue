@@ -18,6 +18,14 @@ const facebookReels = ref([])
 const loadingPosts = ref(false)
 const postsError = ref(null)
 
+// Hai nguồn lấy mã (kieushopee = mã FB/IG, ganma = mã YouTube). Chúng không dùng App ID/Secret
+// và loại trừ nhau — bật cái này thì server tự tắt cái kia, xem ApiConfigController::store().
+const VOUCHER_SOURCES = ['kieushopee', 'ganma']
+
+function isVoucherSource(platform) {
+    return VOUCHER_SOURCES.includes(platform)
+}
+
 function editConfig(config) {
     editing.value = useForm({
         name: config.name,
@@ -198,9 +206,26 @@ async function testConfig(config) {
 
                 <div class="text-sm text-[var(--color-muted)] space-y-1">
                     <p><span class="font-medium text-[var(--color-ink)]">Endpoint:</span> {{ config.endpoint }}</p>
-                    <template v-if="config.platform !== 'kieushopee'">
+                    <template v-if="!isVoucherSource(config.platform)">
                         <p><span class="font-medium text-[var(--color-ink)]">{{ config.platform === 'facebook' ? 'Page ID' : 'App ID' }}:</span> {{ config.app_id || '—' }}</p>
                         <p><span class="font-medium text-[var(--color-ink)]">{{ config.platform === 'facebook' ? 'Page Access Token' : 'Secret' }}:</span> ••••••••</p>
+                    </template>
+
+                    <!-- Hai nguồn mã loại trừ nhau: chỉ một cái phục vụ khách tại một thời điểm.
+                         Nói thẳng ra ở đây vì nhìn công tắc is_active của từng thẻ riêng lẻ thì
+                         không trả lời được câu "khách đang lấy mã từ đâu". -->
+                    <template v-if="isVoucherSource(config.platform)">
+                        <p>
+                            <span class="font-medium text-[var(--color-ink)]">Trạng thái:</span>
+                            <span v-if="config.is_active" class="text-[var(--color-accent-deep)] font-semibold">
+                                Đang phục vụ khách — mọi lượt lấy mã đi qua nguồn này
+                            </span>
+                            <span v-else>Đang tắt</span>
+                        </p>
+                        <p v-if="config.platform === 'ganma'">
+                            <span class="font-medium text-[var(--color-ink)]">Link kiểm tra:</span>
+                            {{ config.meta?.test_url || '— (chưa đặt, nút Kiểm tra kết nối sẽ báo lỗi)' }}
+                        </p>
                     </template>
 
                     <template v-if="config.platform === 'kieushopee'">
@@ -252,8 +277,8 @@ async function testConfig(config) {
                         <label class="block text-sm font-semibold text-[var(--color-ink)] mb-1">Endpoint URL</label>
                         <input v-model="editing.endpoint" type="url" class="w-full border border-[var(--color-line)] rounded-xl px-4 py-2.5 text-sm text-[var(--color-ink)] focus:outline-none focus:border-[var(--color-accent)] transition" />
                     </div>
-                    <!-- kieushopee không dùng App ID/Secret — ẩn đi để khỏi tưởng phải điền. -->
-                    <template v-if="editing.platform !== 'kieushopee'">
+                    <!-- Nguồn lấy mã không dùng App ID/Secret — ẩn đi để khỏi tưởng phải điền. -->
+                    <template v-if="!isVoucherSource(editing.platform)">
                         <div>
                             <label class="block text-sm font-semibold text-[var(--color-ink)] mb-1">{{ editing.platform === 'facebook' ? 'Page ID' : 'App ID / Publisher ID' }}</label>
                             <input v-model="editing.app_id" type="text" class="w-full border border-[var(--color-line)] rounded-xl px-4 py-2.5 text-sm text-[var(--color-ink)] focus:outline-none focus:border-[var(--color-accent)] transition" />
@@ -262,6 +287,32 @@ async function testConfig(config) {
                             <label class="block text-sm font-semibold text-[var(--color-ink)] mb-1">{{ editing.platform === 'facebook' ? 'Page Access Token' : 'App Secret / API Key' }}</label>
                             <input v-model="editing.app_secret" type="text" placeholder="Nhập key mới (để trống = giữ nguyên)"
                                 class="w-full border border-[var(--color-line)] rounded-xl px-4 py-2.5 text-sm text-[var(--color-ink)] focus:outline-none focus:border-[var(--color-accent)] transition" />
+                        </div>
+                    </template>
+
+                    <template v-if="editing.platform === 'ganma'">
+                        <div class="rounded-xl bg-[var(--color-peach-soft)] border border-[var(--color-accent)]/25 px-3 py-2.5">
+                            <p class="text-xs text-[var(--color-accent-deep)] leading-relaxed">
+                                Nguồn <b>mã YouTube</b>. Bật nguồn này lên là <b>tự động tắt kieushopee</b> —
+                                mỗi lúc chỉ một nguồn phục vụ khách.
+                                <br /><br />
+                                Hai điều khác hẳn kieushopee, cân nhắc trước khi bật:
+                                <br />• Chỉ nhận <b>link chia sẻ từ app Shopee</b> (vn.shp.ee/...). Khách dán link
+                                shopee.vn đầy đủ sẽ được báo phải copy lại từ app.
+                                <br />• Mỗi lượt lấy mã mất <b>khoảng 20 giây</b> (kieushopee chỉ vài giây), vì bên
+                                họ xếp hàng xử lý.
+                            </p>
+                        </div>
+
+                        <div>
+                            <label class="block text-sm font-semibold text-[var(--color-ink)] mb-1">Link kiểm tra</label>
+                            <input v-model="editing.meta.test_url" type="text" spellcheck="false" placeholder="https://vn.shp.ee/..."
+                                class="w-full border border-[var(--color-line)] rounded-xl px-4 py-2.5 text-sm font-mono text-[var(--color-ink)] focus:outline-none focus:border-[var(--color-accent)] transition" />
+                            <p class="text-xs text-[var(--color-muted)] mt-1">
+                                Link nút <b>Kiểm tra kết nối</b> đem ra chạy thử — phải là link ngắn từ app Shopee,
+                                link shopee.vn đầy đủ luôn bị từ chối. Bấm kiểm tra sẽ mất ~20 giây vì nó chạy trọn
+                                một lượt lấy mã thật.
+                            </p>
                         </div>
                     </template>
 

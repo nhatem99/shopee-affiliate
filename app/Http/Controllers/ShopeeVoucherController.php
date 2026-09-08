@@ -5,10 +5,12 @@ namespace App\Http\Controllers;
 use App\Exceptions\AffiliateScanException;
 use App\Models\ApiConfig;
 use App\Models\PlatformVoucher;
+use App\Services\GanmaService;
 use App\Services\KieuShopeeService;
 use App\Services\ShopeeLinkResolverService;
 use App\Services\TrackingService;
 use App\Services\UrlValidationService;
+use App\Services\VoucherSourceResolver;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Cache;
@@ -22,6 +24,8 @@ class ShopeeVoucherController extends Controller
         private UrlValidationService $urlValidator,
         private ShopeeLinkResolverService $resolver,
         private KieuShopeeService $kieuShopee,
+        private GanmaService $ganma,
+        private VoucherSourceResolver $sources,
         private TrackingService $tracking,
     ) {}
 
@@ -50,10 +54,25 @@ class ShopeeVoucherController extends Controller
 
         $canonicalUrl = $this->resolver->resolveCanonicalUrl($url);
 
-        // kieushopee trả về ĐÚNG MỘT link đã áp mã (kèm thông tin sản phẩm nếu đọc được).
-        // Link đó thuộc affiliate account của họ; mmp_pid được đổi về của mình khi người dùng
-        // bấm "Mua ngay" — xem KieuShopeeService + AffiliateLinkRewriterService.
-        $data = $this->kieuShopee->fetchProductAndVoucherLink($canonicalUrl);
+        // Nguồn mã trả về ĐÚNG MỘT link đã áp mã (kèm thông tin sản phẩm nếu đọc được). Link đó
+        // thuộc affiliate account của nguồn; affiliate được đổi về của mình khi người dùng bấm
+        // "Mua ngay" — xem AffiliateLinkRewriterService.
+        $source = $this->sources->activeSource();
+
+        if ($source === GanmaService::SOURCE) {
+            // Ganma CHỈ nhận link ngắn từ app Shopee, nên cố tình truyền $url GỐC chứ không
+            // phải $canonicalUrl: resolveCanonicalUrl() vừa biến link ngắn thành link shopee.vn
+            // đầy đủ, mà đó đúng là dạng ganma từ chối thẳng.
+            if (! $this->ganma->canHandle($url)) {
+                return back()->withErrors([
+                    'voucher_url' => 'Nguồn mã đang dùng chỉ nhận link chia sẻ từ ứng dụng Shopee. Vui lòng mở sản phẩm trong app Shopee, bấm Chia sẻ → Sao chép liên kết rồi dán lại.',
+                ]);
+            }
+
+            $data = $this->ganma->fetchProductAndVoucherLink($url);
+        } else {
+            $data = $this->kieuShopee->fetchProductAndVoucherLink($canonicalUrl);
+        }
 
         // ID lấy từ URL là nguồn chính; nếu URL không có dạng -i.SHOP.ITEM thì mượn ID mà
         // kieushopee đã phân giải hộ, để vẫn hỏi được Shopee khi thiếu thông tin sản phẩm.
@@ -78,7 +97,7 @@ class ShopeeVoucherController extends Controller
                 'canonical_url' => $canonicalUrl,
                 'product' => $product,
                 // Token mờ của link CTA duy nhất; null nghĩa là chưa lấy được mã cho sản phẩm này.
-                'voucher_ref' => isset($data['voucher_link']) ? $this->maskVoucherLink($data['voucher_link']) : null,
+                'voucher_ref' => isset($data['voucher_link']) ? $this->maskVoucherLink($data['voucher_link'], $source) : null,
             ],
             ...$this->facebookRedirectFlags(),
         ]);
@@ -136,14 +155,18 @@ class ShopeeVoucherController extends Controller
      * "Mua ngay", để không lộ URL affiliate gốc ngay trong response /voucher/resolve (xem
      * được qua tab Network/Inertia devtools dù chưa bấm link nào).
      */
-    private function maskVoucherLink(string $voucherLink): string
+    private function maskVoucherLink(string $voucherLink, string $source): string
     {
         $ref = Str::random(32);
 
+        // Lưu kèm NGUỒN đã sinh ra link này, không chỉ mỗi URL: lúc khách bấm "Mua ngay",
+        // ShortLinkController mới biết ghi `source` nào vào short-link và tracking. Suy ngược
+        // từ URL thì không đáng tin — cả hai nguồn đều có thể trả về link trên domain Shopee.
+        //
         // TTL dài (7 ngày) để nút "mua lại" trong lịch sử chuyển đổi (lưu ở localStorage,
         // xem Home.vue) còn dùng được sau vài ngày — mã có thể hết lượt trước đó, nhưng
         // đó vốn là giới hạn có sẵn (nguồn không báo trạng thái còn/hết lượt).
-        Cache::put("voucher_ref:{$ref}", $voucherLink, now()->addDays(7));
+        Cache::put("voucher_ref:{$ref}", ['url' => $voucherLink, 'source' => $source], now()->addDays(7));
 
         return $ref;
     }

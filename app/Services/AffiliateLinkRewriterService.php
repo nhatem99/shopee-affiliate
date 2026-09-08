@@ -22,7 +22,9 @@ class AffiliateLinkRewriterService
     {
         try {
             $resolved = $this->followToShopee($url);
-            $rewritten = $this->swapMmpPid($resolved) ?? $resolved;
+            $rewritten = $this->swapAnRedirAffiliate($resolved)
+                ?? $this->swapMmpPid($resolved)
+                ?? $resolved;
 
             Log::info('AffiliateLinkRewriterService: rewrite hoàn tất', [
                 'input_url' => $url,
@@ -45,6 +47,13 @@ class AffiliateLinkRewriterService
 
         for ($i = 0; $i < self::MAX_HOPS; $i++) {
             $host = $this->hostOf($current);
+
+            // Link an_redir là ĐÍCH, không phải chặng trung gian — xem swapAnRedirAffiliate().
+            if ($this->isAnRedir($current)) {
+                Log::info('AffiliateLinkRewriterService: dừng ở an_redir, sửa tại chỗ', ['hop' => $i, 'url' => $current]);
+
+                return $current;
+            }
 
             if ($host === 'shopee.vn') {
                 Log::info('AffiliateLinkRewriterService: chạm tới shopee.vn', ['hop' => $i, 'url' => $current]);
@@ -82,6 +91,80 @@ class AffiliateLinkRewriterService
         Log::warning('AffiliateLinkRewriterService: vượt quá MAX_HOPS mà chưa tới shopee.vn', ['last_url' => $current]);
 
         return $current;
+    }
+
+    /** Link quy kết affiliate của chính Shopee: s.shopee.vn/an_redir?affiliate_id=...&origin_link=...&sub_id=... */
+    private function isAnRedir(string $url): bool
+    {
+        return $this->hostOf($url) === 's.shopee.vn'
+            && rtrim((string) parse_url($url, PHP_URL_PATH), '/') === '/an_redir';
+    }
+
+    /**
+     * Đổi affiliate trên link an_redir (nguồn mã YouTube ganma.vn) — sửa THẲNG tham số rồi
+     * DỪNG, cố ý không đi theo redirect như nhánh kieushopee.
+     *
+     * Đo thật trên production 08-09-2026, lặp 3 lần mỗi bên, chỉ đổi đúng biến affiliate_id:
+     *   affiliate_id=17104820001 (của ganma) → đích shopee.vn/opaanlp/{shop}/{item}
+     *   affiliate_id=17332410386 (của mình)  → đích shopee.vn/product/{shop}/{item}
+     * và mỗi lần CHÍNH SHOPEE cấp một credential_token mới kèm mmp_pid=an_<id> + utm_source=an_<id>
+     * đúng theo affiliate_id gửi lên. Path khác nhau ổn định 3/3, không phải nhiễu.
+     *
+     * Vì sao không đi theo redirect rồi mới sửa như link kieushopee:
+     *  • Sửa tại chỗ thì Shopee cấp attribution cho MÌNH ngay từ nguồn (credential_token của
+     *    mình). Đi theo redirect thì mình nhận landing page Shopee cấp CHO GANMA rồi dán
+     *    mmp_pid của mình đè lên — yếu hơn hẳn về mặt quy kết.
+     *  • Đi theo redirect nghĩa là server mình tự bấm link affiliate của ganma: đốt một lượt
+     *    click ghi cho ID của họ, từ IP datacenter với User-Agent của Guzzle.
+     *
+     * gads_t_sig (tham số có dạng chữ ký, nhiều khả năng mang ưu đãi) nằm trong origin_link và
+     * đi qua nguyên vẹn ở cả hai cách — không đụng tới.
+     *
+     * CHƯA KIỂM CHỨNG ĐƯỢC bằng header: Shopee có ràng buộc ưu đãi của gads_t_sig với affiliate
+     * id đã sinh ra nó hay không. "Có mặt trong URL" không đồng nghĩa "được chấp nhận khi vào
+     * giỏ" — phải mở trên điện thoại thật rồi so giá cuối mới biết.
+     */
+    private function swapAnRedirAffiliate(string $url): ?string
+    {
+        if (! $this->isAnRedir($url)) {
+            return null;
+        }
+
+        $parts = parse_url($url);
+        parse_str($parts['query'] ?? '', $query);
+
+        if (! isset($query['affiliate_id'])) {
+            Log::warning('AffiliateLinkRewriterService: link an_redir nhưng không có affiliate_id để đổi', ['url' => $url]);
+
+            return null;
+        }
+
+        // an_redir dùng affiliate id dạng TRẦN, còn mmp_pid ở link Shopee thường có tiền tố
+        // 'an_'. Cùng một tài khoản, chỉ khác cách viết — chuẩn hoá tại đây để config chỉ phải
+        // khai một chỗ duy nhất (services.shopee_affiliate.mmp_pid).
+        $query['affiliate_id'] = preg_replace('/^an_/', '', (string) config('services.shopee_affiliate.mmp_pid'));
+
+        // sub_id của an_redir chính là ô Sub_id trong báo cáo affiliate — cùng ô mà link
+        // kieushopee ghi qua utm_content. Luôn phải thay giá trị của ganma ('YT3-<token dài>'):
+        // đó vừa là định danh của họ, vừa gần như duy nhất theo từng job nên giữ lại thì cột
+        // Sub_id của mình nở ra hàng nghìn dòng rác, không tổng hợp được gì.
+        //
+        // Dùng thẳng nhãn YT thay vì đoán kênh từ nội dung sub_id: kênh đã biết chắc từ nguồn
+        // gọi (an_redir hiện chỉ do ganma sinh ra), mà token của họ có sẵn dấu '-' bên trong
+        // nên đem đi tách khe kiểu resolveSubId() chỉ ra toàn khe rác.
+        if (isset($query['sub_id'])) {
+            $label = (string) config('services.shopee_affiliate.utm_content_yt');
+
+            if ($label === '') {
+                unset($query['sub_id']);
+            } else {
+                $query['sub_id'] = $label;
+            }
+        }
+
+        $base = ($parts['scheme'] ?? 'https').'://'.($parts['host'] ?? '').($parts['path'] ?? '');
+
+        return $base.'?'.http_build_query($query);
     }
 
     private function swapMmpPid(string $url): ?string

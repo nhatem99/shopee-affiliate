@@ -74,6 +74,32 @@ return [
         // Thêm giá trị vào đây khi họ đổi cách đặt tên nhóm — xem
         // AffiliateLinkRewriterService::resolveSubId(). Danh sách rỗng = tắt hẳn việc tách IG.
         'ig_markers' => ['ig', 'insta', 'instagram'],
+
+        // Nhãn cho mã lấy từ nguồn YouTube (ganma.vn). Link của họ là s.shopee.vn/an_redir,
+        // ô nhãn tên là `sub_id` chứ không phải `utm_content`, nhưng Shopee đổ về cùng một cột
+        // Sub_id trong báo cáo — xem AffiliateLinkRewriterService::swapAnRedirAffiliate().
+        // Để rỗng thì xoá hẳn sub_id khỏi link.
+        'utm_content_yt' => env('SHOPEE_UTM_CONTENT_YT', 'YT'),
+    ],
+
+    // Nguồn lấy mã YouTube — chạy song song kieushopee, admin chọn nguồn nào đang dùng ở
+    // /admin/api-config. Khác kieushopee ở chỗ đây là API BẤT ĐỒNG BỘ: tạo job rồi phải hỏi
+    // lại nhiều lần cho tới khi xong.
+    'ganma' => [
+        'endpoint' => env('GANMA_ENDPOINT', 'https://ganma.vn'),
+
+        // Đo thật 08-09-2026: một job mất ~17-20 giây (queue_position đếm lùi 3 → 0).
+        //
+        // Trần 45s là do HẠ TẦNG chứ không phải do nguồn, đo trên chính VPS production:
+        //   • nginx không đặt fastcgi_read_timeout → mặc định 60s. Vượt là khách ăn 504.
+        //   • PHP-FPM max_execution_time = 30 (xem GanmaService::waitForJob xử lý cái này).
+        // 45s vừa đủ dư địa cho lúc hàng đợi dài gấp đôi bình thường, vừa còn ~15s biên an toàn
+        // trước ngưỡng 60s của nginx. Nâng cao hơn thì phải nới nginx trước, không thì vô nghĩa.
+        'poll_interval_seconds' => 3,
+        'max_wait_seconds' => 45,
+
+        // Timeout cho từng request lẻ (tạo job / hỏi trạng thái), không phải cho cả job.
+        'request_timeout_seconds' => 20,
     ],
 
     // Nguồn lấy link đã áp mã giảm giá — thay cho salesoc.vn (đã bỏ hẳn).
