@@ -119,7 +119,7 @@ class AffiliateLinkRewriterService
         // An toàn: utm_* là tham số tracking độc lập, không nằm trong encrypted_payload /
         // credential_token đã ký — đổi hay bỏ đều không ảnh hưởng việc áp mã giảm giá.
         if (isset($query['utm_content'])) {
-            $utmContent = (string) config('services.shopee_affiliate.utm_content');
+            $utmContent = $this->resolveSubId((string) $query['utm_content']);
 
             if ($utmContent === '') {
                 unset($query['utm_content']);
@@ -131,6 +131,59 @@ class AffiliateLinkRewriterService
         $base = ($parts['scheme'] ?? 'https').'://'.($parts['host'] ?? '').($parts['path'] ?? '');
 
         return $base.'?'.http_build_query($query);
+    }
+
+    /**
+     * Chọn nhãn sub_id gửi cho Shopee, dựa trên nhãn kênh mà nguồn cấp mã đã gắn sẵn.
+     *
+     * `utm_content` CHÍNH LÀ ô "Sub_id" trong báo cáo affiliate Shopee — không phải một tham
+     * số utm thường. Nó gồm 5 khe nối bằng dấu "-" (đo thật trên production 08-09-2026: tool
+     * /22 của kieushopee trả về "Test-22---", tool /20 trả "test-Test---"). kieushopee đặt tên
+     * nhóm/tool của họ vào các khe đó, nên đây là chỗ DUY NHẤT trong response phân biệt được
+     * mã lấy từ kênh nào — field `groupName` của họ tuy đúng nghĩa hơn nhưng đang bỏ trống ở
+     * cả ba tool.
+     *
+     * Mã thuộc kênh Instagram được gắn nhãn riêng để tách traffic IG khỏi FB trong báo cáo
+     * Shopee; mọi kênh khác giữ nhãn mặc định như trước.
+     *
+     * So khớp theo TỪNG KHE và phải bằng đúng marker, không phải "chuỗi có chứa 'ig'" — kiểu
+     * chứa sẽ khớp nhầm hàng loạt tên nhóm bình thường (Big, Signature, Original...) và âm
+     * thầm dồn cả traffic FB sang nhãn IG.
+     */
+    private function resolveSubId(string $sourceUtmContent): string
+    {
+        $default = (string) config('services.shopee_affiliate.utm_content');
+
+        // Chuẩn hoá về chữ thường để config viết 'IG' hay 'ig' đều chạy, và LOẠI GIÁ TRỊ RỖNG:
+        // marker rỗng sẽ khớp với các khe trống của "Test-22---" (luôn có), tức mọi link đều
+        // bị gắn nhãn IG — hỏng âm thầm, báo cáo Shopee vẫn có số nên rất lâu mới phát hiện.
+        $markers = array_filter(
+            array_map(
+                fn ($marker) => mb_strtolower(trim((string) $marker)),
+                (array) config('services.shopee_affiliate.ig_markers'),
+            ),
+            fn (string $marker) => $marker !== '',
+        );
+
+        foreach (explode('-', $sourceUtmContent) as $slot) {
+            if (! in_array(mb_strtolower(trim($slot)), $markers, true)) {
+                continue;
+            }
+
+            $igLabel = (string) config('services.shopee_affiliate.utm_content_ig');
+
+            // Log để đối chiếu với cột Sub_id bên Shopee: nhãn nguồn thật của kieushopee chưa
+            // quan sát được lần nào (ba tool hiện đang mang tên test), nên khi kênh IG chạy
+            // thật thì dòng này là chỗ xác nhận marker đã khớp đúng.
+            Log::info('AffiliateLinkRewriterService: nhận ra mã kênh Instagram', [
+                'source_utm_content' => $sourceUtmContent,
+                'sub_id' => $igLabel,
+            ]);
+
+            return $igLabel;
+        }
+
+        return $default;
     }
 
     /**

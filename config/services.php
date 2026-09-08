@@ -61,6 +61,19 @@ return [
         // Đổi thoải mái, chỉ cần không suy ra được tên miền. Để chuỗi rỗng thì tham số bị xoá
         // hẳn khỏi URL (kín nhất, nhưng mất luôn khả năng tự nhận diện traffic của mình).
         'utm_content' => env('SHOPEE_UTM_CONTENT', 'fb'),
+
+        // Nhãn riêng cho mã lấy từ kênh Instagram, thay cho utm_content mặc định ở trên. Có
+        // nó thì trong báo cáo affiliate Shopee mới tách được đơn/click đến từ IG khỏi FB —
+        // trước đây mọi mã đều gắn cùng một nhãn nên cột Sub_id lúc nào cũng là 'fb'.
+        'utm_content_ig' => env('SHOPEE_UTM_CONTENT_IG', 'IG'),
+
+        // Các nhãn kênh (viết thường) của nguồn cấp mã được coi là "mã IG". kieushopee nhét
+        // tên nhóm/tool của họ vào utm_content của link trả về, dạng 5 khe nối bằng dấu "-";
+        // khe nào bằng đúng một trong các giá trị dưới đây thì link đó là mã IG.
+        //
+        // Thêm giá trị vào đây khi họ đổi cách đặt tên nhóm — xem
+        // AffiliateLinkRewriterService::resolveSubId(). Danh sách rỗng = tắt hẳn việc tách IG.
+        'ig_markers' => ['ig', 'insta', 'instagram'],
     ],
 
     // Nguồn lấy link đã áp mã giảm giá — thay cho salesoc.vn (đã bỏ hẳn).
