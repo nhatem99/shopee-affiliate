@@ -60,6 +60,12 @@ class VoucherShortenTest extends TestCase
         ]);
     }
 
+    /** URL của sản phẩm thứ $item — shop_id giữ nguyên, item_id đổi, y như hàng khác nhau trong cùng shop. */
+    private function productUrl(int $item): string
+    {
+        return "https://shopee.vn/san-pham-i.1.{$item}?mmp_pid=kieushopee";
+    }
+
     private function shorten(?string $ref = null, string $productName = 'Áo Hoodie Test'): TestResponse
     {
         return $this->postJson('/voucher/shorten', [
@@ -153,9 +159,11 @@ class VoucherShortenTest extends TestCase
 
         $used = [];
 
-        foreach (['Áo Hoodie', 'Quần Jean', 'Giày Sneaker'] as $product) {
+        // Sản phẩm khác nhau nghĩa là URL khác nhau: sản phẩm được nhận diện theo shop_id/item_id
+        // trong URL đích chứ không theo tên (xem ShortLinkController::productKey).
+        foreach (['Áo Hoodie', 'Quần Jean', 'Giày Sneaker'] as $item => $product) {
             $used[] = $this->postPartOf(
-                $this->shorten($this->ref(), $product)->assertOk()->json('short_url')
+                $this->shorten($this->ref($this->productUrl($item)), $product)->assertOk()->json('short_url')
             );
         }
 
@@ -215,8 +223,8 @@ class VoucherShortenTest extends TestCase
 
         $urls = [];
 
-        foreach (['Áo Hoodie', 'Quần Jean'] as $product) {
-            $urls[] = $this->shorten($this->ref(), $product)->assertOk()->json('short_url');
+        foreach (['Áo Hoodie', 'Quần Jean'] as $item => $product) {
+            $urls[] = $this->shorten($this->ref($this->productUrl($item)), $product)->assertOk()->json('short_url');
         }
 
         sort($urls);
@@ -250,6 +258,77 @@ class VoucherShortenTest extends TestCase
 
         $this->assertSame($first, $second);
         Http::assertSentCount(1);
+    }
+
+    /**
+     * Trường hợp khó nhất, và cũng là trường hợp thật: hai lượt "lấy mã" của CÙNG một sản phẩm
+     * ra hai link voucher khác nhau (nguồn cấp mã phát payload mới mỗi lần) nên short-link cũng
+     * khác nhau, đồng thời không đọc được tên sản phẩm. Trước đây khoá nhận diện rơi về
+     * short-code — khác nhau ở hai lượt — nên cùng một món hàng bị đăng hai comment.
+     *
+     * Không có tên, không có short-code ổn định thì chỉ còn id sản phẩm trong URL đích là bấu
+     * víu được; đó chính là lý do productKey() đọc shop_id/item_id trước tiên.
+     */
+    public function test_same_product_with_a_new_voucher_payload_shares_one_comment(): void
+    {
+        $this->enableCommentRedirect();
+        Http::fake(['graph.facebook.com/*' => Http::response([
+            'id' => self::POST_ID.'_999',
+            'permalink_url' => 'https://www.facebook.com/permalink',
+        ])]);
+
+        $shortenPayload = fn (string $payload) => $this->postJson('/voucher/shorten', [
+            'ref' => $this->ref("https://shopee.vn/san-pham-i.1.2?mmp_pid=kieushopee&payload={$payload}"),
+        ])->assertOk()->json('short_url');
+
+        $this->assertSame($shortenPayload('AAA'), $shortenPayload('BBB'));
+        Http::assertSentCount(1);
+    }
+
+    /**
+     * Cùng một URL sản phẩm là cùng một sản phẩm, kể cả khi hai lượt bấm đọc ra tên khác nhau
+     * (nguồn cấp mã và Shopee không phải lúc nào cũng trả về cùng một chuỗi tên).
+     */
+    public function test_same_product_url_shares_one_comment_even_if_the_name_differs(): void
+    {
+        $this->enableCommentRedirect();
+        Http::fake(['graph.facebook.com/*' => Http::response([
+            'id' => self::POST_ID.'_999',
+            'permalink_url' => 'https://www.facebook.com/permalink',
+        ])]);
+
+        $first = $this->shorten($this->ref(), 'Áo Hoodie Nam')->json('short_url');
+        $second = $this->shorten($this->ref(), 'AO HOODIE NAM - Hang Cong Ty')->json('short_url');
+
+        $this->assertSame($first, $second);
+        Http::assertSentCount(1);
+    }
+
+    /**
+     * Bấm nhiều lần cùng một sản phẩm không được sinh mỗi lượt một hàng short_links: bảng sẽ
+     * phình theo SỐ LƯỢT BẤM thay vì số sản phẩm, và short-code đổi mỗi lượt còn kéo theo hỏng
+     * phần nhận diện sản phẩm phía Facebook.
+     */
+    public function test_reuses_one_short_link_row_for_repeated_clicks(): void
+    {
+        Http::fake();
+
+        $first = $this->shorten()->assertOk()->json('code');
+        $second = $this->shorten($this->ref())->assertOk()->json('code');
+
+        $this->assertSame($first, $second);
+        $this->assertDatabaseCount('short_links', 1);
+    }
+
+    /** Đích khác nhau thì vẫn phải là hai short-link riêng — dùng lại chỉ khi trỏ cùng một chỗ. */
+    public function test_different_targets_still_get_their_own_short_link(): void
+    {
+        Http::fake();
+
+        $this->shorten($this->ref($this->productUrl(1)));
+        $this->shorten($this->ref($this->productUrl(2)));
+
+        $this->assertDatabaseCount('short_links', 2);
     }
 
     public function test_falls_back_to_short_link_when_target_post_is_missing(): void

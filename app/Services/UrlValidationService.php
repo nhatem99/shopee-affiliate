@@ -117,6 +117,13 @@ class UrlValidationService
             return ['shop_id' => $m[1], 'item_id' => $m[2]];
         }
 
+        // Pattern: /product/SHOP_ID/ITEM_ID — dạng Shopee dùng cho link chia sẻ từ ứng dụng, và
+        // cũng là dạng mà chuỗi redirect của link voucher hay kết thúc ở đó. Thiếu dạng này thì
+        // mọi thứ nhận diện sản phẩm qua id đều mù trước đúng loại link khách hay dán nhất.
+        if (preg_match('#/product/(\d+)/(\d+)#', $url, $m)) {
+            return ['shop_id' => $m[1], 'item_id' => $m[2]];
+        }
+
         return [];
     }
 }

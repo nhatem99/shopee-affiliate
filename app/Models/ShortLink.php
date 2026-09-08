@@ -9,6 +9,7 @@ class ShortLink extends Model
     protected $fillable = [
         'code',
         'target_url',
+        'target_hash',
         'source',
         'product_name',
         'product_image',
