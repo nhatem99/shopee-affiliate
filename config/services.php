@@ -75,11 +75,14 @@ return [
         // AffiliateLinkRewriterService::resolveSubId(). Danh sách rỗng = tắt hẳn việc tách IG.
         'ig_markers' => ['ig', 'insta', 'instagram'],
 
-        // Nhãn cho mã lấy từ nguồn YouTube (ganma.vn). Link của họ là s.shopee.vn/an_redir,
-        // ô nhãn tên là `sub_id` chứ không phải `utm_content`, nhưng Shopee đổ về cùng một cột
-        // Sub_id trong báo cáo — xem AffiliateLinkRewriterService::swapAnRedirAffiliate().
-        // Để rỗng thì xoá hẳn sub_id khỏi link.
+        // Nhãn cho mã lấy từ nguồn YouTube (ganma.vn).
         'utm_content_yt' => env('SHOPEE_UTM_CONTENT_YT', 'YT'),
+
+        // Marker nhận ra "mã YouTube". Link an_redir của ganma mang sub_id dạng "YT3-<token>";
+        // đi theo redirect thì Shopee đổ nguyên văn giá trị đó sang utm_content, nên khe đầu
+        // ('yt3') là chỗ nhận ra kênh. Thêm giá trị vào đây nếu họ đổi cách đặt tên nhóm —
+        // xem AffiliateLinkRewriterService::resolveSubId(). Rỗng = tắt hẳn việc tách YT.
+        'yt_markers' => ['yt', 'yt1', 'yt2', 'yt3', 'ytb', 'youtube'],
     ],
 
     // Nguồn lấy mã YouTube — chạy song song kieushopee, admin chọn nguồn nào đang dùng ở

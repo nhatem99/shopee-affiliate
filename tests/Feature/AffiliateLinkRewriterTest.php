@@ -153,90 +153,87 @@ class AffiliateLinkRewriterTest extends TestCase
     }
 
     /**
-     * Link an_redir (nguồn mã YouTube ganma.vn) — shape khác hẳn kieushopee: affiliate nằm ở
-     * `affiliate_id` dạng TRẦN chứ không phải `mmp_pid` có tiền tố 'an_'.
+     * Link an_redir (nguồn mã YouTube ganma.vn) PHẢI được đi theo redirect, y như link
+     * kieushopee — không được sửa affiliate_id tại chỗ.
      *
-     * Đo thật 08-09-2026: đổi affiliate_id thì chính Shopee cấp credential_token + mmp_pid +
-     * utm_source cho tài khoản gửi lên. Không đổi được ở đây = hoa hồng về túi ganma.
+     * Đo thật 08-09-2026, lặp 3 lần: affiliate_id quyết định trang đích.
+     *   affiliate_id của ganma → shopee.vn/opaanlp/... (trang landing ÁP MÃ độc quyền)
+     *   affiliate_id của mình  → shopee.vn/product/... (trang thường, KHÔNG có mã)
+     * Tài khoản affiliate của mình không nằm trong chương trình đó, nên bắt Shopee cấp lại
+     * token cho mình = mất mã của khách. Cách đúng là giữ nguyên credential_token + trang
+     * /opaanlp/ của ganma (mã), chỉ đổi mmp_pid (hoa hồng) — đúng cơ chế kieushopee đang chạy.
      */
-    private function anRedir(string $affiliateId = '17104820001', string $subId = 'YT3-abc'): string
+    private function fakeAnRedirRedirect(string $utmContent = 'YT3-token'): void
+    {
+        Http::fake([
+            's.shopee.vn/*' => Http::response('', 301, [
+                'Location' => 'https://shopee.vn/opaanlp/1541796848/27236640960?__mobile__=1'
+                    .'&credential_token=TOKEN-CUA-GANMA&exp_group=rollout&gads_t_sig=CHUKY'
+                    .'&mmp_pid=an_17104820001&utm_content='.$utmContent
+                    .'&utm_medium=affiliates&utm_source=an_17104820001',
+            ]),
+        ]);
+    }
+
+    private function anRedir(): string
     {
         $origin = rawurlencode('https://shopee.vn/product/1541796848/27236640960?gads_t_sig=CHUKY');
 
-        return "https://s.shopee.vn/an_redir?affiliate_id={$affiliateId}&origin_link={$origin}&sub_id={$subId}";
+        return "https://s.shopee.vn/an_redir?affiliate_id=17104820001&origin_link={$origin}&sub_id=YT3-token";
     }
 
-    public function test_an_redir_link_gets_our_bare_affiliate_id(): void
+    public function test_an_redir_keeps_the_voucher_page_and_token_of_the_source(): void
     {
-        Http::fake();
+        $this->fakeAnRedirRedirect();
 
         $result = $this->rewrite($this->anRedir());
 
-        parse_str(parse_url($result, PHP_URL_QUERY), $query);
-
-        // Dạng TRẦN: an_redir không dùng tiền tố 'an_' như mmp_pid, dù cùng một tài khoản.
-        $this->assertSame('17332410386', $query['affiliate_id']);
-        $this->assertStringNotContainsString('17104820001', $result);
+        // Mất một trong hai thứ này là mất mã giảm giá của khách.
+        $this->assertStringContainsString('/opaanlp/', $result);
+        $this->assertStringContainsString('credential_token=TOKEN-CUA-GANMA', $result);
+        $this->assertStringContainsString('exp_group=rollout', $result);
     }
 
-    /** sub_id của an_redir là cùng ô Sub_id mà utm_content ghi ở link kieushopee. */
-    public function test_an_redir_sub_id_becomes_the_youtube_label(): void
+    public function test_an_redir_still_moves_the_commission_to_us(): void
     {
-        Http::fake();
+        $this->fakeAnRedirRedirect();
 
-        $result = $this->rewrite($this->anRedir());
+        parse_str(parse_url($this->rewrite($this->anRedir()), PHP_URL_QUERY), $query);
 
-        parse_str(parse_url($result, PHP_URL_QUERY), $query);
-
-        $this->assertSame('YT', $query['sub_id']);
-        // Token của nguồn vừa là định danh không phải của mình, vừa gần như duy nhất mỗi job —
-        // giữ lại thì cột Sub_id nở ra hàng nghìn dòng rác.
-        $this->assertStringNotContainsString('YT3-abc', $result);
+        $this->assertSame(self::MY_PID, $query['mmp_pid']);
+        $this->assertSame(self::MY_PID, $query['utm_source']);
+        $this->assertStringNotContainsString('17104820001', http_build_query($query));
     }
 
-    /**
-     * origin_link mang gads_t_sig — tham số có dạng chữ ký, nhiều khả năng là nơi giữ ưu đãi.
-     * Đụng vào nó là mất mã của khách.
-     */
-    public function test_an_redir_keeps_the_signed_origin_link_untouched(): void
+    /** Traffic YouTube phải tách khỏi cột Sub_id 'fb', nếu không báo cáo gộp chung hai kênh. */
+    public function test_youtube_channel_gets_its_own_sub_id(): void
     {
-        Http::fake();
+        $this->fakeAnRedirRedirect();
 
-        $result = $this->rewrite($this->anRedir());
+        parse_str(parse_url($this->rewrite($this->anRedir()), PHP_URL_QUERY), $query);
 
-        parse_str(parse_url($result, PHP_URL_QUERY), $query);
-
-        $this->assertSame(
-            'https://shopee.vn/product/1541796848/27236640960?gads_t_sig=CHUKY',
-            $query['origin_link'],
-        );
-    }
-
-    /**
-     * Cố ý KHÔNG đi theo redirect của an_redir. Đi theo nghĩa là server mình tự bấm link
-     * affiliate của ganma: đốt một lượt click ghi cho ID của họ, từ IP datacenter — và nhận về
-     * landing page Shopee cấp cho HỌ thay vì để Shopee cấp attribution cho mình.
-     */
-    public function test_an_redir_is_rewritten_in_place_without_any_http_call(): void
-    {
-        Http::fake();
-
-        $this->rewrite($this->anRedir());
-
-        Http::assertNothingSent();
+        $this->assertSame('YT', $query['utm_content']);
     }
 
     /** Nhãn YouTube cũng đổi được bằng config như nhãn fb/IG. */
     public function test_youtube_label_comes_from_config(): void
     {
-        Http::fake();
-        config(['services.shopee_affiliate.utm_content_yt' => 'ytb2']);
+        $this->fakeAnRedirRedirect();
+        config(['services.shopee_affiliate.utm_content_yt' => 'ytb9']);
 
-        $result = $this->rewrite($this->anRedir());
+        parse_str(parse_url($this->rewrite($this->anRedir()), PHP_URL_QUERY), $query);
 
-        parse_str(parse_url($result, PHP_URL_QUERY), $query);
+        $this->assertSame('ytb9', $query['utm_content']);
+    }
 
-        $this->assertSame('ytb2', $query['sub_id']);
+    /** Tên nhóm chỉ tình cờ chứa "yt" không được tính là kênh YouTube. */
+    public function test_group_name_merely_containing_yt_is_not_treated_as_youtube(): void
+    {
+        $this->fakeAnRedirRedirect('Myth-Skyt---');
+
+        parse_str(parse_url($this->rewrite($this->anRedir()), PHP_URL_QUERY), $query);
+
+        $this->assertSame('fb', $query['utm_content']);
     }
 
     /** Payload đã ký (nơi chứa mã giảm giá) phải đi qua nguyên vẹn. */
