@@ -5,57 +5,53 @@ namespace App\Http\Controllers\Admin;
 use App\Http\Controllers\Controller;
 use App\Models\UserActivity;
 use App\Services\TrackingService;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
 use Inertia\Response;
+use Symfony\Component\HttpFoundation\StreamedResponse;
 
 class ActivityController extends Controller
 {
+    /** Các cột xuất ra CSV, theo đúng thứ tự cột trong file. */
+    private const EXPORT_HEADERS = [
+        'Thời gian', 'Sự kiện', 'Người dùng', 'Sản phẩm', 'Nguồn', 'Mã', 'Sàn',
+        'Thiết bị', 'Trình duyệt', 'Hệ điều hành', 'IP', 'Tỉnh/Thành', 'Quốc gia',
+        'Nguồn truy cập', 'Referrer', 'URL',
+    ];
+
     public function index(Request $request): Response
     {
-        $query = UserActivity::with('user')->latest();
-
-        if ($request->filled('event_type')) {
-            $query->where('event_type', $request->input('event_type'));
-        }
-
-        if ($request->filled('platform')) {
-            $query->where('platform', $request->input('platform'));
-        }
-
-        if ($request->filled('device_type')) {
-            $query->where('device_type', $request->input('device_type'));
-        }
-
-        if ($request->filled('traffic_source')) {
-            $query->where('traffic_source', $request->input('traffic_source'));
-        }
-
-        $activities = $query->paginate(30)->through(fn (UserActivity $a) => [
-            'id' => $a->id,
-            'user' => $a->user?->name,
-            'event_type' => $a->event_type,
-            'platform' => $a->platform,
-            'product_name' => $a->product_name,
-            'voucher_code' => $a->voucher_code,
-            'source' => $a->source,
-            'device_type' => $a->device_type,
-            'browser' => $a->browser,
-            'os_name' => $a->os_name,
-            'ip_address' => $a->ip_address,
-            'country' => $a->country,
-            'city' => $a->city,
-            'traffic_source' => $a->traffic_source,
-            'referrer_host' => $a->referrer_host,
-            'created_at' => $a->created_at->toDateTimeString(),
-        ])->withQueryString();
+        $activities = $this->filteredQuery($request)
+            ->with('user')
+            ->latest()
+            ->paginate(30)
+            ->through(fn (UserActivity $a) => [
+                'id' => $a->id,
+                'user' => $a->user?->name,
+                'event_type' => $a->event_type,
+                'platform' => $a->platform,
+                'product_name' => $a->product_name,
+                'voucher_code' => $a->voucher_code,
+                'source' => $a->source,
+                'device_type' => $a->device_type,
+                'browser' => $a->browser,
+                'os_name' => $a->os_name,
+                'ip_address' => $a->ip_address,
+                'country' => $a->country,
+                'city' => $a->city,
+                'traffic_source' => $a->traffic_source,
+                'referrer_host' => $a->referrer_host,
+                'created_at' => $a->created_at->toDateTimeString(),
+            ])
+            ->withQueryString();
 
         $recentWindow = now()->subDays(7);
 
         return Inertia::render('Admin/Activities', [
             'activities' => $activities,
-            'filters' => $request->only(['event_type', 'platform', 'device_type', 'traffic_source']),
+            'filters' => $this->activeFilters($request),
             'summary' => [
                 'total' => UserActivity::where('created_at', '>=', $recentWindow)->count(),
                 'by_device' => UserActivity::where('created_at', '>=', $recentWindow)
@@ -94,6 +90,14 @@ class ActivityController extends Controller
                     ->orderByDesc('total')
                     ->limit(6)
                     ->pluck('total', 'traffic_source'),
+                // Top IP để admin thấy ngay máy nào vào nhiều bất thường; bấm vào lọc luôn.
+                'top_ips' => UserActivity::where('created_at', '>=', $recentWindow)
+                    ->whereNotNull('ip_address')
+                    ->selectRaw('ip_address, COUNT(*) as total')
+                    ->groupBy('ip_address')
+                    ->orderByDesc('total')
+                    ->limit(5)
+                    ->pluck('total', 'ip_address'),
                 // Đếm các dấu hiệu tấn công (brute-force login/OTP, cố vào admin trái phép,
                 // bị chặn bởi rate-limit) để admin thấy ngay khi vào trang theo dõi.
                 'security_events' => UserActivity::where('created_at', '>=', $recentWindow)
@@ -106,6 +110,121 @@ class ActivityController extends Controller
                     ->pluck('total', 'event_type'),
             ],
         ]);
+    }
+
+    /**
+     * Xuất CSV theo đúng bộ lọc đang xem (gồm cả khoảng ngày). Stream + chunk để
+     * không nạp cả bảng log vào RAM khi dữ liệu đã lớn.
+     */
+    public function export(Request $request): StreamedResponse
+    {
+        $query = $this->filteredQuery($request)->with('user');
+        $filters = $this->activeFilters($request);
+
+        $from = $filters['from'] ?? null;
+        $to = $filters['to'] ?? null;
+
+        $name = 'hoat-dong';
+        if ($from || $to) {
+            $name .= '_'.($from ?: 'dau').'_den_'.($to ?: now()->format('Y-m-d'));
+        } else {
+            $name .= '_tat-ca_'.now()->format('Y-m-d');
+        }
+
+        return response()->streamDownload(function () use ($query) {
+            $out = fopen('php://output', 'w');
+
+            // BOM để Excel nhận đúng UTF-8, không thì tiếng Việt bị vỡ dấu.
+            fwrite($out, "\xEF\xBB\xBF");
+            fputcsv($out, self::EXPORT_HEADERS);
+
+            $query->chunkById(500, function ($rows) use ($out) {
+                foreach ($rows as $a) {
+                    fputcsv($out, [
+                        $a->created_at?->toDateTimeString(),
+                        $a->event_type,
+                        $a->user?->name ?? 'Khách',
+                        $a->product_name,
+                        $a->source,
+                        $a->voucher_code,
+                        $a->platform,
+                        $a->device_type,
+                        $a->browser,
+                        $a->os_name,
+                        $a->ip_address,
+                        $a->city,
+                        $a->country,
+                        $a->traffic_source,
+                        $a->referrer_host,
+                        $a->url,
+                    ]);
+                }
+                flush();
+            });
+
+            fclose($out);
+        }, $name.'.csv', [
+            'Content-Type' => 'text/csv; charset=UTF-8',
+        ]);
+    }
+
+    /**
+     * Bộ lọc dùng chung cho bảng trên web lẫn file CSV, để cái nhìn thấy và cái
+     * tải về luôn khớp nhau.
+     */
+    private function filteredQuery(Request $request): Builder
+    {
+        $query = UserActivity::query();
+
+        foreach (['event_type', 'platform', 'device_type', 'traffic_source'] as $field) {
+            if ($request->filled($field)) {
+                $query->where($field, $request->input($field));
+            }
+        }
+
+        if ($request->filled('ip')) {
+            $ip = trim((string) $request->input('ip'));
+            // Gõ đủ IP thì so khớp chính xác; gõ một phần (vd '113.161.') thì tìm gần
+            // đúng để tra được cả một dải máy.
+            if (filter_var($ip, FILTER_VALIDATE_IP)) {
+                $query->where('ip_address', $ip);
+            } else {
+                $query->where('ip_address', 'like', '%'.addcslashes($ip, '%_\\').'%');
+            }
+        }
+
+        if ($from = $this->date($request->input('from'))) {
+            $query->whereDate('created_at', '>=', $from);
+        }
+
+        if ($to = $this->date($request->input('to'))) {
+            $query->whereDate('created_at', '<=', $to);
+        }
+
+        return $query;
+    }
+
+    /** @return array<string, string> */
+    private function activeFilters(Request $request): array
+    {
+        $filters = $request->only(['event_type', 'platform', 'device_type', 'traffic_source', 'ip']);
+        $filters['ip'] = isset($filters['ip']) ? trim((string) $filters['ip']) : null;
+        $filters['from'] = $this->date($request->input('from'));
+        $filters['to'] = $this->date($request->input('to'));
+
+        return array_filter($filters, fn ($v) => $v !== null && $v !== '');
+    }
+
+    /** Chỉ nhận đúng dạng Y-m-d; giá trị lạ bị bỏ qua thay vì làm hỏng truy vấn. */
+    private function date(mixed $value): ?string
+    {
+        if (! is_string($value) || ! preg_match('/^\d{4}-\d{2}-\d{2}$/', $value)) {
+            return null;
+        }
+
+        [$y, $m, $d] = array_map('intval', explode('-', $value));
+
+        return checkdate($m, $d, $y) ? $value : null;
     }
 
     /**
