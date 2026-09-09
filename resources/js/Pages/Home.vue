@@ -46,6 +46,15 @@ const resolving = ref(false)
 const voucherError = ref(null)
 const history = useLocalStorage('sv_history', [])
 
+// Link đã quét xong gần nhất. So với nội dung đang có trong ô để biết có gì mới cần quét hay
+// không — dùng chính chuỗi khách nhập chứ không phải canonical_url của server, vì server đã bung
+// link ngắn thành link đầy đủ nên hai bên không bao giờ khớp.
+const resolvedUrl = ref(null)
+
+const alreadyResolved = computed(
+    () => resolvedUrl.value !== null && voucherUrl.value.trim() === resolvedUrl.value,
+)
+
 async function pasteVoucherUrl() {
     try {
         const text = (await navigator.clipboard.readText()).trim()
@@ -74,6 +83,10 @@ function focusVoucherTool() {
 
 function resolveVoucher() {
     if (!voucherUrl.value.trim()) return
+    // Chặn gửi trùng ở ngay đây, không chỉ dựa vào :disabled của nút: Enter và sự kiện dán đều
+    // gọi thẳng hàm này mà không đi qua nút. Trong log hoạt động đã thấy khách dán/bấm lặp lại
+    // cách nhau 2-3 giây, và mỗi lượt trượt cache của nguồn ganma là một job ~20 giây.
+    if (resolving.value) return
     resolving.value = true
     voucherError.value = null
     // Xoá link đã lấy của lần quét trước: nút kết quả dùng chung key 'result', còn các dòng
@@ -85,6 +98,9 @@ function resolveVoucher() {
         preserveScroll: true,
         onSuccess: () => {
             resolving.value = false
+            // Ghi lại link vừa quét xong để khoá nút. Chỉ đặt ở onSuccess: quét lỗi thì phải cho
+            // khách bấm thử lại, không được khoá.
+            resolvedUrl.value = voucherUrl.value.trim()
             const result = props.voucherResult
             if (result?.voucher_ref) {
                 history.value = [
@@ -111,6 +127,12 @@ function resolveVoucher() {
         onError: (errors) => {
             voucherError.value = errors.voucher_url || 'Có lỗi xảy ra, vui lòng thử lại.'
             toast.error(voucherError.value)
+        },
+        // onFinish chạy trong MỌI trường hợp, kể cả request đứt giữa đường (mạng yếu, khách
+        // đang trong webview Facebook) — nơi onSuccess/onError đều không được gọi. Bỏ nút đi
+        // rồi thì `resolving` còn khoá cả ô nhập, nên kẹt cờ này nghĩa là khách không sửa
+        // được link mà cũng không thử lại được, phải tải lại trang.
+        onFinish: () => {
             resolving.value = false
         },
     })
@@ -367,6 +389,7 @@ onUnmounted(() => {
                                     ref="voucherUrlInput"
                                     v-model="voucherUrl"
                                     type="url"
+                                    enterkeyhint="search"
                                     @keydown.enter="resolveVoucher"
                                     @paste="onVoucherUrlPaste"
                                     placeholder="Dán link Shopee (shopee.vn hoặc s.shopee.vn)..."
@@ -379,17 +402,21 @@ onUnmounted(() => {
                                     class="absolute right-1.5 top-1/2 -translate-y-1/2 text-xs font-bold text-[var(--color-accent)] bg-[var(--color-peach-soft)] hover:bg-[var(--color-peach)] border border-[var(--color-accent)]/30 rounded-lg px-3 py-1.5 transition"
                                 >Dán</button>
                             </div>
+                            <!-- Dán link là tự quét luôn, nên nút này gần như không còn việc gì:
+                                 khoá lại khi ĐANG quét và cả khi link trong ô ĐÃ quét xong, để khách
+                                 không bấm thêm một lượt vô ích (mỗi lượt trượt cache là một vòng gọi
+                                 nguồn mã, riêng ganma mất ~20 giây). Sửa lại link thì nút tự mở. -->
                             <button
                                 @click="resolveVoucher"
-                                :disabled="resolving || !voucherUrl.trim()"
-                                class="btn-fire rounded-xl flex items-center justify-center gap-2 whitespace-nowrap transition-all duration-200"
+                                :disabled="resolving || !voucherUrl.trim() || alreadyResolved"
+                                class="btn-fire rounded-xl flex items-center justify-center gap-2 whitespace-nowrap transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
                                 :class="stuck ? 'px-6 py-3' : 'px-8 py-4'"
                             >
                                 <svg v-if="resolving" class="w-4 h-4 animate-spin" viewBox="0 0 24 24" fill="none">
                                     <circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" stroke-dasharray="30 70" />
                                 </svg>
-                                <span v-else>🔍</span>
-                                {{ resolving ? 'Đang xử lý...' : 'Tìm mã ngay' }}
+                                <span v-else>{{ alreadyResolved ? '✓' : '🔍' }}</span>
+                                {{ resolving ? 'Đang tìm mã...' : (alreadyResolved ? 'Đã tìm xong' : 'Tìm mã ngay') }}
                             </button>
                         </div>
                         <p v-if="voucherError" class="text-red-500 text-sm mt-2">{{ voucherError }}</p>
