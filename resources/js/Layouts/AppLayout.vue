@@ -39,6 +39,29 @@ const maintenanceMode = computed(() => page.props.settings?.maintenanceMode ?? f
                 </nav>
 
                 <div class="flex items-center gap-3">
+                    <!--
+                        Đường vào admin trên ĐIỆN THOẠI. Thanh nav phía trên là `hidden md:flex`
+                        và BottomNav không sinh mục nào cho admin, nên trước đây mở trang khách
+                        bằng điện thoại thì admin không có chỗ nào bấm để vào /admin — phải tự gõ
+                        URL. Đúng chỗ đau nhất: lấy mã là chức năng CHỈ chạy trên điện thoại
+                        (xem ShopeeVoucherController::resolve), tức muốn kiểm tra rồi nhảy sang
+                        chỉnh cấu hình thì luôn đang ở đúng thiết bị không có lối vào.
+
+                        Chỉ hiện dưới md để không đụng vào mục "Admin" vốn có của nav desktop.
+                    -->
+                    <Link
+                        v-if="auth.isAdmin"
+                        href="/admin/dashboard"
+                        class="md:hidden w-9 h-9 inline-flex items-center justify-center rounded-xl border border-[var(--color-accent)] text-[var(--color-accent)] transition-colors"
+                        aria-label="Vào trang quản trị"
+                        title="Trang quản trị"
+                    >
+                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none"
+                            stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"
+                            class="w-5 h-5">
+                            <path d="M4 21v-7M4 10V3M12 21v-9M12 8V3M20 21v-5M20 12V3M1 14h6M9 8h6M17 16h6" />
+                        </svg>
+                    </Link>
                     <ThemeToggle />
                     <template v-if="auth.isLoggedIn">
                         <Link v-if="!auth.isAdmin" href="/profile" class="hidden md:block text-sm text-[var(--color-muted)] hover:text-[var(--color-ink)] font-medium transition">{{ auth.user?.name }}</Link>
