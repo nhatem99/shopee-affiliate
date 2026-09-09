@@ -144,7 +144,16 @@ class ShortLinkController extends Controller
             'target_url' => $link->target_url,
         ]);
 
-        $this->tracking->log('short_link_click', $request, ['url' => $link->target_url]);
+        // Ghi kèm sản phẩm và nguồn mã, không chỉ URL. Bảng short_links đã giữ sẵn hai thứ này
+        // từ lúc tạo link, mà trước đây không truyền xuống nên ở /admin/activities mọi dòng
+        // "Click link rút gọn" đều trống cột Sản phẩm — tức đúng cú bấm ĐÁNG GIÁ NHẤT (khách
+        // thật sự đi tới Shopee) lại là dòng duy nhất không biết là của sản phẩm nào, không nối
+        // được với dòng "Chọn/lấy mã" trước đó, và không thống kê được sản phẩm nào ra click.
+        $this->tracking->log('short_link_click', $request, [
+            'url' => $link->target_url,
+            'product_name' => $link->product_name,
+            'source' => $link->source,
+        ]);
 
         // Đã tắt tạm bọc intent:// (mở thẳng app Shopee trên Android) — gây lỗi 502 thật trên
         // production ngay sau khi bấm link. Nguyên nhân đang được điều tra (nghi do hạ tầng

@@ -366,4 +366,31 @@ class VoucherShortenTest extends TestCase
 
         $this->postJson('/voucher/shorten', ['ref' => str_repeat('z', 32)])->assertStatus(422);
     }
+
+    /**
+     * Cú bấm ĐÁNG GIÁ NHẤT — khách thật sự rời trang để đi tới Shopee — phải ghi được là của
+     * sản phẩm nào và từ nguồn mã nào.
+     *
+     * Trước đây /go/{code} chỉ ghi URL, nên ở /admin/activities mọi dòng "Click link rút gọn"
+     * đều trống cột Sản phẩm: không nối được với dòng "Chọn/lấy mã" ngay trước đó, và không
+     * trả lời được câu "sản phẩm nào ra click". Bảng short_links đã giữ sẵn cả hai thông tin
+     * từ lúc tạo link, chỉ là không được truyền xuống.
+     */
+    public function test_click_records_which_product_and_source_it_was_for(): void
+    {
+        Http::fake();
+
+        $code = $this->shorten(productName: 'Dép Lỗ Breakwave')->assertOk()->json('code');
+
+        // UA của người thật: TrackingService bỏ qua bot nên UA rỗng sẽ không ghi gì cả.
+        $this->withHeaders([
+            'User-Agent' => 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_5 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.5 Mobile/15E148 Safari/604.1',
+        ])->get('/go/'.$code)->assertRedirect();
+
+        $this->assertDatabaseHas('user_activities', [
+            'event_type' => 'short_link_click',
+            'product_name' => 'Dép Lỗ Breakwave',
+            'source' => KieuShopeeService::SOURCE,
+        ]);
+    }
 }
