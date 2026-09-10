@@ -8,6 +8,7 @@ const props = defineProps({
     customerAuthEnabled: { type: Boolean, required: true },
     maintenanceMode: { type: Boolean, required: true },
     communityUrl: { type: String, default: '' },
+    cashbackRate: { type: Number, default: 0 },
 })
 
 const toast = useToast()
@@ -17,11 +18,14 @@ const savingCustomerAuth = ref(false)
 const savingMaintenance = ref(false)
 const communityUrl = ref(props.communityUrl)
 const savingCommunityUrl = ref(false)
+const cashbackRate = ref(props.cashbackRate)
+const savingCashbackRate = ref(false)
 
 // Đồng bộ lại nếu server trả về giá trị khác (ví dụ sau khi lưu xong)
 watch(() => props.customerAuthEnabled, (v) => { customerAuthEnabled.value = v })
 watch(() => props.maintenanceMode, (v) => { maintenanceMode.value = v })
 watch(() => props.communityUrl, (v) => { communityUrl.value = v })
+watch(() => props.cashbackRate, (v) => { cashbackRate.value = v })
 
 function toggleCustomerAuth() {
     const next = !customerAuthEnabled.value
@@ -65,6 +69,18 @@ function saveCommunityUrl() {
             : 'Đã bỏ link cộng đồng — banner sẽ ẩn dòng đó đi.'),
         onError: (errors) => toast.error(errors.community_url || 'Không lưu được link, vui lòng thử lại.'),
         onFinish: () => { savingCommunityUrl.value = false },
+    })
+}
+function saveCashbackRate() {
+    savingCashbackRate.value = true
+
+    router.post('/admin/settings', { cashback_rate: Number(cashbackRate.value) || 0 }, {
+        preserveScroll: true,
+        onSuccess: () => toast.success(Number(cashbackRate.value) > 0
+            ? `Đã đặt tỉ lệ hoàn tiền ${Number(cashbackRate.value)}% và áp lại cho các đơn đã nhập.`
+            : 'Đã tắt hoàn tiền — đơn mới sẽ không sinh hoa hồng cho khách.'),
+        onError: (errors) => toast.error(errors.cashback_rate || 'Không lưu được tỉ lệ, vui lòng thử lại.'),
+        onFinish: () => { savingCashbackRate.value = false },
     })
 }
 </script>
@@ -143,6 +159,46 @@ function saveCommunityUrl() {
                     <span class="w-2 h-2 rounded-full flex-none" :class="maintenanceMode ? 'bg-amber-500' : 'bg-[var(--color-muted)]'"></span>
                     <span class="text-[var(--color-ink)] font-medium">
                         {{ maintenanceMode ? 'Đang bảo trì — khách không vào được trang, admin vẫn dùng bình thường.' : 'Đang tắt — trang hoạt động bình thường.' }}
+                    </span>
+                </div>
+            </div>
+
+            <div class="bg-[var(--color-surface)] rounded-2xl border border-[var(--color-line)] p-6">
+                <h2 class="font-bold text-[var(--color-ink)] mb-1">Tỉ lệ hoàn tiền cho khách</h2>
+                <p class="text-sm text-[var(--color-muted)] leading-relaxed mb-4">
+                    Phần trăm <strong class="text-[var(--color-ink)]">hoa hồng ròng</strong> (đã trừ phí MCN) trả lại cho khách
+                    mỗi khi một đơn hàng <strong class="text-[var(--color-ink)]">Hoàn thành</strong> trong báo cáo Shopee.
+                    Để <strong class="text-[var(--color-ink)]">0</strong> là tắt hẳn — nhập báo cáo vẫn chạy nhưng không đồng nào vào ví khách.
+                    Đổi tỉ lệ sẽ <strong class="text-[var(--color-ink)]">tính lại cả những đơn đã nhập trước đó</strong>, trừ đơn đã chi trả.
+                </p>
+
+                <div class="flex flex-col sm:flex-row gap-2">
+                    <div class="relative flex-1 min-w-0">
+                        <input
+                            v-model="cashbackRate"
+                            type="number"
+                            min="0"
+                            max="100"
+                            step="1"
+                            @keydown.enter="saveCashbackRate"
+                            class="w-full px-4 py-2.5 pr-10 rounded-xl border border-[var(--color-line)] bg-[var(--color-bg)] text-sm text-[var(--color-ink)] tabular-nums focus:outline-none focus:border-[var(--color-accent)]"
+                        />
+                        <span class="absolute right-4 top-1/2 -translate-y-1/2 text-sm text-[var(--color-muted)] pointer-events-none">%</span>
+                    </div>
+                    <button
+                        type="button"
+                        @click="saveCashbackRate"
+                        :disabled="savingCashbackRate"
+                        class="btn-fire px-6 py-2.5 rounded-xl text-sm whitespace-nowrap disabled:opacity-60"
+                    >{{ savingCashbackRate ? 'Đang lưu...' : 'Lưu tỉ lệ' }}</button>
+                </div>
+
+                <div class="mt-4 pt-4 border-t border-[var(--color-line)] flex items-center gap-2 text-sm">
+                    <span class="w-2 h-2 rounded-full flex-none" :class="Number(cashbackRate) > 0 ? 'bg-[var(--color-brand-green)]' : 'bg-[var(--color-muted)]'"></span>
+                    <span class="text-[var(--color-ink)] font-medium">
+                        {{ Number(cashbackRate) > 0
+                            ? `Đang hoàn ${Number(cashbackRate)}% hoa hồng ròng cho khách.`
+                            : 'Đang tắt — chưa trả hoa hồng cho khách nào.' }}
                     </span>
                 </div>
             </div>

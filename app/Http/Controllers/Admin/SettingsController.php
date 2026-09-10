@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
 use App\Models\Setting;
+use App\Services\CashbackService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
@@ -17,6 +18,7 @@ class SettingsController extends Controller
             'customerAuthEnabled' => Setting::getBool('customer_auth_enabled', true),
             'maintenanceMode' => Setting::getBool('maintenance_mode', false),
             'communityUrl' => Setting::get('community_url') ?: '',
+            'cashbackRate' => (float) Setting::get(CashbackService::RATE_KEY, 0),
         ]);
     }
 
@@ -28,6 +30,7 @@ class SettingsController extends Controller
             'customer_auth_enabled' => ['sometimes', 'boolean'],
             'maintenance_mode' => ['sometimes', 'boolean'],
             'community_url' => ['sometimes', 'nullable', 'url', 'max:255'],
+            'cashback_rate' => ['sometimes', 'numeric', 'min:0', 'max:100'],
         ]);
 
         if (array_key_exists('customer_auth_enabled', $validated)) {
@@ -40,6 +43,14 @@ class SettingsController extends Controller
 
         if (array_key_exists('community_url', $validated)) {
             Setting::set('community_url', $validated['community_url'] ?? '');
+        }
+
+        if (array_key_exists('cashback_rate', $validated)) {
+            Setting::set(CashbackService::RATE_KEY, (string) $validated['cashback_rate']);
+
+            // Đổi tỉ lệ phải áp ngay cho những đơn ĐÃ nhập, không chỉ đơn nhập về sau: nếu không,
+            // admin đặt tỉ lệ lần đầu sau khi đã nhập báo cáo sẽ thấy không có gì xảy ra cả.
+            app(CashbackService::class)->sync();
         }
 
         return back()->with('success', 'Đã lưu cài đặt.');

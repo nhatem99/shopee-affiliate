@@ -17,6 +17,7 @@ const navItems = [
     { href: '/admin/dashboard', icon: '📊', label: 'Dashboard' },
     { href: '/admin/activities', icon: '🕵️', label: 'Theo dõi' },
     { href: '/admin/orders', icon: '📦', label: 'Đơn hàng' },
+    { href: '/admin/shopee-orders', icon: '🧾', label: 'Báo cáo Shopee' },
     { href: '/admin/withdrawals', icon: '💸', label: 'Rút tiền' },
     { href: '/admin/vouchers', icon: '🎫', label: 'Voucher FB/YT' },
     { href: '/admin/voucher-buttons', icon: '🔘', label: 'Nút Voucher' },

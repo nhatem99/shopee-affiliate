@@ -7,6 +7,7 @@ use App\Http\Controllers\Admin\DashboardController;
 use App\Http\Controllers\Admin\LogController;
 use App\Http\Controllers\Admin\OrderController;
 use App\Http\Controllers\Admin\SettingsController;
+use App\Http\Controllers\Admin\ShopeeOrderController;
 use App\Http\Controllers\Admin\VoucherButtonConfigController;
 use App\Http\Controllers\Admin\VoucherController;
 use App\Http\Controllers\Admin\WithdrawalController as AdminWithdrawalController;
@@ -108,6 +109,8 @@ Route::middleware(['auth', 'auth.admin'])->prefix('admin')->name('admin.')->grou
     Route::post('/activities/prune-bots', [ActivityController::class, 'pruneBots'])->name('activities.prune-bots');
     Route::get('/orders', [OrderController::class, 'index'])->name('orders');
     Route::patch('/orders/{commission}', [OrderController::class, 'update'])->name('orders.update');
+    Route::get('/shopee-orders', [ShopeeOrderController::class, 'index'])->name('shopee-orders');
+    Route::post('/shopee-orders/import', [ShopeeOrderController::class, 'import'])->name('shopee-orders.import');
     Route::get('/api-config', [ApiConfigController::class, 'index'])->name('api-config');
     Route::post('/api-config', [ApiConfigController::class, 'store'])->name('api-config.store');
     Route::post('/api-config/{config}/test', [ApiConfigController::class, 'test'])->name('api-config.test');
