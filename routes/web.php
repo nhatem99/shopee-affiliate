@@ -14,7 +14,6 @@ use App\Http\Controllers\AffiliateController;
 use App\Http\Controllers\Auth\AdminLoginController;
 use App\Http\Controllers\Auth\GoogleController;
 use App\Http\Controllers\Auth\LoginController;
-use App\Http\Controllers\Auth\OtpController;
 use App\Http\Controllers\Auth\RegisterController;
 use App\Http\Controllers\BlogController;
 use App\Http\Controllers\ProfileController;
@@ -52,12 +51,10 @@ Route::middleware('guest')->group(function () {
     Route::get('/admin/login', [AdminLoginController::class, 'show'])->name('admin.login');
     Route::post('/admin/login', [AdminLoginController::class, 'store'])->middleware('throttle:login')->name('admin.login.store');
 
-    // Đăng ký + OTP là lối tạo tài khoản KHÁCH mới — cái này tắt được.
+    // Đăng ký là lối tạo tài khoản KHÁCH mới — cái này tắt được.
     Route::middleware('customer.auth.enabled')->group(function () {
         Route::get('/register', [RegisterController::class, 'show'])->name('register');
         Route::post('/register', [RegisterController::class, 'store'])->middleware('throttle:register');
-        Route::post('/auth/otp/send', [OtpController::class, 'send'])->middleware('throttle:otp-send')->name('otp.send');
-        Route::post('/auth/otp/verify', [OtpController::class, 'verify'])->middleware('throttle:otp-verify')->name('otp.verify');
         Route::get('/auth/google/redirect', [GoogleController::class, 'redirect'])->name('google.redirect');
         Route::get('/auth/google/callback', [GoogleController::class, 'callback'])->name('google.callback');
     });

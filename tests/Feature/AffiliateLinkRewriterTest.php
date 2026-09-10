@@ -22,9 +22,9 @@ class AffiliateLinkRewriterTest extends TestCase
         config(['services.shopee_affiliate.mmp_pid' => self::MY_PID]);
     }
 
-    private function rewrite(string $url): string
+    private function rewrite(string $url, ?string $userSubId = null): string
     {
-        return app(AffiliateLinkRewriterService::class)->rewriteToOwnAffiliate($url);
+        return app(AffiliateLinkRewriterService::class)->rewriteToOwnAffiliate($url, $userSubId);
     }
 
     public function test_swaps_mmp_pid_to_our_own_affiliate_id(): void
@@ -273,6 +273,88 @@ class AffiliateLinkRewriterTest extends TestCase
         $this->assertStringStartsWith('https://shopee.vn/product-i.1.2?', $result);
         $this->assertStringContainsString('mmp_pid='.self::MY_PID, $result);
         // Nhãn của nguồn cấp mã bị thay bằng nhãn trong config, không đi tiếp tới Shopee.
+        $this->assertStringNotContainsString('kieushopee', $result);
+    }
+    // ── Mã sub_id của khách (nền móng hoàn tiền) ──────────────────────────────
+
+    /**
+     * Mã khách phải nằm ở KHE 2, nhãn kênh giữ nguyên khe 1. Đây là hợp đồng mà khâu đọc báo
+     * cáo Shopee sẽ dựa vào để biết đơn hàng thuộc về ai — đổi vị trí là hoàn tiền sai người.
+     */
+    public function test_logged_in_user_sub_id_is_placed_in_the_second_slot(): void
+    {
+        Http::fake();
+
+        $result = $this->rewrite('https://shopee.vn/product-i.1.2?mmp_pid=x&utm_content=kieushopee', 'u7k2m9');
+
+        parse_str(parse_url($result, PHP_URL_QUERY), $query);
+
+        $this->assertSame('fb-u7k2m9---', $query['utm_content']);
+        $this->assertSame('u7k2m9', explode('-', $query['utm_content'])[1]);
+    }
+
+    /** Khách vãng lai giữ nguyên hành vi cũ: chỉ nhãn kênh, không thêm khe trống nào. */
+    public function test_guest_link_keeps_the_bare_channel_label(): void
+    {
+        Http::fake();
+
+        $result = $this->rewrite('https://shopee.vn/product-i.1.2?mmp_pid=x&utm_content=kieushopee');
+
+        parse_str(parse_url($result, PHP_URL_QUERY), $query);
+
+        $this->assertSame('fb', $query['utm_content']);
+    }
+
+    /**
+     * Hai thứ phải cùng sống: nhãn kênh (để tách IG/YT khỏi FB trong báo cáo) và mã khách (để
+     * hoàn tiền). Thêm cái sau mà mất cái trước là hỏng chức năng vừa xây xong.
+     */
+    public function test_channel_label_and_user_sub_id_coexist(): void
+    {
+        Http::fake();
+
+        $result = $this->rewrite('https://shopee.vn/product-i.1.2?mmp_pid=x&utm_content=IG-sansale---', 'u7k2m9');
+
+        parse_str(parse_url($result, PHP_URL_QUERY), $query);
+
+        $this->assertSame('IG-u7k2m9---', $query['utm_content']);
+    }
+
+    /**
+     * Nhãn kênh rỗng vốn nghĩa là "xoá hẳn utm_content". Có mã khách thì KHÔNG được xoá nữa,
+     * và mã vẫn phải ở đúng khe 2 — mất tham số này là khách đó vĩnh viễn không nhận được tiền.
+     */
+    public function test_user_sub_id_survives_an_empty_channel_label(): void
+    {
+        Http::fake();
+        config(['services.shopee_affiliate.utm_content' => '']);
+
+        $result = $this->rewrite('https://shopee.vn/product-i.1.2?mmp_pid=x&utm_content=kieushopee', 'u7k2m9');
+
+        parse_str(parse_url($result, PHP_URL_QUERY), $query);
+
+        $this->assertSame('-u7k2m9---', $query['utm_content']);
+        $this->assertSame('u7k2m9', explode('-', $query['utm_content'])[1]);
+    }
+
+    /** Mã khách cũng phải đi được qua nhánh an_redir (nguồn ganma), không chỉ nhánh kieushopee. */
+    public function test_user_sub_id_also_rides_the_an_redir_branch(): void
+    {
+        $this->fakeAnRedirRedirect();
+
+        parse_str(parse_url($this->rewrite($this->anRedir(), 'u7k2m9'), PHP_URL_QUERY), $query);
+
+        $this->assertSame('YT-u7k2m9---', $query['utm_content']);
+    }
+
+    /** Mã khách không được kéo theo định danh website — ràng buộc cũ vẫn phải đúng. */
+    public function test_user_sub_id_does_not_leak_our_site_identity(): void
+    {
+        Http::fake();
+
+        $result = $this->rewrite('https://shopee.vn/product-i.1.2?mmp_pid=x&utm_content=kieushopee', 'u7k2m9');
+
+        $this->assertStringNotContainsString('tietkiemvi', $result);
         $this->assertStringNotContainsString('kieushopee', $result);
     }
 }

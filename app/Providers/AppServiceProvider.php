@@ -34,19 +34,6 @@ class AppServiceProvider extends ServiceProvider
             return Limit::perMinute(5)->by($request->ip());
         });
 
-        // Chống SMS-bombing: khoá theo số điện thoại lẫn IP.
-        RateLimiter::for('otp-send', function (Request $request) {
-            $key = (string) $request->input('phone').'|'.$request->ip();
-
-            return Limit::perMinutes(10, 3)->by($key);
-        });
-
-        RateLimiter::for('otp-verify', function (Request $request) {
-            $key = (string) $request->input('phone').'|'.$request->ip();
-
-            return Limit::perMinutes(5, 5)->by($key);
-        });
-
         RateLimiter::for('withdrawals', function (Request $request) {
             return Limit::perMinute(10)->by($request->user()?->id ?: $request->ip());
         });

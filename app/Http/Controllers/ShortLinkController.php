@@ -79,7 +79,10 @@ class ShortLinkController extends Controller
             'voucher_url' => $url,
         ]);
 
-        $targetUrl = $this->rewriter->rewriteToOwnAffiliate($url);
+        // Mã sub_id của khách đang đăng nhập đi kèm link tới Shopee và quay về trong cột Sub_id
+        // của báo cáo hoa hồng — đó là đường duy nhất để biết đơn hàng này của ai mà hoàn tiền.
+        // Khách vãng lai (null) thì link chỉ mang nhãn kênh mặc định như trước.
+        $targetUrl = $this->rewriter->rewriteToOwnAffiliate($url, $request->user()?->sub_id);
 
         // Source vẫn do PHÍA SERVER quyết định, không nhận từ client (trước đây client gửi lên
         // facebook/zalo/... vì salesoc trả nhiều kênh). Khác trước ở chỗ giờ có hai nguồn nên

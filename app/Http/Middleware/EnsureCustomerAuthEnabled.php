@@ -10,7 +10,7 @@ use Symfony\Component\HttpFoundation\Response;
 class EnsureCustomerAuthEnabled
 {
     /**
-     * Chặn /login, /register và OTP khi admin đã tắt đăng nhập/đăng ký cho khách —
+     * Chặn /login và /register khi admin đã tắt đăng nhập/đăng ký cho khách —
      * tránh khách gõ thẳng URL để lách qua giao diện đã ẩn.
      *
      * @param  Closure(Request): (Response)  $next

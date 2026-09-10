@@ -18,11 +18,16 @@ class AffiliateLinkRewriterService
 
     private const MAX_HOPS = 4;
 
-    public function rewriteToOwnAffiliate(string $url): string
+    /**
+     * @param  string|null  $userSubId  Mã định danh của khách đang đăng nhập (User::$sub_id).
+     *                                  null = khách vãng lai: link chỉ mang nhãn kênh như trước,
+     *                                  đơn phát sinh không quy được về ai để hoàn tiền.
+     */
+    public function rewriteToOwnAffiliate(string $url, ?string $userSubId = null): string
     {
         try {
             $resolved = $this->followToShopee($url);
-            $rewritten = $this->swapMmpPid($resolved) ?? $resolved;
+            $rewritten = $this->swapMmpPid($resolved, $userSubId) ?? $resolved;
 
             // Không lần được tới shopee.vn thì link đi tới khách VẪN NGUYÊN của nguồn: hoa hồng
             // về túi họ, và định danh của họ nằm luôn trong cột Sub_id của mình. Cố ý vẫn trả
@@ -95,7 +100,7 @@ class AffiliateLinkRewriterService
         return $current;
     }
 
-    private function swapMmpPid(string $url): ?string
+    private function swapMmpPid(string $url, ?string $userSubId = null): ?string
     {
         if ($this->hostOf($url) !== 'shopee.vn') {
             return null;
@@ -130,7 +135,7 @@ class AffiliateLinkRewriterService
         // An toàn: utm_* là tham số tracking độc lập, không nằm trong encrypted_payload /
         // credential_token đã ký — đổi hay bỏ đều không ảnh hưởng việc áp mã giảm giá.
         if (isset($query['utm_content'])) {
-            $utmContent = $this->resolveSubId((string) $query['utm_content']);
+            $utmContent = $this->buildSubId($this->resolveSubId((string) $query['utm_content']), $userSubId);
 
             if ($utmContent === '') {
                 unset($query['utm_content']);
@@ -196,6 +201,40 @@ class AffiliateLinkRewriterService
         }
 
         return (string) config('services.shopee_affiliate.utm_content');
+    }
+
+    /**
+     * Xếp nhãn kênh và mã khách vào ô Sub_id gửi cho Shopee.
+     *
+     * Ô Sub_id gồm 5 khe nối bằng dấu "-" (đo thật trên production 08-09-2026, và khớp với báo
+     * cáo hoa hồng ngày 10-09-2026: gửi đúng chữ "fb" thì cột Sub_id1 = "fb", Sub_id2..5 trống).
+     * Nhãn kênh giữ nguyên khe 1 như trước, mã khách vào khe 2:
+     *
+     *     "fb-u7k2m9---"  →  Sub_id1 = fb   Sub_id2 = u7k2m9
+     *
+     * Chưa xác nhận được Shopee CÓ tách khe hay không — mới có một điểm dữ liệu, mà chuỗi "fb"
+     * một khe thì hai giả thuyết cho ra kết quả giống hệt nhau. Cách xếp này cố ý an toàn ở cả
+     * hai chiều: nếu Shopee không tách, cả chuỗi "fb-u7k2m9---" rơi nguyên vào Sub_id1 và khâu
+     * đọc báo cáo vẫn tự tách được bằng dấu "-". Kiểu gì cũng lấy lại được mã khách, nên không
+     * phải chờ đo xong mới dám chạy.
+     *
+     * Khe 2 là VỊ TRÍ CỐ ĐỊNH của mã khách, kể cả khi nhãn kênh rỗng (config utm_content = '')
+     * — lúc đó chuỗi thành "-u7k2m9---". Nhìn xấu, nhưng đọc ngược theo vị trí mới chắc chắn
+     * đúng; đổi chỗ theo hoàn cảnh là tự tay làm hỏng khâu đối soát.
+     *
+     * Lưu ý: nhãn kênh rỗng vốn có nghĩa "xoá hẳn utm_content khỏi URL". Khi có mã khách thì
+     * KHÔNG xoá nữa — mất mã là mất luôn khả năng hoàn tiền cho khách đó, đắt hơn nhiều so với
+     * việc kín thêm một chút.
+     */
+    private function buildSubId(string $channelLabel, ?string $userSubId): string
+    {
+        if ($userSubId === null || $userSubId === '') {
+            return $channelLabel;
+        }
+
+        // 5 khe = 4 dấu "-". Khe 3-5 để trống, dành chỗ cho nhu cầu sau này mà không phải đổi
+        // cách đọc báo cáo.
+        return $channelLabel.'-'.$userSubId.'---';
     }
 
     /**
