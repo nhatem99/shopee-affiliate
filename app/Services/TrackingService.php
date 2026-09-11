@@ -26,6 +26,12 @@ class TrackingService
             return null;
         }
 
+        // Admin vào web để kiểm tra/test — không phải khách, không tính vào thống kê.
+        // (Sự kiện bảo mật đi qua logSecurityEvent nên vẫn được ghi đầy đủ.)
+        if ($request->user()?->isAdmin()) {
+            return null;
+        }
+
         $agent = new Agent;
         $agent->setUserAgent($userAgent);
         $traffic = $this->resolveTrafficSource($request);

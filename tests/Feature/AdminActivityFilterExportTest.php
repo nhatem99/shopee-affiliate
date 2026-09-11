@@ -119,6 +119,23 @@ class AdminActivityFilterExportTest extends TestCase
             );
     }
 
+    public function test_admin_visits_are_not_tracked(): void
+    {
+        $this->actingAs($this->createAdmin())
+            ->withHeaders(['User-Agent' => 'Mozilla/5.0'])
+            ->get('/')
+            ->assertOk();
+
+        $this->assertDatabaseCount('user_activities', 0);
+
+        $this->actingAs($this->createUser())
+            ->withHeaders(['User-Agent' => 'Mozilla/5.0'])
+            ->get('/')
+            ->assertOk();
+
+        $this->assertDatabaseHas('user_activities', ['event_type' => 'page_view']);
+    }
+
     public function test_export_returns_csv_limited_to_the_active_filters(): void
     {
         $this->log('113.161.20.5', '2026-09-03 08:00:00', ['voucher_code' => 'INRANGE']);
