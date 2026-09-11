@@ -91,6 +91,34 @@ class AdminActivityFilterExportTest extends TestCase
             );
     }
 
+    public function test_daily_counts_split_page_views_from_all_events_and_zero_fill_missing_days(): void
+    {
+        $today = now()->toDateString();
+        $yesterday = now()->subDay()->toDateString();
+
+        $this->log('1.1.1.1', "$today 08:00:00", ['event_type' => 'page_view']);
+        $this->log('1.1.1.1', "$today 08:01:00", ['event_type' => 'page_view']);
+        $this->log('1.1.1.1', "$today 08:02:00", ['event_type' => 'voucher_copy']);
+        $this->log('2.2.2.2', "$yesterday 12:00:00", ['event_type' => 'page_view']);
+        // Quá 14 ngày → không được tính vào biểu đồ.
+        $this->log('3.3.3.3', now()->subDays(20)->toDateTimeString(), ['event_type' => 'page_view']);
+
+        $this->actingAs($this->createAdmin())
+            ->get('/admin/activities')
+            ->assertOk()
+            ->assertInertia(fn ($page) => $page
+                ->has('daily', 14)
+                ->where('daily.13.date', $today)
+                ->where('daily.13.page_views', 2)
+                ->where('daily.13.events', 3)
+                ->where('daily.12.date', $yesterday)
+                ->where('daily.12.page_views', 1)
+                ->where('daily.12.events', 1)
+                ->where('daily.0.page_views', 0)
+                ->where('daily.0.events', 0)
+            );
+    }
+
     public function test_export_returns_csv_limited_to_the_active_filters(): void
     {
         $this->log('113.161.20.5', '2026-09-03 08:00:00', ['voucher_code' => 'INRANGE']);

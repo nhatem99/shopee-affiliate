@@ -52,6 +52,7 @@ class ActivityController extends Controller
         return Inertia::render('Admin/Activities', [
             'activities' => $activities,
             'filters' => $this->activeFilters($request),
+            'daily' => $this->dailyCounts(14),
             'summary' => [
                 'total' => UserActivity::where('created_at', '>=', $recentWindow)->count(),
                 'by_device' => UserActivity::where('created_at', '>=', $recentWindow)
@@ -98,6 +99,27 @@ class ActivityController extends Controller
                     ->orderByDesc('total')
                     ->limit(5)
                     ->pluck('total', 'ip_address'),
+                // Chuyển đổi = khách bấm "Mở Facebook ngay" (bước cuối của luồng lấy mã qua FB).
+                // source phân biệt link nằm trong bình luận (fb_comment) hay mô tả reel (fb_reel).
+                'conversions' => [
+                    'total' => UserActivity::where('created_at', '>=', $recentWindow)
+                        ->where('event_type', 'facebook_open')
+                        ->count(),
+                    'by_mode' => UserActivity::where('created_at', '>=', $recentWindow)
+                        ->where('event_type', 'facebook_open')
+                        ->whereNotNull('source')
+                        ->selectRaw('source, COUNT(*) as total')
+                        ->groupBy('source')
+                        ->pluck('total', 'source'),
+                    'top_products' => UserActivity::where('created_at', '>=', $recentWindow)
+                        ->where('event_type', 'facebook_open')
+                        ->whereNotNull('product_name')
+                        ->selectRaw('product_name, COUNT(*) as total')
+                        ->groupBy('product_name')
+                        ->orderByDesc('total')
+                        ->limit(8)
+                        ->pluck('total', 'product_name'),
+                ],
                 // Đếm các dấu hiệu tấn công (brute-force login/OTP, cố vào admin trái phép,
                 // bị chặn bởi rate-limit) để admin thấy ngay khi vào trang theo dõi.
                 'security_events' => UserActivity::where('created_at', '>=', $recentWindow)
@@ -110,6 +132,35 @@ class ActivityController extends Controller
                     ->pluck('total', 'event_type'),
             ],
         ]);
+    }
+
+    /**
+     * Số lượt xem trang và tổng sự kiện của từng ngày trong N ngày gần nhất (cả hôm
+     * nay). Ngày không có log vẫn trả về 0 để biểu đồ không bị "mất cột".
+     *
+     * @return list<array{date: string, page_views: int, events: int}>
+     */
+    private function dailyCounts(int $days): array
+    {
+        $start = now()->subDays($days - 1)->startOfDay();
+
+        $rows = UserActivity::where('created_at', '>=', $start)
+            ->selectRaw("DATE(created_at) as day, COUNT(*) as events, SUM(CASE WHEN event_type = 'page_view' THEN 1 ELSE 0 END) as page_views")
+            ->groupBy('day')
+            ->get()
+            ->keyBy('day');
+
+        $daily = [];
+        for ($i = 0; $i < $days; $i++) {
+            $date = $start->copy()->addDays($i)->toDateString();
+            $daily[] = [
+                'date' => $date,
+                'page_views' => (int) ($rows[$date]->page_views ?? 0),
+                'events' => (int) ($rows[$date]->events ?? 0),
+            ];
+        }
+
+        return $daily;
     }
 
     /**

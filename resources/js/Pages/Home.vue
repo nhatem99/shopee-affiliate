@@ -182,6 +182,37 @@ function isFacebookLink(url) {
  * iOS không có cơ chế tương đương — fb:// không trỏ được tới đúng comment (đã test, xem
  * ShortLinkController::commentUrl) nên để nguyên https và trông cậy vào universal link.
  */
+/**
+ * Ghi nhận cú bấm "Mở Facebook ngay" — đây là điểm chuyển đổi thật của luồng lấy mã qua FB
+ * (khách đã đi được tới bước cuối). Trang sẽ rời đi ngay sau cú bấm nên dùng fetch keepalive
+ * để request vẫn hoàn tất; không await, không chặn điều hướng.
+ */
+function trackFacebookOpen(url, productName) {
+    if (!isFacebookLink(url)) return
+
+    try {
+        fetch('/track/event', {
+            method: 'POST',
+            keepalive: true,
+            credentials: 'same-origin',
+            headers: {
+                'Content-Type': 'application/json',
+                'Accept': 'application/json',
+                'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.content ?? '',
+            },
+            body: JSON.stringify({
+                event_type: 'facebook_open',
+                product_name: productName || null,
+                platform: 'shopee',
+                source: props.facebookMode === 'reel' ? 'fb_reel' : 'fb_comment',
+                url,
+            }),
+        }).catch(() => {})
+    } catch (e) {
+        // Không có fetch/keepalive thì bỏ qua — thống kê không được phép làm hỏng nút.
+    }
+}
+
 function facebookAppLink(url) {
     if (!url || !isAndroid || isInAppBrowser) return url
     if (!isFacebookLink(url)) return url
@@ -472,6 +503,7 @@ onUnmounted(() => {
                         <a
                             v-if="readyLinks.result"
                             :href="facebookAppLink(readyLinks.result)"
+                            @click="trackFacebookOpen(readyLinks.result, voucherResult.product?.product_name)"
                             class="btn-fire flex-1 min-w-0 px-6 py-4 rounded-xl flex items-center justify-center gap-2 text-base animate-pulse-ring no-underline"
                         >
                             <span>{{ isFacebookLink(readyLinks.result) ? '👉' : '🛒' }}</span>
@@ -529,6 +561,7 @@ onUnmounted(() => {
                             <a
                                 v-if="h.ref && readyLinks[`hist-${hi}`]"
                                 :href="facebookAppLink(readyLinks[`hist-${hi}`])"
+                                @click="trackFacebookOpen(readyLinks[`hist-${hi}`], h.product_name)"
                                 class="btn-fire px-4 py-2 rounded-lg text-xs inline-flex items-center gap-1.5 no-underline"
                             >
                                 <span>{{ isFacebookLink(readyLinks[`hist-${hi}`]) ? '👉' : '🛒' }}</span>

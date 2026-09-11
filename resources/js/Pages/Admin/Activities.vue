@@ -8,6 +8,7 @@ const props = defineProps({
     activities: Object,
     filters: Object,
     summary: Object,
+    daily: { type: Array, default: () => [] },
 })
 
 const toast = useToast()
@@ -31,6 +32,7 @@ const eventLabels = {
     voucher_select: 'Chọn/lấy mã',
     voucher_copy: 'Copy mã',
     short_link_click: 'Click link rút gọn',
+    facebook_open: '👉 Mở Facebook (chuyển đổi)',
     login_failed: '🔒 Đăng nhập sai',
     login_success: '✅ Đăng nhập thành công',
     otp_verify_failed: '🔒 OTP sai',
@@ -44,6 +46,12 @@ const securityEventLabels = {
     otp_verify_failed: 'OTP sai',
     admin_access_denied: 'Bị chặn vào Admin',
     rate_limited: 'Bị chặn (rate limit)',
+}
+
+// Khách bấm "Mở Facebook ngay" khi link nằm ở bình luận hay ở mô tả reel.
+const conversionModeLabels = {
+    fb_comment: '💬 Qua bình luận',
+    fb_reel: '🎬 Qua reel',
 }
 
 const deviceLabels = {
@@ -158,6 +166,29 @@ function deviceLine(a) {
 function locationLine(a) {
     return [a.city, a.country].filter(Boolean).join(', ')
 }
+
+// Thanh dài nhất = 100%, các ngày khác tính theo tỉ lệ; tránh chia 0 khi chưa có log.
+const dailyMax = computed(() => Math.max(1, ...props.daily.map((d) => d.events)))
+
+const dailyTotals = computed(() => props.daily.reduce(
+    (acc, d) => ({ page_views: acc.page_views + d.page_views, events: acc.events + d.events }),
+    { page_views: 0, events: 0 },
+))
+
+const today = ymd(new Date())
+
+// '2026-09-09' → '09/09'
+function shortDate(value) {
+    const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value || '')
+    return m ? `${m[3]}/${m[2]}` : value
+}
+
+// Bấm vào một ngày thì lọc bảng bên dưới đúng ngày đó.
+function pickDay(date) {
+    fromInput.value = date
+    toInput.value = date
+    applySearch()
+}
 </script>
 
 <template>
@@ -248,6 +279,81 @@ function locationLine(a) {
                     </button>
                     <span v-if="!Object.keys(summary?.top_ips || {}).length" class="text-[var(--color-muted)]">Chưa có dữ liệu</span>
                 </p>
+            </div>
+        </div>
+
+        <!-- Truy cập theo ngày: lượt xem trang (khách ghé) và tổng sự kiện (mọi hành động) -->
+        <div :class="showStats ? 'block' : 'hidden md:block'"
+            class="bg-[var(--color-surface)] rounded-2xl border border-[var(--color-line)] p-3 md:p-4 mb-4 md:mb-6">
+            <div class="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1 mb-3">
+                <p class="text-xs font-semibold text-[var(--color-ink)]">📅 Truy cập theo ngày (14 ngày gần nhất)</p>
+                <p class="text-xs text-[var(--color-muted)]">
+                    <span class="inline-block w-2.5 h-2.5 rounded-sm bg-[var(--color-accent)] align-middle mr-1"></span>Lượt xem trang: <b class="text-[var(--color-ink)]">{{ dailyTotals.page_views }}</b>
+                    <span class="mx-2">·</span>
+                    <span class="inline-block w-2.5 h-2.5 rounded-sm bg-[var(--color-accent)]/25 align-middle mr-1"></span>Tổng sự kiện: <b class="text-[var(--color-ink)]">{{ dailyTotals.events }}</b>
+                </p>
+            </div>
+            <div class="space-y-1">
+                <button
+                    v-for="d in daily" :key="d.date"
+                    @click="pickDay(d.date)"
+                    :title="`Lọc bảng theo ngày ${d.date}`"
+                    class="group flex items-center gap-2 md:gap-3 w-full text-left text-xs hover:bg-[var(--color-accent)]/5 rounded-lg px-1 py-0.5 transition"
+                    :class="filters?.from === d.date && filters?.to === d.date ? 'bg-[var(--color-accent)]/10' : ''"
+                >
+                    <span class="flex-none w-11 font-mono tabular-nums"
+                        :class="d.date === today ? 'font-bold text-[var(--color-accent)]' : 'text-[var(--color-muted)]'">
+                        {{ d.date === today ? 'Nay' : shortDate(d.date) }}
+                    </span>
+                    <span class="relative flex-1 h-4 min-w-0 rounded bg-[var(--color-line)]/40 overflow-hidden">
+                        <span class="absolute inset-y-0 left-0 rounded bg-[var(--color-accent)]/25"
+                            :style="{ width: `${(d.events / dailyMax) * 100}%` }"></span>
+                        <span class="absolute inset-y-0 left-0 rounded bg-[var(--color-accent)]"
+                            :style="{ width: `${(d.page_views / dailyMax) * 100}%` }"></span>
+                    </span>
+                    <span class="flex-none w-[5.5rem] md:w-28 text-right tabular-nums text-[var(--color-ink)]">
+                        <b>{{ d.page_views }}</b><span class="text-[var(--color-muted)]"> / {{ d.events }}</span>
+                    </span>
+                </button>
+            </div>
+            <p class="mt-2 text-[11px] text-[var(--color-muted)]">Số đậm là lượt xem trang, số nhạt là tổng sự kiện. Bấm vào một ngày để lọc bảng bên dưới.</p>
+        </div>
+
+        <!-- Chuyển đổi: khách bấm "Mở Facebook ngay" — bước cuối trước khi sang FB lấy mã -->
+        <div :class="showStats ? 'block' : 'hidden md:block'"
+            class="bg-[#1877F2]/5 rounded-2xl border border-[#1877F2]/30 p-3 md:p-4 mb-4 md:mb-6">
+            <div class="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1 mb-3">
+                <button @click="filter('event_type', 'facebook_open')"
+                    class="text-xs font-semibold text-[#1877F2] hover:underline text-left">
+                    🎯 Chuyển đổi — bấm "Mở Facebook ngay" (7 ngày)
+                </button>
+                <p class="text-xs text-[var(--color-muted)]">
+                    <span v-for="(label, mode) in conversionModeLabels" :key="mode" class="mr-3">
+                        {{ label }}: <b class="text-[var(--color-ink)]">{{ summary?.conversions?.by_mode?.[mode] ?? 0 }}</b>
+                    </span>
+                </p>
+            </div>
+            <div class="grid grid-cols-1 md:grid-cols-[auto_1fr] gap-3 md:gap-6 items-start">
+                <div class="min-w-0">
+                    <p class="text-xs text-[var(--color-muted)] mb-1">Tổng lượt chuyển đổi</p>
+                    <p class="text-3xl font-extrabold text-[var(--color-ink)]">{{ summary?.conversions?.total ?? 0 }}</p>
+                </div>
+                <div class="min-w-0">
+                    <p class="text-xs text-[var(--color-muted)] mb-1">Sản phẩm được chuyển đổi</p>
+                    <ol class="text-sm text-[var(--color-ink)] space-y-1">
+                        <li
+                            v-for="(count, name, idx) in summary?.conversions?.top_products" :key="name"
+                            class="flex items-baseline gap-2"
+                        >
+                            <span class="flex-none w-5 text-xs text-[var(--color-muted)] tabular-nums">{{ idx + 1 }}.</span>
+                            <span class="min-w-0 flex-1 line-clamp-2 break-words">{{ name }}</span>
+                            <b class="flex-none tabular-nums">{{ count }}</b>
+                        </li>
+                        <li v-if="!Object.keys(summary?.conversions?.top_products || {}).length" class="text-[var(--color-muted)]">
+                            Chưa có lượt chuyển đổi nào
+                        </li>
+                    </ol>
+                </div>
             </div>
         </div>
 
