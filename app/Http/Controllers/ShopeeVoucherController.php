@@ -3,8 +3,8 @@
 namespace App\Http\Controllers;
 
 use App\Exceptions\AffiliateScanException;
-use App\Models\ApiConfig;
 use App\Models\PlatformVoucher;
+use App\Services\FacebookRedirectFlagService;
 use App\Services\GanmaService;
 use App\Services\KieuShopeeService;
 use App\Services\ShopeeLinkResolverService;
@@ -129,29 +129,15 @@ class ShopeeVoucherController extends Controller
      *   (meta.auto_redirect_enabled) — vẫn đọc auto_source cũ để cấu hình đang chạy trên
      *   production không mất tác dụng ngay sau khi đổi nguồn.
      *
+     * Logic đã chuyển sang FacebookRedirectFlagService vì kho mẫu bài đăng của admin cũng cần
+     * đúng mấy cờ này — bài đăng mà mô tả sai luồng (dạy "bấm nút Mua ngay" trong khi nút đang
+     * tên "Lấy mã qua Facebook") thì khách làm theo không ra kết quả.
+     *
      * @return array{viaFacebookComment: bool, autoRedirect: bool, facebookMode: string}
      */
     private function facebookRedirectFlags(): array
     {
-        $config = ApiConfig::where('platform', 'facebook')->where('is_active', true)->first();
-
-        $viaComment = $config
-            && ($config->meta['comment_redirect_enabled'] ?? false)
-            && $config->app_id
-            && $config->app_secret
-            // Một trong hai chế độ có đủ cấu hình là được: đổi caption reel (khách bấm link
-            // trong phần mô tả reel) hoặc đăng comment (khách bấm link trong bình luận).
-            && ($config->facebookReelCaptionEnabled() || $config->facebookTargetPostIds());
-
-        if (! $viaComment) {
-            return ['viaFacebookComment' => false, 'autoRedirect' => false, 'facebookMode' => 'comment'];
-        }
-
-        return [
-            'viaFacebookComment' => true,
-            'facebookMode' => $config->facebookReelCaptionEnabled() ? 'reel' : 'comment',
-            'autoRedirect' => (bool) ($config->meta['auto_redirect_enabled'] ?? ! empty($config->meta['auto_source'])),
-        ];
+        return app(FacebookRedirectFlagService::class)->flags();
     }
 
     /**
