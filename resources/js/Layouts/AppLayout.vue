@@ -5,8 +5,10 @@ import { useAuthStore } from '@/Stores/useAuthStore'
 import BottomNav from '@/Components/BottomNav.vue'
 import ToastContainer from '@/Components/ToastContainer.vue'
 import ThemeToggle from '@/Components/ThemeToggle.vue'
+import { useCashback } from '@/composables/useCashback'
 
 const auth = useAuthStore()
+const { cashbackOn } = useCashback()
 const page = usePage()
 const current = computed(() => page.url)
 const customerAuthEnabled = computed(() => page.props.settings?.customerAuthEnabled ?? true)
@@ -32,6 +34,10 @@ const maintenanceMode = computed(() => page.props.settings?.maintenanceMode ?? f
 
                 <nav class="hidden md:flex items-center gap-1 text-sm font-medium">
                     <Link v-if="!auth.isAdmin" href="/" class="nav-pill rounded-xl px-3.5 py-2" :class="{ 'nav-pill--active': current === '/' }">Trang chủ</Link>
+                    <!-- Lối vào phần giải thích hoàn tiền cho MÁY TÍNH: BottomNav là md:hidden nên
+                         mục "Hoàn tiền" dưới đó không bao giờ hiện ở đây. Thiếu link này thì khách
+                         máy tính không có đường nào tới /hoan-tien ngoài gõ tay URL. -->
+                    <Link v-if="!auth.isAdmin && cashbackOn" href="/hoan-tien" class="nav-pill rounded-xl px-3.5 py-2" :class="{ 'nav-pill--active': current.startsWith('/hoan-tien') }">Hoàn tiền</Link>
                     <Link v-if="!auth.isAdmin" href="/blog" class="nav-pill rounded-xl px-3.5 py-2" :class="{ 'nav-pill--active': current.startsWith('/blog') }">Blog</Link>
                     <Link v-if="auth.isLoggedIn && !auth.isAdmin" href="/history" class="nav-pill rounded-xl px-3.5 py-2" :class="{ 'nav-pill--active': current.startsWith('/history') }">Lịch sử</Link>
                     <Link v-if="auth.isLoggedIn && !auth.isAdmin" href="/profile" class="nav-pill rounded-xl px-3.5 py-2" :class="{ 'nav-pill--active': current.startsWith('/profile') }">Tài khoản</Link>

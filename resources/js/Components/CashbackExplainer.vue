@@ -12,6 +12,14 @@ import { useCashback } from '@/composables/useCashback'
 //
 // Mọi con số đều lấy động từ server (xem useCashback): tỉ lệ hoàn do admin đặt và có thể đổi
 // bất cứ lúc nào, mức rút tối thiểu nằm trong PHP. Gõ cứng ở đây là sớm muộn cũng nói dối.
+// `compact` = bản dùng ở TRANG CHỦ: giữ hai cột ✓/✕ (thứ thuyết phục nhất) và bỏ phần thời
+// gian + rút tiền, vốn là chi tiết người ta chỉ đọc khi đã quan tâm. Bản đầy đủ nằm ở
+// /hoan-tien. Một component hai chế độ chứ không phải hai bản nội dung — chép ra hai nơi thì
+// sớm muộn cũng lệch, mà lệch ở đây nghĩa là hai trang nói hai điều khác nhau về tiền.
+defineProps({
+    compact: { type: Boolean, default: false },
+})
+
 const auth = useAuthStore()
 const { cashbackRate, minWithdrawal, joinHref, joinLabel, vnd } = useCashback()
 </script>
@@ -92,7 +100,7 @@ const { cashbackRate, minWithdrawal, joinHref, joinLabel, vnd } = useCashback()
             <!-- Khối thời gian. Câu từ chối hứa hẹn nằm ở đây là có chủ đích: đối thủ đều hứa
                  "về ví trong 24h", nên nói thẳng mình KHÔNG hứa vậy vừa đúng sự thật (hệ thống
                  đối soát bằng báo cáo tải tay, không có SLA nào cả) vừa là điểm khác biệt. -->
-            <div class="card-glass rounded-2xl p-5 mb-4">
+            <div v-if="!compact" class="card-glass rounded-2xl p-5 mb-4">
                 <p class="font-bold text-[var(--color-ink)] text-sm mb-2">⏳ Bao lâu thì tiền về ví?</p>
                 <p class="text-sm text-[var(--color-muted)] leading-relaxed">
                     Thật lòng: không nhanh. Đơn phải hoàn thành bên Shopee trước đã — tức qua hết hạn đổi trả —
@@ -104,7 +112,7 @@ const { cashbackRate, minWithdrawal, joinHref, joinLabel, vnd } = useCashback()
                 </p>
             </div>
 
-            <div class="card-glass rounded-2xl p-5 mb-6">
+            <div v-if="!compact" class="card-glass rounded-2xl p-5 mb-6">
                 <p class="font-bold text-[var(--color-ink)] text-sm mb-2">💸 Rút tiền thế nào?</p>
                 <p class="text-sm text-[var(--color-muted)] leading-relaxed">
                     Tiền hoàn vào số dư của bạn trên web trước. Khi số dư đủ mức tối thiểu<!--
@@ -115,7 +123,7 @@ const { cashbackRate, minWithdrawal, joinHref, joinLabel, vnd } = useCashback()
                 </p>
             </div>
 
-            <div class="text-center">
+            <div class="text-center" :class="compact ? 'mt-6' : ''">
                 <Link
                     v-if="!auth.isLoggedIn"
                     :href="joinHref"
@@ -129,6 +137,15 @@ const { cashbackRate, minWithdrawal, joinHref, joinLabel, vnd } = useCashback()
                 <p v-if="!auth.isLoggedIn" class="text-xs text-[var(--color-muted)] mt-3">
                     Miễn phí. Đăng nhập xong quay lại dán link như bình thường.
                 </p>
+
+                <!-- Đường dẫn tới bản đầy đủ. Nêu thẳng hai câu hỏi người ta hay thắc mắc nhất
+                     thay vì "Xem thêm" chung chung — người đang phân vân chỉ bấm khi biết bấm
+                     vào sẽ được trả lời đúng thứ mình đang lăn tăn. -->
+                <Link
+                    v-if="compact"
+                    href="/hoan-tien"
+                    class="inline-block mt-4 text-sm font-semibold text-[var(--color-accent)] hover:underline"
+                >Bao lâu tiền về ví? Rút thế nào? → Xem chi tiết</Link>
             </div>
         </div>
     </section>

@@ -671,8 +671,10 @@ onUnmounted(() => {
 
         <!-- Hoàn tiền: đặt NGAY SAU công cụ, trước mọi section dài khác. Trên điện thoại, section
              "Mã giảm giá gợi ý" bên dưới là một grid một cột dài hàng chục màn hình — nhét khối
-             giải thích xuống sau nó thì coi như không ai đọc. -->
-        <CashbackExplainer v-if="cashbackOn" />
+             giải thích xuống sau nó thì coi như không ai đọc.
+             Bản RÚT GỌN: chỉ giữ hai cột ✓/✕ rồi dẫn sang /hoan-tien. Bản đầy đủ dài 3-4 màn
+             hình điện thoại, đẩy mục mã gợi ý và FAQ xuống quá sâu. -->
+        <CashbackExplainer v-if="cashbackOn" compact />
 
         <!-- Mã giảm giá gợi ý -->
         <section v-if="vouchers.length" class="py-16 px-4 bg-[var(--color-bg)]">
