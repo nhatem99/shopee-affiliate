@@ -73,6 +73,11 @@ const maintenanceMode = computed(() => page.props.settings?.maintenanceMode ?? f
                     </template>
                     <template v-else-if="customerAuthEnabled">
                         <Link href="/login" class="text-sm text-[var(--color-muted)] hover:text-[var(--color-ink)] font-medium transition">Đăng nhập</Link>
+                        <!-- Cố ý GIỮ nhãn "Đăng ký" thay vì đổi thành "Nhận hoàn tiền": bấm vào đây
+                             chỉ ra form đăng ký, không có đồng nào được nhận, và với khách chưa mua
+                             gì thì còn cách rất xa. Cả trang này đang bán bằng sự thẳng thắn — chỗ
+                             ít bối cảnh nhất lại là chỗ không được phép hứa quá.
+                             Lời mời có lý do đầy đủ nằm ở khối hoàn tiền và CTA cuối trang chủ. -->
                         <Link href="/register" class="btn-fire text-sm px-4 py-2 rounded-xl">
                             Đăng ký
                         </Link>

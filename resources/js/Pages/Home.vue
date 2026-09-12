@@ -1,13 +1,16 @@
 ﻿<script setup>
 import { ref, computed, nextTick, onMounted, onUnmounted } from 'vue'
-import { Head } from '@inertiajs/vue3'
+import { Head, Link } from '@inertiajs/vue3'
 import { router } from '@inertiajs/vue3'
 import axios from 'axios'
 import { useLocalStorage } from '@vueuse/core'
 import AppLayout from '@/Layouts/AppLayout.vue'
 import CouponTicket from '@/Components/CouponTicket.vue'
 import RestockSchedule from '@/Components/RestockSchedule.vue'
+import CashbackExplainer from '@/Components/CashbackExplainer.vue'
 import { useToast } from '@/composables/useToast'
+import { useCashback } from '@/composables/useCashback'
+import { useAuthStore } from '@/Stores/useAuthStore'
 
 const props = defineProps({
     vouchers: { type: Array, default: () => [] },
@@ -32,6 +35,30 @@ const linkLocation = computed(() => props.facebookMode === 'reel'
     : 'link trong bình luận')
 
 const toast = useToast()
+const auth = useAuthStore()
+const { cashbackRate, cashbackOn, joinHref, joinLabel } = useCashback()
+
+// Nhắc hoàn tiền cho khách VÃNG LAI. Chỉ hiện khi chương trình đang bật và khách chưa đăng nhập:
+// đúng lúc đó, mỗi cú bấm mua là một đơn vĩnh viễn không quy về ai được (ShortLinkController chỉ
+// gắn sub_id khi có user), và không có đường bù lại sau.
+const showGuestCashbackNudge = computed(() => cashbackOn.value && !auth.isLoggedIn)
+
+/**
+ * Khách ĐÃ đăng nhập có được nói "đơn này sẽ được ghi nhận" hay không.
+ *
+ * Ở chế độ đi vòng qua Facebook thì KHÔNG được nói: comment/reel được dùng lại theo SẢN PHẨM
+ * trong 20 phút chứ không theo từng khách (xem ShortLinkController::facebookCommentRedirectUrl),
+ * nên khách thứ hai mua cùng sản phẩm trong cửa sổ đó sẽ đi qua short-link mang sub_id của khách
+ * thứ nhất. Hứa chắc ở đây là hứa sai với đúng những người tin mình nhất.
+ */
+const showLoggedInCashbackBadge = computed(
+    () => cashbackOn.value && auth.isLoggedIn && !props.viaFacebookComment,
+)
+
+// Khối chặn ngay trước nút mua cũng phải im ở chế độ Facebook, vì cùng một lý do: ở đó không
+// đảm bảo được đơn của khách đi qua đúng short-link của chính khách. Mời người ta đăng nhập
+// bằng một lời hứa mà mình biết là có thể sai thì tệ hơn là không mời.
+const showGuestBuyNudge = computed(() => showGuestCashbackNudge.value && !props.viaFacebookComment)
 
 // --- tietkiemvi.com: công cụ lấy link voucher công khai, không cần đăng nhập ---
 // Nguồn cấp mã (kieushopee) trả về ĐÚNG MỘT link đã áp sẵn mã cho mỗi sản phẩm, nên ở đây
@@ -310,14 +337,35 @@ const filteredVouchers = computed(() => {
     return props.vouchers.filter(v => v.platform === activePlatform.value || v.platform === 'all')
 })
 
-const faqs = [
+// Hướng dẫn chính thức của trang. Khi hoàn tiền đang bật thì bước ĐĂNG NHẬP phải nằm ngay trong
+// đây: sub_id chỉ được gắn tại đúng giây khách bấm nút mua, nên khách làm đủ ba bước cũ một cách
+// hoàn hảo vẫn nhận 0đ. Một bản hướng dẫn dẫn tới 0đ là lỗi nặng hơn cả việc không có hướng dẫn.
+const steps = computed(() => [
+    ...(cashbackOn.value ? [
+        { icon: '🔑', title: 'Đăng nhập trước', desc: 'Bắt buộc nếu bạn muốn được hoàn tiền — đơn chỉ ghi nhận được về tài khoản đang đăng nhập tại lúc bấm mua. Chỉ cần làm một lần.', badge: 'emerald' },
+    ] : []),
+    { icon: '📎', title: 'Dán link sản phẩm Shopee', desc: 'Copy link sản phẩm từ app hoặc web Shopee, dán vào ô ở đầu trang.', badge: 'cyan' },
+    { icon: '🔍', title: 'Tự động quét mã', desc: 'Không cần bấm nút — hệ thống tự tìm mã Facebook, YouTube, Instagram còn hiệu lực ngay khi bạn dán link.', badge: 'orange' },
+    { icon: '🛍️', title: 'Chọn mã & mua ngay', desc: 'Bấm vào mã phù hợp (mã có nhãn “Đề xuất” là tốt nhất) — link mua hàng đã áp sẵn voucher sẽ tự mở ra.', badge: 'emerald' },
+])
+
+// FAQ phải theo trạng thái chương trình hoàn tiền: khi admin chưa bật (tỉ lệ = 0) thì hệ thống
+// thật sự không trả đồng nào, nên câu trả lời cũ mới là câu đúng. Bật lên rồi mà vẫn để nguyên
+// câu "không tạo hoàn tiền" thì chính trang của mình đang phủ nhận chức năng của mình.
+const faqs = computed(() => [
     { q: 'Công cụ này hoạt động như thế nào?', a: 'Bạn dán link sản phẩm Shopee vào ô ở đầu trang — hệ thống tự tìm mã giảm giá đang áp dụng cho sản phẩm đó và trả về một link đã gắn sẵn mã, không phải nhập mã thủ công.' },
     { q: 'Vì sao bấm nút lại mở ra Facebook?', a: 'Vì đây là mã dành riêng cho người mua đến từ Facebook — Shopee chỉ áp mã khi bạn bấm vào link nằm trên Facebook. Quy trình là: bấm "Lấy mã qua Facebook" → bấm tiếp "Mở Facebook ngay" (ứng dụng Facebook sẽ mở ra) → bấm link hiện ở đó → về Shopee với mã đã được áp sẵn. Bỏ qua bước này thì mã sẽ không có hiệu lực.' },
     { q: 'Mấy giờ thì có mã mới (back mã)?', a: 'Mã YouTube được nạp lại lượt vào 0h, 9h, 12h và 18h. Mã IG – FB nạp lại vào 0h, 9h, 15h và 20h (giờ Việt Nam). Mã có số lượng giới hạn nên thường hết rất nhanh — nếu Shopee báo hết lượt, bạn quay lại đúng khung giờ trên để lấy mã mới.' },
-    { q: 'Tôi có được hoàn tiền không?', a: 'Công cụ lấy mã giảm giá không tạo hoàn tiền — mục đích là giúp bạn được giảm giá ngay khi thanh toán trên Shopee.' },
+    cashbackOn.value
+        ? { q: 'Tôi có được hoàn tiền không?', a: `Có. Ngoài mã giảm giá được áp ngay lúc thanh toán, bạn còn được hoàn thêm ${cashbackRate.value}% khoản hoa hồng tiếp thị mà Shopee trả cho tụi mình vì đơn của bạn. Điều kiện bắt buộc: phải đăng nhập TRƯỚC khi bấm nút mua ở đầu trang — bấm lúc chưa đăng nhập thì đơn đó không quy về tài khoản nào được và sau này không cứu lại được. Tiền vào ví sau khi đơn chuyển sang trạng thái Hoàn thành trên Shopee và được đối soát.` }
+        : { q: 'Tôi có được hoàn tiền không?', a: 'Công cụ lấy mã giảm giá không tạo hoàn tiền — mục đích là giúp bạn được giảm giá ngay khi thanh toán trên Shopee.' },
+    ...(cashbackOn.value ? [
+        { q: 'Sao tôi mua rồi mà ví vẫn 0đ?', a: 'Bốn khả năng, xếp theo thứ tự hay gặp nhất. (1) Lúc bấm mua bạn chưa đăng nhập — đơn đó không gắn được mã định danh của bạn, trường hợp này tiếc thật nhưng không cứu được. (2) Đơn chưa "Hoàn thành" trên Shopee — còn đang giao hoặc còn trong hạn đổi trả thì chưa tính. (3) Đơn đã hoàn thành nhưng chưa tới kỳ đối soát — tụi mình nhập báo cáo Shopee theo đợt, không phải tức thì. (4) Hiếm hơn: link lúc đó không gắn được mã định danh của bạn do nguồn cấp mã đổi đường dẫn hoặc chuỗi chuyển hướng bị gãy — nhắn cho tụi mình kèm ngày đặt và mã đơn Shopee để đối chiếu. Lưu ý: trang Tài khoản chỉ hiện số dư đã đối soát xong, chưa hiện đơn đang chờ — nên mua xong vài ngày mà chưa thấy gì ở đó là bình thường, không phải mất.' },
+        { q: 'Tiền hoàn tính trên cái gì?', a: `Tính trên hoa hồng tiếp thị Shopee trả cho tụi mình vì đơn của bạn, không phải trên giá trị đơn hàng. Mức hoàn hiện tại là ${cashbackRate.value}% khoản hoa hồng đó. Hoa hồng mỗi ngành hàng mỗi khác nên số tiền hoàn của mỗi đơn cũng khác nhau — tụi mình không thể báo trước con số chính xác lúc bạn đang bấm mua. Mức hoàn này có thể được điều chỉnh; khi đổi thì các khoản chưa chi trả sẽ được tính lại theo mức mới.` },
+    ] : []),
     { q: 'Có mất phí không?', a: 'Hoàn toàn miễn phí, bạn không mất phí gì khi dùng công cụ lấy mã.' },
     { q: 'Hỗ trợ những sàn nào?', a: 'Ô dán link ở đầu trang hiện chỉ hỗ trợ Shopee. Riêng mục "Mã giảm giá gợi ý" bên dưới có thêm mã cho Lazada, TikTok Shop và Tiki.' },
-]
+])
 const openFaq = ref(null)
 
 // Khung dán link dính lên đầu trang khi cuộn (sticky) để khách lúc nào cũng dán được link.
@@ -353,9 +401,17 @@ onUnmounted(() => {
 </script>
 
 <template>
+    <!-- Tiêu đề/mô tả đổi theo trạng thái chương trình hoàn tiền: khi admin chưa bật (tỉ lệ = 0)
+         thì hệ thống không trả đồng nào, quảng cáo hoàn tiền trên kết quả tìm kiếm lúc đó là
+         kéo khách vào để thất vọng. -->
     <Head>
-        <title>Tìm Voucher Shopee Facebook YouTube Instagram | tietkiemvi.com</title>
-        <meta name="description" content="Dán link sản phẩm Shopee → nhận link voucher độc quyền Facebook, YouTube, Instagram. Xem giá sau giảm ngay." />
+        <title>{{ cashbackOn ? 'Mã Giảm Giá Shopee + Hoàn Tiền Về Ví | tietkiemvi.com' : 'Tìm Voucher Shopee Facebook YouTube Instagram | tietkiemvi.com' }}</title>
+        <meta
+            name="description"
+            :content="cashbackOn
+                ? `Dán link Shopee → nhận mã giảm giá áp sẵn, và được chia lại ${cashbackRate}% hoa hồng của đơn vào số dư trên web, rút về MoMo/ZaloPay khi đủ mức tối thiểu. Đăng nhập trước khi bấm mua thì đơn mới được ghi nhận.`
+                : 'Dán link sản phẩm Shopee → nhận link voucher độc quyền Facebook, YouTube, Instagram. Xem giá sau giảm ngay.'"
+        />
     </Head>
     <AppLayout>
         <!-- Công cụ chính: hiện ngay khi vào trang, không cần mô tả dài trước đó -->
@@ -422,12 +478,47 @@ onUnmounted(() => {
                         <p v-if="voucherError" class="text-red-500 text-sm mt-2">{{ voucherError }}</p>
                     </div>
 
-                    <!-- Máy tính (không phải admin): ẩn khung tìm mã, chỉ hiện thông báo dùng điện thoại -->
+                    <!-- Máy tính (không phải admin): ẩn khung tìm mã, chỉ hiện thông báo dùng điện thoại.
+                         PHẢI đứng liền ngay sau khối v-if bên trên — chen bất cứ thẻ nào vào giữa
+                         là đứt cặp v-if/v-else và thông báo này nhảy ra trên cả điện thoại. -->
                     <div v-else class="rounded-3xl p-6 md:p-8 bg-gradient-to-br from-[var(--color-peach)] via-[var(--color-peach-soft)] to-[var(--color-green-soft)] border border-[var(--color-line)] text-center">
                         <p class="text-2xl mb-2">📱</p>
                         <p class="font-semibold text-[var(--color-ink)]">Chức năng lấy mã chỉ dùng được trên điện thoại.</p>
                         <p class="text-sm text-[var(--color-muted)] mt-1">Vui lòng mở tietkiemvi.com bằng trình duyệt trên điện thoại.</p>
                     </div>
+
+                    <!-- Dải nhắc hoàn tiền, dính theo ô dán link nên khách lúc nào cũng thấy.
+                         Bắt buộc gói gọn MỘT DÒNG (text-[11px], truncate): vùng này đã chiếm chỗ
+                         của ô nhập trên màn hình điện thoại, dài thêm một dòng nữa là đẩy chính
+                         công cụ ra khỏi tầm nhìn. -->
+                    <template v-if="canUseVoucherTool">
+                        <div
+                            v-if="showGuestCashbackNudge"
+                            class="mt-2 flex items-center gap-2 rounded-xl bg-[var(--color-ink)] text-white px-3 py-1.5"
+                        >
+                            <span class="text-[11px] leading-tight truncate flex-1 min-w-0">
+                                🔒 Chưa đăng nhập = đơn này không được hoàn tiền
+                            </span>
+                            <Link
+                                href="/login"
+                                class="flex-none text-[11px] font-bold bg-white/15 hover:bg-white/25 rounded-lg px-2.5 py-1 transition no-underline text-white"
+                            >Đăng nhập</Link>
+                        </div>
+                        <!-- Câu ĐIỀU KIỆN, không phải cam kết: "mua từ link này thì mới được tính"
+                             nói đúng thứ khách cần biết (đi đường khác là mất) mà không hứa thay
+                             cho những khâu phía sau vốn có thể hỏng — rewriteToOwnAffiliate() gặp
+                             lỗi thì trả nguyên link của nguồn, và mã khách chỉ gắn được khi link
+                             đích đã có sẵn tham số utm_content. -->
+                        <div
+                            v-else-if="showLoggedInCashbackBadge"
+                            title="Đơn được tính hoàn tiền sau khi Shopee chốt ở trạng thái Hoàn thành và tụi mình đối soát báo cáo."
+                            class="mt-2 flex items-center gap-2 rounded-xl bg-[var(--color-green-soft)] border border-[var(--color-brand-green)]/25 px-3 py-1.5"
+                        >
+                            <span class="text-[11px] leading-tight truncate text-[var(--color-brand-green)] font-semibold">
+                                ✓ Đang đăng nhập — mua từ link này thì đơn mới được tính hoàn tiền
+                            </span>
+                        </div>
+                    </template>
                 </div>
 
                 <!-- Kết quả -->
@@ -462,6 +553,29 @@ onUnmounted(() => {
                             <li>Bấm tiếp vào <b>{{ linkLocation }}</b> → về Shopee, mã đã áp sẵn.</li>
                         </ol>
                         <p class="text-xs text-[var(--color-muted)] mt-2">Phải đi qua Facebook thì mã mới có hiệu lực — đừng đóng giữa chừng nhé.</p>
+                    </div>
+
+                    <!-- Cửa cuối trước cú bấm mua của khách vãng lai. Đây là chỗ duy nhất trên
+                         cả trang mà lời nhắc còn kịp có tác dụng: bấm xong là khách sang Shopee,
+                         đơn đó vĩnh viễn không quy về ai được.
+                         Cố ý KHÔNG dùng btn-fire và KHÔNG dùng animate-pulse-ring — hai thứ đó
+                         đang là của nút "Mua ngay" ngay bên dưới; đánh nhau về độ nổi bật ở đây
+                         chỉ làm khách chậm lại đúng lúc họ đã muốn mua. -->
+                    <div
+                        v-if="!autoRedirecting && voucherResult.voucher_ref && showGuestBuyNudge"
+                        class="mb-3 rounded-xl bg-[var(--color-ink)] px-4 py-3.5"
+                    >
+                        <p class="text-sm font-bold text-white mb-1">🔒 Mua lúc này thì chắc chắn không được hoàn tiền</p>
+                        <p class="text-xs text-white/70 leading-relaxed mb-3">
+                            Đăng nhập trước rồi mới bấm mua thì đơn này mới được ghi nhận về tài khoản của bạn.
+                            Khi Shopee chốt đơn ở trạng thái Hoàn thành và tụi mình đối soát xong, bạn được chia lại
+                            <b class="text-white">{{ cashbackRate }}% khoản hoa hồng</b> Shopee trả cho đơn đó.
+                            Bấm mua khi chưa đăng nhập thì sau này không cứu lại được.
+                        </p>
+                        <Link
+                            :href="joinHref"
+                            class="block w-full text-center bg-white text-[var(--color-ink)] text-sm font-bold py-2.5 rounded-lg no-underline hover:bg-white/90 transition"
+                        >{{ joinLabel }}</Link>
                     </div>
 
                     <!-- Mã đã được áp sẵn trong link nên khách không phải chọn/nhập gì, chỉ bấm mở. -->
@@ -549,6 +663,11 @@ onUnmounted(() => {
             </div>
         </section>
 
+        <!-- Hoàn tiền: đặt NGAY SAU công cụ, trước mọi section dài khác. Trên điện thoại, section
+             "Mã giảm giá gợi ý" bên dưới là một grid một cột dài hàng chục màn hình — nhét khối
+             giải thích xuống sau nó thì coi như không ai đọc. -->
+        <CashbackExplainer v-if="cashbackOn" />
+
         <!-- Mã giảm giá gợi ý -->
         <section v-if="vouchers.length" class="py-16 px-4 bg-[var(--color-bg)]">
             <div class="max-w-5xl mx-auto">
@@ -596,13 +715,9 @@ onUnmounted(() => {
         <!-- How it works -->
         <section class="py-16 px-4 bg-[var(--color-bg)]">
             <div class="max-w-4xl mx-auto text-center">
-                <h2 class="text-2xl md:text-3xl font-extrabold text-[var(--color-ink)] mb-12">Chỉ 3 bước đơn giản</h2>
-                <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
-                    <div v-for="(step, i) in [
-                        { icon: '📎', title: 'Dán link sản phẩm Shopee', desc: 'Copy link sản phẩm từ app hoặc web Shopee, dán vào ô ở đầu trang.', badge: 'cyan' },
-                        { icon: '🔍', title: 'Tự động quét mã', desc: 'Không cần bấm nút — hệ thống tự tìm mã Facebook, YouTube, Instagram còn hiệu lực ngay khi bạn dán link.', badge: 'orange' },
-                        { icon: '🛍️', title: 'Chọn mã & mua ngay', desc: 'Bấm vào mã phù hợp (mã có nhãn “Đề xuất” là tốt nhất) — link mua hàng đã áp sẵn voucher sẽ tự mở ra.', badge: 'emerald' },
-                    ]" :key="i" class="card-glass rounded-2xl p-6 flex flex-col items-center text-center">
+                <h2 class="text-2xl md:text-3xl font-extrabold text-[var(--color-ink)] mb-12">Chỉ {{ steps.length }} bước đơn giản</h2>
+                <div class="grid grid-cols-1 gap-6" :class="steps.length === 4 ? 'md:grid-cols-2' : 'md:grid-cols-3'">
+                    <div v-for="(step, i) in steps" :key="i" class="card-glass rounded-2xl p-6 flex flex-col items-center text-center">
                         <span class="step-badge px-2.5 py-1 text-xs mb-4" :class="`step-badge--${step.badge}`">BƯỚC {{ i + 1 }}</span>
                         <div class="w-16 h-16 rounded-2xl bg-[var(--color-peach-soft)] flex items-center justify-center text-3xl mb-4">{{ step.icon }}</div>
                         <h3 class="font-extrabold text-[var(--color-ink)] mb-2">{{ step.title }}</h3>
@@ -642,12 +757,36 @@ onUnmounted(() => {
         <!-- CTA -->
         <section class="py-16 px-4 bg-gradient-to-br from-[var(--color-accent)] to-[var(--color-accent-deep)]">
             <div class="max-w-xl mx-auto text-center">
-                <h2 class="text-2xl md:text-3xl font-extrabold text-white mb-4">Sẵn sàng tiết kiệm tiền?</h2>
-                <p class="text-white/80 mb-8">Hơn 1.2 triệu mã đã được tạo. Tham gia ngay hôm nay.</p>
-                <button @click="focusVoucherTool"
-                    class="bg-white text-[var(--color-accent)] font-bold px-8 py-4 rounded-2xl hover:shadow-xl transition">
-                    Lấy link ngay — Miễn phí
-                </button>
+                <!-- Khách vãng lai + đang có hoàn tiền: đây là lời mời TẠO TÀI KHOẢN, nên nút phải
+                     dẫn thẳng tới /register. Trước đây nút ghi "Tham gia ngay hôm nay" mà bấm vào
+                     chỉ cuộn ngược lên ô dán link — hứa một đằng làm một nẻo.
+                     Con số "hơn 1.2 triệu mã đã được tạo" đã bỏ: không có nguồn nào trong hệ thống
+                     đếm ra con số đó, mà cả trang này đang bán bằng sự minh bạch. -->
+                <template v-if="showGuestCashbackNudge">
+                    <h2 class="text-2xl md:text-3xl font-extrabold text-white mb-4">Mua thì vẫn phải mua — sao không lấy lại một phần?</h2>
+                    <!-- Không dùng chữ "khác mỗi việc đăng nhập": đăng nhập là điều kiện ĐẦU TIÊN
+                         chứ không phải điều kiện duy nhất — sau nó còn đơn phải Hoàn thành, phải
+                         qua kỳ đối soát, và muốn cầm được tiền thì còn mốc rút tối thiểu. Kể đúng
+                         thứ tự các chặng, rồi lấy chính sự thẳng thắn đó làm câu chốt. -->
+                    <p class="text-white/80 mb-8">
+                        Vẫn dán link, vẫn được mã giảm giá như thường. Đăng nhập trước khi bấm mua thì đơn của bạn
+                        còn được ghi nhận: Shopee chốt đơn ở trạng thái Hoàn thành, tụi mình đối soát báo cáo,
+                        rồi {{ cashbackRate }}% hoa hồng của đơn đó vào ví bạn. Không nhanh, nhưng có thật —
+                        và tụi mình nói trước cả những lúc bạn không được hoàn.
+                    </p>
+                    <Link :href="joinHref"
+                        class="inline-block bg-white text-[var(--color-accent)] font-bold px-8 py-4 rounded-2xl hover:shadow-xl transition no-underline">
+                        {{ joinLabel }}
+                    </Link>
+                </template>
+                <template v-else>
+                    <h2 class="text-2xl md:text-3xl font-extrabold text-white mb-4">Sẵn sàng tiết kiệm tiền?</h2>
+                    <p class="text-white/80 mb-8">Dán link sản phẩm là có ngay mã giảm giá — miễn phí, không cần nhập tay.</p>
+                    <button @click="focusVoucherTool"
+                        class="bg-white text-[var(--color-accent)] font-bold px-8 py-4 rounded-2xl hover:shadow-xl transition">
+                        Lấy link ngay — Miễn phí
+                    </button>
+                </template>
             </div>
         </section>
     </AppLayout>
