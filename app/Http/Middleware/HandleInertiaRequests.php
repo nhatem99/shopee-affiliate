@@ -2,7 +2,9 @@
 
 namespace App\Http\Middleware;
 
+use App\Http\Controllers\ProfileController;
 use App\Models\Setting;
+use App\Services\CashbackService;
 use Illuminate\Http\Request;
 use Inertia\Middleware;
 
@@ -40,6 +42,19 @@ class HandleInertiaRequests extends Middleware
                 // dựa vào đây để hiện thanh nhắc.
                 'maintenanceMode' => ($request->user()?->isAdmin() ?? false)
                     && Setting::getBool('maintenance_mode', false),
+                // Tỉ lệ hoàn tiền — chia sẻ toàn cục vì nội dung quảng bá hoàn tiền nằm rải khắp
+                // các trang khách (trang chủ, tài khoản, thanh điều hướng), không riêng trang nào.
+                //
+                // Đây cũng là CÔNG TẮC của toàn bộ nội dung đó: mặc định setting này bằng 0, và
+                // khi bằng 0 thì CashbackService::sync() không tạo đồng hoa hồng nào (xem
+                // CashbackService::sync). Nói chuyện hoàn tiền trong lúc hệ thống trả 0đ cho tất
+                // cả mọi người là hứa suông — nên frontend bọc mọi khối hoàn tiền bằng
+                // `cashbackRate > 0` (xem composable useCashback).
+                'cashbackRate' => (float) Setting::get(CashbackService::RATE_KEY, 0),
+                // Mức rút tối thiểu đi kèm luôn: nội dung nào nhắc tới con số này (trang tài
+                // khoản, khối giải thích ở trang chủ) cũng phải lấy động, tránh cảnh sửa hằng số
+                // trong PHP rồi quên mất mấy chỗ đã gõ cứng "50.000đ" trong .vue.
+                'minWithdrawal' => ProfileController::MIN_WITHDRAWAL,
             ],
         ]);
     }
