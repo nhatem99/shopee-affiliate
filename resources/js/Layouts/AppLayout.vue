@@ -5,6 +5,7 @@ import { useAuthStore } from '@/Stores/useAuthStore'
 import BottomNav from '@/Components/BottomNav.vue'
 import ToastContainer from '@/Components/ToastContainer.vue'
 import ThemeToggle from '@/Components/ThemeToggle.vue'
+import FestiveDecor from '@/Components/FestiveDecor.vue'
 import { useCashback } from '@/composables/useCashback'
 
 const auth = useAuthStore()
@@ -18,6 +19,9 @@ const maintenanceMode = computed(() => page.props.settings?.maintenanceMode ?? f
 
 <template>
     <div class="min-h-screen bg-[var(--color-bg)]">
+        <!-- Trang trí theo mùa — bật/tắt ở Admin → Cài đặt, hết mùa là tắt, không sửa code. -->
+        <FestiveDecor v-if="page.props.settings?.festiveDecor" />
+
         <!-- Nhắc admin: bạn đang xem trang khách trong lúc khách chỉ thấy trang bảo trì -->
         <div v-if="maintenanceMode" class="bg-amber-500 text-[#1c0a00] text-xs md:text-sm font-semibold px-4 py-2 flex flex-wrap items-center justify-center gap-x-2 gap-y-1 text-center">
             <span>🔧 Đang bật chế độ bảo trì — khách chỉ thấy trang bảo trì, bạn đang xem với quyền admin.</span>
@@ -40,6 +44,7 @@ const maintenanceMode = computed(() => page.props.settings?.maintenanceMode ?? f
                     <Link v-if="!auth.isAdmin && cashbackOn" href="/hoan-tien" class="nav-pill rounded-xl px-3.5 py-2" :class="{ 'nav-pill--active': current.startsWith('/hoan-tien') }">Hoàn tiền</Link>
                     <Link v-if="!auth.isAdmin" href="/blog" class="nav-pill rounded-xl px-3.5 py-2" :class="{ 'nav-pill--active': current.startsWith('/blog') }">Blog</Link>
                     <Link v-if="auth.isLoggedIn && !auth.isAdmin" href="/history" class="nav-pill rounded-xl px-3.5 py-2" :class="{ 'nav-pill--active': current.startsWith('/history') }">Lịch sử</Link>
+                    <Link v-if="auth.isLoggedIn && !auth.isAdmin && cashbackOn" href="/don-hang" class="nav-pill rounded-xl px-3.5 py-2" :class="{ 'nav-pill--active': current.startsWith('/don-hang') }">Đơn hàng</Link>
                     <Link v-if="auth.isLoggedIn && !auth.isAdmin" href="/profile" class="nav-pill rounded-xl px-3.5 py-2" :class="{ 'nav-pill--active': current.startsWith('/profile') }">Tài khoản</Link>
                     <Link v-if="auth.isAdmin" href="/admin/dashboard" class="nav-pill rounded-xl px-3.5 py-2" :class="{ 'nav-pill--active': current.startsWith('/admin') }">Admin</Link>
                 </nav>

@@ -202,6 +202,71 @@
     animation: pulseRing 1.6s ease-in-out infinite;
 }
 
+/* Lớp trang trí theo mùa (Components/FestiveDecor.vue). Thời lượng/độ trễ đặt inline theo
+   từng món để không nhấp nhô đồng loạt; ở đây chỉ định nghĩa chuyển động. */
+@keyframes festiveFloat {
+    0%, 100% { transform: translateY(0) rotate(-3deg); }
+    50% { transform: translateY(-14px) rotate(3deg); }
+}
+/* Đèn lồng đung đưa quanh điểm treo (đầu dây), không quanh tâm — quanh tâm nhìn như bị lắc. */
+@keyframes festiveSway {
+    0%, 100% { transform: rotate(-5deg); }
+    50% { transform: rotate(5deg); }
+}
+@keyframes festiveTwinkle {
+    0%, 100% { opacity: 0.1; transform: scale(0.6) rotate(0deg); }
+    50% { opacity: 1; transform: scale(1.15) rotate(20deg); }
+}
+/* Trăng thở: quầng sáng phồng lên xẹp xuống rất chậm. */
+@keyframes festiveGlow {
+    0%, 100% { transform: scale(1); filter: drop-shadow(0 0 18px rgba(255, 212, 106, 0.35)); }
+    50% { transform: scale(1.04); filter: drop-shadow(0 0 34px rgba(255, 212, 106, 0.6)); }
+}
+@keyframes festiveDrift {
+    from { transform: translateX(0); }
+    to { transform: translateX(130vw); }
+}
+.festive-float { animation: festiveFloat 6s ease-in-out infinite; }
+.festive-sway { animation: festiveSway 5s ease-in-out infinite; transform-origin: 50% 0; }
+.festive-twinkle { animation: festiveTwinkle 2.5s ease-in-out infinite; }
+.festive-glow { animation: festiveGlow 7s ease-in-out infinite; }
+.festive-drift { animation: festiveDrift 50s linear infinite; }
+
+/* Chú Cuội bay lên chơi với chị Hằng khi tìm mã xong (useFestive.celebrate). Hai người gặp
+   nhau ở bên phải, khoảng 55vh — KHÔNG hẹn trên đỉnh màn hình vì header + khung dán link dính
+   che tới ~40vh trên điện thoại thấp. X = 73vw trừ chính bề rộng Cuội (100% trong translate là
+   bề rộng phần tử) để đậu sát bên trái chị Hằng (left 74%). Cuội đi từ top 72% lên ~55%
+   (-17vh), chị Hằng từ top 12% xuống ~55% (+43vh). 9s khớp FESTIVE_FLIGHT_MS (useFestive.js). */
+@keyframes festiveFly {
+    0% { transform: translate(0, 0) rotate(0deg) scale(1); }
+    14% { transform: translate(10vw, -30vh) rotate(-12deg) scale(1.02); }
+    38% { transform: translate(calc(73vw - 100% - 8px), -17vh) rotate(6deg) scale(0.88); }
+    48% { transform: translate(calc(73vw - 100% - 4px), -20vh) rotate(-5deg) scale(0.88); }
+    58% { transform: translate(calc(73vw - 100% - 10px), -17vh) rotate(5deg) scale(0.88); }
+    68% { transform: translate(calc(73vw - 100% - 4px), -20vh) rotate(-5deg) scale(0.88); }
+    78% { transform: translate(calc(73vw - 100% - 8px), -17vh) rotate(0deg) scale(0.88); }
+    100% { transform: translate(0, 0) rotate(0deg) scale(1); }
+}
+/* Chị Hằng bay xuống đón, nhún chào khi Cuội tới, rồi bay về chỗ cũ. */
+@keyframes festiveGreet {
+    0% { transform: translateY(0) rotate(0deg); }
+    30% { transform: translateY(43vh) rotate(-6deg); }
+    38% { transform: translateY(40vh) rotate(4deg); }
+    46% { transform: translateY(44vh) rotate(-4deg); }
+    54% { transform: translateY(40vh) rotate(4deg); }
+    62% { transform: translateY(44vh) rotate(-3deg); }
+    72% { transform: translateY(42vh) rotate(0deg); }
+    100% { transform: translateY(0) rotate(0deg); }
+}
+.festive-fly { animation: festiveFly 9s cubic-bezier(0.45, 0, 0.3, 1) forwards !important; }
+.festive-greet { animation: festiveGreet 9s ease-in-out forwards !important; }
+
+/* Người tắt hiệu ứng chuyển động ở hệ điều hành: giữ hình, bỏ chuyển động. */
+@media (prefers-reduced-motion: reduce) {
+    .festive-float, .festive-sway, .festive-twinkle, .festive-glow, .festive-drift,
+    .festive-fly, .festive-greet { animation: none !important; }
+}
+
 @keyframes fadeUp {
     from { opacity: 0; transform: translateY(18px); }
     to { opacity: 1; transform: none; }
