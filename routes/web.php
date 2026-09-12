@@ -24,6 +24,7 @@ use App\Http\Controllers\ShortLinkController;
 use App\Http\Controllers\TrackingController;
 use App\Http\Controllers\WithdrawalController;
 use App\Models\PlatformVoucher;
+use App\Services\CashbackService;
 use App\Services\TrackingService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
@@ -88,6 +89,15 @@ Route::get('/go/{code}', [ShortLinkController::class, 'redirect'])->name('go');
 Route::post('/track/event', [TrackingController::class, 'store'])
     ->middleware('throttle:affiliate-scan')
     ->name('track.event');
+
+// Giải thích hoàn tiền — trang riêng để thanh điều hướng dưới và bài đăng trỏ tới được.
+// Chương trình chưa bật (tỉ lệ = 0) thì không có gì để giải thích: đá về trang chủ thay vì
+// hiện một trang nói về thứ hệ thống đang không trả đồng nào.
+Route::get('/hoan-tien', function (CashbackService $cashback) {
+    abort_if($cashback->rate() <= 0, 404);
+
+    return Inertia::render('Cashback');
+})->name('cashback.info');
 
 // Blog
 Route::get('/blog', [BlogController::class, 'index'])->name('blog.index');

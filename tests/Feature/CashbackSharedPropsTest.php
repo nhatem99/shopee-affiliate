@@ -53,4 +53,22 @@ class CashbackSharedPropsTest extends TestCase
             ->assertOk()
             ->assertInertia(fn ($page) => $page->where('settings.cashbackRate', 0));
     }
+
+    public function test_trang_giai_thich_hoan_tien_mo_duoc_khi_dang_bat(): void
+    {
+        Setting::set(CashbackService::RATE_KEY, '30');
+
+        $this->get('/hoan-tien')
+            ->assertOk()
+            ->assertInertia(fn ($page) => $page->component('Cashback'));
+    }
+
+    public function test_tat_hoan_tien_thi_trang_giai_thich_bien_mat(): void
+    {
+        // Không để tồn tại một trang công khai nói về chương trình mà hệ thống đang trả 0đ —
+        // thanh điều hướng dưới cũng tự ẩn mục đó, nhưng ai gõ thẳng URL vẫn phải bị chặn.
+        Setting::set(CashbackService::RATE_KEY, '0');
+
+        $this->get('/hoan-tien')->assertNotFound();
+    }
 }
