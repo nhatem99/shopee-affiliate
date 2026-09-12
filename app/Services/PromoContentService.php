@@ -105,7 +105,9 @@ class PromoContentService
     {
         return [
             'siteUrl' => rtrim((string) config('app.url'), '/'),
-            'cashbackRate' => $this->formatNumber($this->cashback->rate()),
+            // Bài quảng bá dùng tỉ lệ HIỂN THỊ — cùng con số khách thấy trên trang chủ, để bài
+            // đăng và web không nói hai số khác nhau. Ví dụ tiền hoàn bên dưới cũng tính theo nó.
+            'cashbackRate' => $this->formatNumber($this->cashback->displayRate()),
             'topPercent' => $this->formatNumber($this->topPercent()),
             'secondPercent' => $this->formatNumber($this->secondPercent()),
             // Link nhóm cộng đồng — admin chưa đặt thì để rỗng, và dòng chứa nó sẽ bị cắt khỏi
@@ -116,7 +118,7 @@ class PromoContentService
             'restockHoursYoutube' => self::RESTOCK_YOUTUBE,
             'exampleOrder' => $this->vnd(self::EXAMPLE_ORDER_VALUE),
             'exampleCommission' => $this->vnd(self::EXAMPLE_COMMISSION),
-            'exampleCashback' => $this->vnd((int) round(self::EXAMPLE_COMMISSION * $this->cashback->rate() / 100)),
+            'exampleCashback' => $this->vnd((int) round(self::EXAMPLE_COMMISSION * $this->cashback->displayRate() / 100)),
             'fbStep' => $this->facebookStep(),
             'buyButtonLabel' => $this->buyButtonLabel(),
             'loginOrder' => $this->loginOrder(),
@@ -229,59 +231,38 @@ class PromoContentService
                 'when_to_use' => 'Bài đăng hàng ngày trong nhóm săn sale. Ngắn để không bị cắt ở chỗ "Xem thêm". Dùng đúng hai mức giảm bạn đặt ở trên — nguồn đổi mức thì sửa lại rồi copy bài mới.',
                 'needs_percents' => true,
                 'body' => <<<'TXT'
-🔥 Mã giảm Shopee tới {{ topPercent }}% — loại mã nội bộ, tự mở app tìm không thấy
+🔥 Mã giảm Shopee tới {{ topPercent }}% — mã nội bộ, tự mở app tìm không thấy
 
-Mình gom mã ở đây: {{ siteUrl }}
-Dán link sản phẩm Shopee vào ô đầu trang, nó trả về link đã gắn sẵn mã — bấm vào là mua với giá đã giảm, khỏi nhập mã tay.
+Dán link sản phẩm Shopee vào {{ siteUrl }} → nhận link đã gắn sẵn mã, bấm là mua giá đã giảm.
+Mức đang chạy: {{ topPercent }}% và {{ secondPercent }}%, tuỳ sản phẩm.
 
-Mức đang chạy: {{ topPercent }}% và {{ secondPercent }}%, tuỳ sản phẩm và tuỳ còn lượt hay không.
-
-Nói trước mấy cái kẻo dùng rồi tưởng lỗi:
-▪️ Mở bằng ĐIỆN THOẠI, máy tính không chạy được
-▪️ Chỉ nhận link Shopee
+▪️ Mở bằng ĐIỆN THOẠI, chỉ nhận link Shopee
 ▪️ {{ fbStep }}
-▪️ Không phải sản phẩm nào cũng có mã, và mã có giới hạn lượt. Hết thì canh khung {{ restockHoursFbIg }} (giờ VN) quay lại.
+▪️ Mã có giới hạn lượt, hết thì canh khung {{ restockHoursFbIg }} (giờ VN)
 
-Miễn phí, không thu gì cả.
-👉 {{ siteUrl }}
+Miễn phí 👉 {{ siteUrl }}
 TXT,
             ],
             [
                 'id' => 'fb-group-cashback',
                 'channel' => 'group-fb',
-                'name' => 'Nhóm Facebook — bài dài giải thích hoàn tiền (bài ghim)',
-                'when_to_use' => 'Dùng cho nhóm mình lập, nhóm đã quen mặt, hoặc làm BÀI GHIM cho người mới. Cũng dùng để trả lời tập trung khi có người hỏi "hoàn tiền kiểu gì, bao lâu có tiền".',
+                'name' => 'Nhóm Facebook — bài ngắn, nhấn hoàn tiền',
+                'when_to_use' => 'Bài đăng trong nhóm hoặc bài ghim. Cố tình ngắn: chỉ nói con số, cách dùng và điều kiện chính; ai hỏi kỹ thì trỏ sang trang /hoan-tien hoặc dùng mẫu bình luận "trả lời người hỏi kỹ về hoàn tiền".',
                 'needs_cashback' => true,
                 'body' => <<<'TXT'
-💸 Mua Shopee xong được chia lại tiền — mình nói thẳng con số thật, kẻo bạn hiểu nhầm
+💰 Mua hoàn tiền tại tietkiemvi lên đến {{ cashbackRate }}%
 
-Là {{ cashbackRate }}% của khoản HOA HỒNG mà Shopee trả cho mình vì đơn của bạn — KHÔNG phải {{ cashbackRate }}% giá trị đơn hàng.
-Ví dụ cho dễ hình dung: đơn {{ exampleOrder }}, nếu Shopee trả hoa hồng khoảng {{ exampleCommission }} thì bạn nhận lại khoảng {{ exampleCashback }}.
+Mua Shopee qua {{ siteUrl }} được 2 thứ:
+▪️ Mã giảm giá gắn sẵn trong link — bấm là mua giá đã giảm
+▪️ Được chia lại tới {{ cashbackRate }}% khoản hoa hồng Shopee trả cho đơn đó (ví dụ đơn {{ exampleOrder }}, hoa hồng khoảng {{ exampleCommission }} thì nhận lại khoảng {{ exampleCashback }})
 
-Tiền ở đâu ra mà cho không? Shopee trả hoa hồng tiếp thị cho mình khi bạn mua qua link của mình. Mình chia lại {{ cashbackRate }}% khoản đó cho chính bạn — cộng THÊM vào phần mã giảm giá bạn đã được chứ không thay thế nó. Hoa hồng mỗi ngành hàng mỗi khác nên số tiền mỗi đơn cũng khác, mình không báo trước con số chính xác được.
+Cách dùng: mở bằng ĐIỆN THOẠI → {{ loginOrder }} → dán link sản phẩm Shopee. {{ fbStep }}
 
-✅ ĐƯỢC HOÀN khi:
-▪️ Bạn {{ loginOrder }} — cái này quan trọng nhất
-▪️ Bạn đi thẳng từ link của mình sang Shopee và đặt hàng luôn ở đó
-▪️ Đơn chuyển sang trạng thái "Hoàn thành" bên Shopee
-▪️ Đơn đó thực sự có hoa hồng — vài ngành hàng hoa hồng bằng 0 thì không có gì để chia
+Tiền vào ví sau khi đơn Hoàn thành bên Shopee và mình đối soát xong (thường vài tuần), đủ {{ minWithdrawal }} thì rút về MoMo/ZaloPay.
+Điều kiện chi tiết: {{ siteUrl }}/hoan-tien
 
-❌ KHÔNG ĐƯỢC HOÀN khi:
-▪️ Bấm mua lúc chưa đăng nhập — đơn đó không quy về ai được, và sau này không cứu lại được
-▪️ Tự mở app Shopee tìm lại sản phẩm rồi đặt (kiểu này mất luôn cả mã giảm giá)
-▪️ Đơn huỷ hoặc trả hàng — khoản đã ghi sẽ bị trừ lại
-
-⏳ Bao lâu có tiền? Không nhanh, và mình không hứa 24h. Đơn phải Hoàn thành bên Shopee (tức qua hạn đổi trả), rồi mình đối soát theo báo cáo hoa hồng của Shopee mới ghi tiền vào ví — thường mất vài tuần. Chỗ nào hứa tiền về sau 24h thì bạn nên nghi ngờ.
-
-🏦 Rút tiền: đủ {{ minWithdrawal }} là gửi được yêu cầu rút về MoMo/ZaloPay đã khai trong trang Tài khoản. Mình duyệt rồi chuyển tay, không tự động.
-
-📌 Lưu ý khi dùng: chỉ nhận link SHOPEE, chỉ chạy trên ĐIỆN THOẠI. {{ fbStep }}
-Mức hoàn {{ cashbackRate }}% hiện tại có thể được điều chỉnh; khi đổi thì các khoản chưa chi trả sẽ được tính lại theo mức mới, mình luôn cập nhật ngay trên trang chủ.
-
-👉 Nhớ {{ loginOrder }}: {{ siteUrl }}
+👉 {{ siteUrl }}
 👥 Nhóm săn sale của tụi mình: {{ communityUrl }}
-
-Mua rồi mà ví vẫn 0đ thì nhắn mình kèm mã đơn Shopee + ngày đặt để đối chiếu nhé. Trang Tài khoản chỉ hiện số dư đã đối soát xong, đơn đang chờ thì chưa hiện đâu.
 TXT,
             ],
             [

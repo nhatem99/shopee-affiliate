@@ -54,6 +54,43 @@ class CashbackSharedPropsTest extends TestCase
             ->assertInertia(fn ($page) => $page->where('settings.cashbackRate', 0));
     }
 
+    /**
+     * Admin có thể đặt một con số HIỂN THỊ tách khỏi tỉ lệ thực trả. Prop chia sẻ cho khách phải
+     * là số hiển thị; tỉ lệ thực chỉ dùng để tính tiền (CashbackService::sync).
+     */
+    public function test_dat_ti_le_hien_thi_rieng_thi_khach_thay_so_do(): void
+    {
+        Setting::set(CashbackService::RATE_KEY, '50');
+        Setting::set(CashbackService::DISPLAY_RATE_KEY, '60');
+
+        $this->get('/')
+            ->assertOk()
+            ->assertInertia(fn ($page) => $page->where('settings.cashbackRate', 60));
+    }
+
+    public function test_bo_trong_ti_le_hien_thi_thi_khach_thay_ti_le_thuc(): void
+    {
+        Setting::set(CashbackService::RATE_KEY, '50');
+        Setting::set(CashbackService::DISPLAY_RATE_KEY, '');
+
+        $this->get('/')
+            ->assertOk()
+            ->assertInertia(fn ($page) => $page->where('settings.cashbackRate', 50));
+    }
+
+    public function test_tat_hoan_tien_thi_so_hien_thi_cung_ve_0(): void
+    {
+        // Số hiển thị không được sống sót qua công tắc: chương trình tắt mà trang chủ vẫn
+        // khoe "hoàn 60%" là hứa suông với tất cả mọi người.
+        Setting::set(CashbackService::RATE_KEY, '0');
+        Setting::set(CashbackService::DISPLAY_RATE_KEY, '60');
+
+        $this->get('/')
+            ->assertOk()
+            ->assertInertia(fn ($page) => $page->where('settings.cashbackRate', 0));
+        $this->get('/hoan-tien')->assertNotFound();
+    }
+
     public function test_trang_giai_thich_hoan_tien_mo_duoc_khi_dang_bat(): void
     {
         Setting::set(CashbackService::RATE_KEY, '30');

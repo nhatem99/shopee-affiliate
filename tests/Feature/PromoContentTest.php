@@ -51,6 +51,18 @@ class PromoContentTest extends TestCase
         $this->assertStringNotContainsString('40%', $body);
     }
 
+    /** Bài mẫu phải nói cùng một số với trang chủ — tức số HIỂN THỊ, khi admin đặt riêng. */
+    public function test_bai_mau_dung_ti_le_hien_thi_khi_admin_dat_rieng(): void
+    {
+        Setting::set(CashbackService::RATE_KEY, '50');
+        Setting::set(CashbackService::DISPLAY_RATE_KEY, '60');
+
+        $body = collect($this->service()->templates())->firstWhere('id', 'fb-group-cashback')['body'];
+
+        $this->assertStringContainsString('lên đến 60%', $body);
+        $this->assertStringNotContainsString('50%', $body);
+    }
+
     public function test_tat_hoan_tien_thi_moi_mau_nhac_hoan_tien_bien_mat(): void
     {
         Setting::set(CashbackService::RATE_KEY, '0');

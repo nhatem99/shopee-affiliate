@@ -50,11 +50,16 @@ class HandleInertiaRequests extends Middleware
                 // CashbackService::sync). Nói chuyện hoàn tiền trong lúc hệ thống trả 0đ cho tất
                 // cả mọi người là hứa suông — nên frontend bọc mọi khối hoàn tiền bằng
                 // `cashbackRate > 0` (xem composable useCashback).
-                'cashbackRate' => (float) Setting::get(CashbackService::RATE_KEY, 0),
+                //
+                // Là tỉ lệ HIỂN THỊ (displayRate), không phải tỉ lệ tính tiền: admin có thể đặt
+                // hai số khác nhau ở trang Cài đặt. Công tắc bật/tắt vẫn theo tỉ lệ thực.
+                'cashbackRate' => app(CashbackService::class)->displayRate(),
                 // Mức rút tối thiểu đi kèm luôn: nội dung nào nhắc tới con số này (trang tài
                 // khoản, khối giải thích ở trang chủ) cũng phải lấy động, tránh cảnh sửa hằng số
                 // trong PHP rồi quên mất mấy chỗ đã gõ cứng "50.000đ" trong .vue.
                 'minWithdrawal' => ProfileController::MIN_WITHDRAWAL,
+                // Lớp trang trí theo mùa trên trang khách (Components/FestiveDecor.vue).
+                'festiveDecor' => Setting::getBool('festive_decor', false),
             ],
         ]);
     }

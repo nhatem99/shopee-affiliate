@@ -190,6 +190,31 @@ class AdminShopeeReportTest extends TestCase
             ->assertSessionHasErrors('cashback_rate');
     }
 
+    public function test_luu_ti_le_hien_thi_khong_dong_toi_tien_thuc_tra(): void
+    {
+        $admin = $this->createAdmin();
+        $this->actingAs($admin)->post('/admin/settings', ['cashback_rate' => 50]);
+
+        $this->actingAs($admin)
+            ->post('/admin/settings', ['cashback_display_rate' => 60])
+            ->assertSessionHasNoErrors();
+
+        $service = app(CashbackService::class);
+        $this->assertSame(50.0, $service->rate());
+        $this->assertSame(60.0, $service->displayRate());
+
+        // Gửi null là xoá số riêng, quay về theo tỉ lệ thực.
+        $this->actingAs($admin)->post('/admin/settings', ['cashback_display_rate' => null]);
+        $this->assertSame(50.0, app(CashbackService::class)->displayRate());
+    }
+
+    public function test_ti_le_hien_thi_qua_100_bi_tu_choi(): void
+    {
+        $this->actingAs($this->createAdmin())
+            ->post('/admin/settings', ['cashback_display_rate' => 150])
+            ->assertSessionHasErrors('cashback_display_rate');
+    }
+
     /** Lưu một cài đặt khác không được vô tình xoá tỉ lệ đang chạy. */
     public function test_saving_another_setting_leaves_the_rate_alone(): void
     {

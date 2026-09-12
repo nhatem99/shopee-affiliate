@@ -21,6 +21,13 @@ class CashbackService
     public const RATE_KEY = 'cashback_rate';
 
     /**
+     * Con số hiển thị cho khách (trang chủ, /hoan-tien, bài mẫu quảng bá) — TÁCH khỏi tỉ lệ
+     * thực trả ở trên theo yêu cầu admin. Để trống thì lấy đúng tỉ lệ thực; chỉ khi admin cố ý
+     * nhập một số khác thì hai nơi mới nói khác nhau. Không bao giờ dùng số này để tính tiền.
+     */
+    public const DISPLAY_RATE_KEY = 'cashback_display_rate';
+
+    /**
      * @return array{created: int, updated: int, revoked: int, rate: float, orders: int}
      */
     public function sync(): array
@@ -65,6 +72,28 @@ class CashbackService
     public function rate(): float
     {
         return max(0.0, (float) Setting::get(self::RATE_KEY, 0));
+    }
+
+    /**
+     * Tỉ lệ đưa ra cho khách xem. Vẫn bám vào công tắc của tỉ lệ thực: chương trình tắt
+     * (rate = 0) thì số hiển thị cũng phải về 0 để toàn bộ nội dung hoàn tiền tự ẩn — không
+     * được để một con số quảng bá còn sáng trong khi hệ thống trả 0đ cho tất cả mọi người.
+     */
+    public function displayRate(): float
+    {
+        $rate = $this->rate();
+
+        if ($rate <= 0) {
+            return 0.0;
+        }
+
+        $display = Setting::get(self::DISPLAY_RATE_KEY);
+
+        if ($display === null || $display === '') {
+            return $rate;
+        }
+
+        return max(0.0, (float) $display);
     }
 
     /**

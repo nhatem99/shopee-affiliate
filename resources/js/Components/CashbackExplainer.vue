@@ -97,9 +97,9 @@ const { cashbackRate, minWithdrawal, joinHref, joinLabel, vnd } = useCashback()
                 </div>
             </div>
 
-            <!-- Khối thời gian. Câu từ chối hứa hẹn nằm ở đây là có chủ đích: đối thủ đều hứa
-                 "về ví trong 24h", nên nói thẳng mình KHÔNG hứa vậy vừa đúng sự thật (hệ thống
-                 đối soát bằng báo cáo tải tay, không có SLA nào cả) vừa là điểm khác biệt. -->
+            <!-- Khối thời gian. Nói thẳng là không nhanh để quản lý kỳ vọng (hệ thống đối soát
+                 bằng báo cáo tải tay, không có SLA nào cả), nhưng diễn đạt theo hướng "chậm vì
+                 chắc" thay vì đá xoáy đối thủ. -->
             <div v-if="!compact" class="card-glass rounded-2xl p-5 mb-4">
                 <p class="font-bold text-[var(--color-ink)] text-sm mb-2">⏳ Bao lâu thì tiền về ví?</p>
                 <p class="text-sm text-[var(--color-muted)] leading-relaxed">
@@ -107,8 +107,8 @@ const { cashbackRate, minWithdrawal, joinHref, joinLabel, vnd } = useCashback()
                     rồi tụi mình đối soát theo báo cáo Shopee mới ghi tiền vào ví bạn. Thường mất vài tuần kể từ ngày đặt.
                 </p>
                 <p class="text-sm text-[var(--color-ink)] leading-relaxed mt-2">
-                    Tụi mình <b>không hứa 24h</b>, không hứa "tự động về ví ngay sau khi nhận hàng".
-                    Trang nào hứa vậy thì bạn nên nghi ngờ.
+                    Chậm hơn một chút nhưng <b>chắc</b>: tiền chỉ ghi vào ví khi Shopee đã xác nhận
+                    hoa hồng cho đơn đó, nên khoản nào đã hiện trong ví là khoản bạn thật sự nhận được.
                 </p>
             </div>
 
