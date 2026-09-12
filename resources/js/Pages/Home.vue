@@ -10,6 +10,7 @@ import RestockSchedule from '@/Components/RestockSchedule.vue'
 import CashbackExplainer from '@/Components/CashbackExplainer.vue'
 import { useToast } from '@/composables/useToast'
 import { useCashback } from '@/composables/useCashback'
+import { useFestive } from '@/composables/useFestive'
 import { useAuthStore } from '@/Stores/useAuthStore'
 
 const props = defineProps({
@@ -37,6 +38,7 @@ const linkLocation = computed(() => props.facebookMode === 'reel'
 const toast = useToast()
 const auth = useAuthStore()
 const { cashbackRate, cashbackOn, joinHref, joinLabel } = useCashback()
+const { celebrate } = useFestive()
 
 // Nhắc hoàn tiền cho khách VÃNG LAI. Chỉ hiện khi chương trình đang bật và khách chưa đăng nhập:
 // đúng lúc đó, mỗi cú bấm mua là một đơn vĩnh viễn không quy về ai được (ShortLinkController chỉ
@@ -69,6 +71,7 @@ const showGuestBuyNudge = computed(() => showGuestCashbackNudge.value && !props.
 const voucherUrl = ref('')
 const voucherUrlInput = ref(null)
 const voucherResultEl = ref(null)
+const resultCtaEl = ref(null)
 const resolving = ref(false)
 const voucherError = ref(null)
 const history = useLocalStorage('sv_history', [])
@@ -101,6 +104,39 @@ function onVoucherUrlPaste(e) {
     e.preventDefault()
     voucherUrl.value = text
     resolveVoucher()
+}
+
+/**
+ * Cuộn cho khối kết quả hiện ra ngay dưới vùng dính (header + khung dán link + dải nhắc).
+ * Không dùng scrollIntoView + scroll-mt cố định: vùng dính cao ~300px trên điện thoại và
+ * đổi chiều cao khi thu gọn, con số cứng luôn lệch. Ưu tiên nút mua/Mở Facebook: nếu đầu
+ * kết quả vừa khít mà nút vẫn tụt dưới mép màn hình (hoặc dưới BottomNav) thì cuộn thêm.
+ *
+ * Ép khung thu gọn (stuck) TRƯỚC, đợi transition 200ms chạy xong rồi mới đo và cuộn. Nếu
+ * cuộn ngay thì khung thu gọn giữa chừng lúc trang đang trượt: nội dung bên dưới trồi lên
+ * trong khi màn hình đi xuống — nhìn giật, và mọi vị trí đo lúc đầu đều sai một khoảng bằng
+ * phần vừa co lại. Đằng nào cuộn tới kết quả cũng qua ngưỡng dính, nên ép sớm không đổi gì.
+ */
+const BOTTOM_NAV_HEIGHT = 80
+const STICKY_TRANSITION_MS = 200
+
+function scrollToResult() {
+    stuck.value = true
+    setTimeout(() => {
+        const result = voucherResultEl.value
+        if (!result) return
+        const topGap = HEADER_HEIGHT + (stickyEl.value?.offsetHeight ?? 0) + 12
+        let top = result.getBoundingClientRect().top + window.scrollY - topGap
+
+        const cta = resultCtaEl.value
+        if (cta) {
+            const ctaBottom = cta.getBoundingClientRect().bottom + window.scrollY + 16
+            const visibleHeight = window.innerHeight - BOTTOM_NAV_HEIGHT
+            if (ctaBottom - top > visibleHeight) top = ctaBottom - visibleHeight
+        }
+
+        window.scrollTo({ top: Math.max(0, top), behavior: 'smooth' })
+    }, STICKY_TRANSITION_MS + 50)
 }
 
 function focusVoucherTool() {
@@ -143,13 +179,16 @@ function resolveVoucher() {
                     ...history.value,
                 ].slice(0, 5)
             }
+            // Cuộn tới kết quả ngay khi có — khách không cần tự kéo xuống. Phải gọi TRƯỚC nhánh
+            // autoRedirect: nhánh đó return sớm, trước đây vì thế mà chế độ Facebook (đi qua
+            // goStraightToVoucher) không bao giờ cuộn, khách tìm xong vẫn đứng ở đầu trang.
+            scrollToResult()
+            // Tìm ra mã thì lớp trang trí (nếu đang bật) cho chú Cuội bay lên chơi với chị Hằng —
+            // chỉ khi có mã thật, không ăn mừng lúc trả về "chưa lấy được mã".
+            if (result?.voucher_ref) celebrate()
             if (props.autoRedirect && result?.voucher_ref) {
                 goStraightToVoucher()
-
-                return
             }
-            // Cuộn thẳng tới khu vực chọn mã ngay khi có kết quả — khách không cần tự kéo xuống.
-            nextTick(() => voucherResultEl.value?.scrollIntoView({ behavior: 'smooth', block: 'start' }))
         },
         onError: (errors) => {
             voucherError.value = errors.voucher_url || 'Có lỗi xảy ra, vui lòng thử lại.'
@@ -244,6 +283,9 @@ async function goStraightToVoucher() {
         if (props.viaFacebookComment) {
             readyLinks.value.result = url
             autoRedirecting.value = false
+            // Ô "đang mở" vừa được thay bằng hướng dẫn 2 bước + nút, cao hơn hẳn — cuộn lại
+            // để nút Mở Facebook chắc chắn nằm trong màn hình.
+            scrollToResult()
 
             return
         }
@@ -461,8 +503,12 @@ onUnmounted(() => {
                             <!-- Dán link là tự quét luôn, nên nút này gần như không còn việc gì:
                                  khoá lại khi ĐANG quét và cả khi link trong ô ĐÃ quét xong, để khách
                                  không bấm thêm một lượt vô ích (mỗi lượt trượt cache là một vòng gọi
-                                 nguồn mã, riêng ganma mất ~20 giây). Sửa lại link thì nút tự mở. -->
+                                 nguồn mã, riêng ganma mất ~20 giây). Sửa lại link thì nút tự mở.
+                                 Khi khung đã dính mà link đã tìm xong thì ẩn hẳn: nút disabled
+                                 chiếm ~70px của màn hình điện thoại vốn đã chật, che mất tên
+                                 sản phẩm phía dưới. Cuộn lên đầu hoặc sửa link là nút hiện lại. -->
                             <button
+                                v-show="!(stuck && alreadyResolved)"
                                 @click="resolveVoucher"
                                 :disabled="resolving || !voucherUrl.trim() || alreadyResolved"
                                 class="btn-fire rounded-xl flex items-center justify-center gap-2 whitespace-nowrap transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
@@ -528,7 +574,7 @@ onUnmounted(() => {
                 </div>
 
                 <!-- Kết quả -->
-                <div v-if="canUseVoucherTool && voucherResult" ref="voucherResultEl" class="mt-4 card-glass rounded-2xl p-5 scroll-mt-48">
+                <div v-if="canUseVoucherTool && voucherResult" ref="voucherResultEl" class="mt-4 card-glass rounded-2xl p-5">
                     <div v-if="voucherResult.product" class="flex gap-4 items-start mb-5">
                         <div class="w-16 h-16 rounded-xl bg-[var(--color-peach-soft)] flex-none overflow-hidden">
                             <img v-if="voucherResult.product.product_image" :src="voucherResult.product.product_image" :alt="voucherResult.product.product_name" class="w-full h-full object-cover" />
@@ -585,7 +631,7 @@ onUnmounted(() => {
                     </div>
 
                     <!-- Mã đã được áp sẵn trong link nên khách không phải chọn/nhập gì, chỉ bấm mở. -->
-                    <div v-if="!autoRedirecting && voucherResult.voucher_ref" class="flex items-stretch gap-1.5 mb-4">
+                    <div v-if="!autoRedirecting && voucherResult.voucher_ref" ref="resultCtaEl" class="flex items-stretch gap-1.5 mb-4">
                         <!-- Đã lấy được link comment: chuyển hẳn sang thẻ <a>. Cú chạm vào anchor
                              thật là điều kiện bắt buộc để iOS bật app Facebook; không dùng
                              target="_blank" vì tab mới cũng làm hỏng universal link. -->

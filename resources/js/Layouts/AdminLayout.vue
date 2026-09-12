@@ -13,19 +13,42 @@ const mobileOpen = ref(false)
 // Đóng sidebar mobile mỗi khi chuyển trang, tránh bị kẹt mở đè lên nội dung mới.
 watch(current, () => { mobileOpen.value = false })
 
-const navItems = [
-    { href: '/admin/dashboard', icon: '📊', label: 'Dashboard' },
-    { href: '/admin/activities', icon: '🕵️', label: 'Theo dõi' },
-    { href: '/admin/orders', icon: '📦', label: 'Đơn hàng' },
-    { href: '/admin/shopee-orders', icon: '🧾', label: 'Báo cáo Shopee' },
-    { href: '/admin/withdrawals', icon: '💸', label: 'Rút tiền' },
-    { href: '/admin/vouchers', icon: '🎫', label: 'Voucher FB/YT' },
-    { href: '/admin/voucher-buttons', icon: '🔘', label: 'Nút Voucher' },
-    { href: '/admin/promo', icon: '📣', label: 'Bài giới thiệu' },
-    { href: '/admin/api-config', icon: '⚙️', label: 'Cấu hình API' },
-    { href: '/admin/settings', icon: '🔧', label: 'Cài đặt' },
-    { href: '/admin/blocked-ips', icon: '🚫', label: 'Chặn IP' },
-    { href: '/admin/logs', icon: '🐞', label: 'Nhật ký lỗi' },
+// Tách nhóm theo việc admin làm, không theo thứ tự thêm trang: 13 mục xếp thành một cột
+// phẳng là không dò được mục cần bấm. Nhóm nào cũng ngắn (2-4 mục) để mắt quét một nhịp.
+const navGroups = [
+    {
+        label: 'Tổng quan',
+        items: [
+            { href: '/admin/dashboard', icon: '📊', label: 'Dashboard' },
+            { href: '/admin/activities', icon: '🕵️', label: 'Theo dõi' },
+        ],
+    },
+    {
+        label: 'Khách & tiền',
+        items: [
+            { href: '/admin/users', icon: '👥', label: 'Tài khoản' },
+            { href: '/admin/orders', icon: '📦', label: 'Đơn hàng' },
+            { href: '/admin/shopee-orders', icon: '🧾', label: 'Báo cáo Shopee' },
+            { href: '/admin/withdrawals', icon: '💸', label: 'Rút tiền' },
+        ],
+    },
+    {
+        label: 'Mã & quảng bá',
+        items: [
+            { href: '/admin/vouchers', icon: '🎫', label: 'Voucher FB/YT' },
+            { href: '/admin/voucher-buttons', icon: '🔘', label: 'Nút Voucher' },
+            { href: '/admin/promo', icon: '📣', label: 'Bài giới thiệu' },
+        ],
+    },
+    {
+        label: 'Hệ thống',
+        items: [
+            { href: '/admin/settings', icon: '🔧', label: 'Cài đặt' },
+            { href: '/admin/api-config', icon: '⚙️', label: 'Cấu hình API' },
+            { href: '/admin/blocked-ips', icon: '🚫', label: 'Chặn IP' },
+            { href: '/admin/logs', icon: '🐞', label: 'Nhật ký lỗi' },
+        ],
+    },
 ]
 </script>
 
@@ -43,24 +66,31 @@ const navItems = [
             class="w-[248px] flex-none bg-[var(--color-side)] text-white flex flex-col py-6 px-4 fixed h-screen z-50 transition-transform duration-200 md:translate-x-0"
             :class="mobileOpen ? 'translate-x-0' : '-translate-x-full'"
         >
-            <Link href="/" class="flex items-center gap-2 font-extrabold text-lg text-white mb-10 px-2">
+            <Link href="/" class="flex items-center gap-2 font-extrabold text-lg text-white mb-6 px-2">
                 <span class="w-8 h-8 rounded-lg bg-gradient-to-br from-[var(--color-accent)] to-[var(--color-accent-deep)] flex items-center justify-center text-base font-extrabold">%</span>
                 Mã Giảm Giá
             </Link>
 
-            <nav class="flex-1 space-y-1">
-                <Link
-                    v-for="item in navItems"
-                    :key="item.href"
-                    :href="item.href"
-                    class="flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-semibold transition"
-                    :class="current.startsWith(item.href) && item.href !== '/'
-                        ? 'bg-[var(--color-side-soft)] text-white'
-                        : 'text-white/60 hover:text-white hover:bg-[var(--color-side-soft)]'"
-                >
-                    <span>{{ item.icon }}</span>
-                    {{ item.label }}
-                </Link>
+            <!-- overflow-y-auto: có tiêu đề nhóm thì cột dài hơn màn hình điện thoại ngang,
+                 không cuộn được là mất mấy mục cuối. -->
+            <nav class="flex-1 overflow-y-auto -mx-1 px-1 space-y-5">
+                <div v-for="group in navGroups" :key="group.label">
+                    <p class="px-3 mb-1.5 text-[11px] font-bold uppercase tracking-wider text-white/35">{{ group.label }}</p>
+                    <div class="space-y-0.5">
+                        <Link
+                            v-for="item in group.items"
+                            :key="item.href"
+                            :href="item.href"
+                            class="flex items-center gap-3 px-3 py-2 rounded-xl text-sm font-semibold transition"
+                            :class="current.startsWith(item.href) && item.href !== '/'
+                                ? 'bg-[var(--color-side-soft)] text-white'
+                                : 'text-white/60 hover:text-white hover:bg-[var(--color-side-soft)]'"
+                        >
+                            <span>{{ item.icon }}</span>
+                            {{ item.label }}
+                        </Link>
+                    </div>
+                </div>
             </nav>
 
             <div class="border-t border-white/10 pt-4 px-2">
