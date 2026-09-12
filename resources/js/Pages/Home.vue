@@ -492,16 +492,22 @@ onUnmounted(() => {
                          của ô nhập trên màn hình điện thoại, dài thêm một dòng nữa là đẩy chính
                          công cụ ra khỏi tầm nhìn. -->
                     <template v-if="canUseVoucherTool">
+                        <!-- Dải cảnh báo: dùng đúng cặp màu của thanh bảo trì trong AppLayout
+                             (amber-500 + #1c0a00) — màu cố định nên đọc được y hệt ở cả hai theme.
+                             TUYỆT ĐỐI không lấy --color-ink làm nền: đó là màu CHỮ, và nó LẬT ở
+                             dark mode (#1B1B1F -> #f1f5f9) nên thành nền trắng chữ trắng, mất hút.
+                             Cần một khối tối ở cả hai theme thì dùng --color-side (xem khối nhắc
+                             trước nút mua bên dưới, và AdminLayout). -->
                         <div
                             v-if="showGuestCashbackNudge"
-                            class="mt-2 flex items-center gap-2 rounded-xl bg-[var(--color-ink)] text-white px-3 py-1.5"
+                            class="mt-2 flex items-center gap-2 rounded-xl bg-amber-500 text-[#1c0a00] px-3 py-1.5"
                         >
-                            <span class="text-[11px] leading-tight truncate flex-1 min-w-0">
+                            <span class="text-[11px] font-semibold leading-tight truncate flex-1 min-w-0">
                                 🔒 Chưa đăng nhập = đơn này không được hoàn tiền
                             </span>
                             <Link
                                 href="/login"
-                                class="flex-none text-[11px] font-bold bg-white/15 hover:bg-white/25 rounded-lg px-2.5 py-1 transition no-underline text-white"
+                                class="flex-none text-[11px] font-bold bg-[#1c0a00] text-amber-50 hover:bg-[#3a1a00] rounded-lg px-2.5 py-1 transition no-underline"
                             >Đăng nhập</Link>
                         </div>
                         <!-- Câu ĐIỀU KIỆN, không phải cam kết: "mua từ link này thì mới được tính"
@@ -563,7 +569,7 @@ onUnmounted(() => {
                          chỉ làm khách chậm lại đúng lúc họ đã muốn mua. -->
                     <div
                         v-if="!autoRedirecting && voucherResult.voucher_ref && showGuestBuyNudge"
-                        class="mb-3 rounded-xl bg-[var(--color-ink)] px-4 py-3.5"
+                        class="mb-3 rounded-xl bg-[var(--color-side)] border border-white/10 px-4 py-3.5"
                     >
                         <p class="text-sm font-bold text-white mb-1">🔒 Mua lúc này thì chắc chắn không được hoàn tiền</p>
                         <p class="text-xs text-white/70 leading-relaxed mb-3">
