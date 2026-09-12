@@ -21,6 +21,7 @@ const navItems = [
     { href: '/admin/withdrawals', icon: '💸', label: 'Rút tiền' },
     { href: '/admin/vouchers', icon: '🎫', label: 'Voucher FB/YT' },
     { href: '/admin/voucher-buttons', icon: '🔘', label: 'Nút Voucher' },
+    { href: '/admin/promo', icon: '📣', label: 'Bài giới thiệu' },
     { href: '/admin/api-config', icon: '⚙️', label: 'Cấu hình API' },
     { href: '/admin/settings', icon: '🔧', label: 'Cài đặt' },
     { href: '/admin/blocked-ips', icon: '🚫', label: 'Chặn IP' },
