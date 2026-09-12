@@ -232,39 +232,36 @@
 .festive-glow { animation: festiveGlow 7s ease-in-out infinite; }
 .festive-drift { animation: festiveDrift 50s linear infinite; }
 
-/* Chú Cuội bay lên chơi với chị Hằng khi tìm mã xong (useFestive.celebrate). Hai người gặp
-   nhau ở bên phải, khoảng 55vh — KHÔNG hẹn trên đỉnh màn hình vì header + khung dán link dính
-   che tới ~40vh trên điện thoại thấp. X = 73vw trừ chính bề rộng Cuội (100% trong translate là
-   bề rộng phần tử) để đậu sát bên trái chị Hằng (left 74%). Cuội đi từ top 72% lên ~55%
-   (-17vh), chị Hằng từ top 12% xuống ~55% (+43vh). 9s khớp FESTIVE_FLIGHT_MS (useFestive.js). */
-@keyframes festiveFly {
-    0% { transform: translate(0, 0) rotate(0deg) scale(1); }
-    14% { transform: translate(10vw, -30vh) rotate(-12deg) scale(1.02); }
-    38% { transform: translate(calc(73vw - 100% - 8px), -17vh) rotate(6deg) scale(0.88); }
-    48% { transform: translate(calc(73vw - 100% - 4px), -20vh) rotate(-5deg) scale(0.88); }
-    58% { transform: translate(calc(73vw - 100% - 10px), -17vh) rotate(5deg) scale(0.88); }
-    68% { transform: translate(calc(73vw - 100% - 4px), -20vh) rotate(-5deg) scale(0.88); }
-    78% { transform: translate(calc(73vw - 100% - 8px), -17vh) rotate(0deg) scale(0.88); }
-    100% { transform: translate(0, 0) rotate(0deg) scale(1); }
+/* Ăn mừng khi tìm mã xong (useFestive.celebrate): đoàn trẻ con rước đèn đi ngang chân màn
+   hình từ ngoài mép trái sang hết mép phải. Mỗi em xuất phát ở left âm khác nhau (xem
+   FestiveDecor.parade) nên cùng một quãng dịch chuyển vẫn thành hàng. 9s khớp
+   FESTIVE_CELEBRATE_MS trong composables/useFestive.js. */
+@keyframes festiveParade {
+    from { transform: translateX(0); }
+    to { transform: translateX(200vw); }
 }
-/* Chị Hằng bay xuống đón, nhún chào khi Cuội tới, rồi bay về chỗ cũ. */
-@keyframes festiveGreet {
-    0% { transform: translateY(0) rotate(0deg); }
-    30% { transform: translateY(43vh) rotate(-6deg); }
-    38% { transform: translateY(40vh) rotate(4deg); }
-    46% { transform: translateY(44vh) rotate(-4deg); }
-    54% { transform: translateY(40vh) rotate(4deg); }
-    62% { transform: translateY(44vh) rotate(-3deg); }
-    72% { transform: translateY(42vh) rotate(0deg); }
-    100% { transform: translateY(0) rotate(0deg); }
+/* Nhịp bước: nhún lên xuống + nghiêng nhẹ, nhanh (0.5-0.6s/bước) — gắn cho lớp con bên trong
+   phần tử rước để không đánh nhau với transform của festiveParade. */
+@keyframes festiveWalk {
+    0%, 100% { transform: translateY(0) rotate(-3deg); }
+    50% { transform: translateY(-9px) rotate(3deg); }
 }
-.festive-fly { animation: festiveFly 9s cubic-bezier(0.45, 0, 0.3, 1) forwards !important; }
-.festive-greet { animation: festiveGreet 9s ease-in-out forwards !important; }
+/* Hai em đứng góc nhảy cẫng lên khi đoàn rước đi qua. */
+@keyframes festiveHop {
+    0%, 100% { transform: translateY(0) rotate(0deg); }
+    30% { transform: translateY(-24px) rotate(-5deg); }
+    50% { transform: translateY(0) rotate(0deg); }
+    70% { transform: translateY(-14px) rotate(5deg); }
+    85% { transform: translateY(0) rotate(0deg); }
+}
+.festive-parade { animation: festiveParade 9s linear forwards; }
+.festive-walk { animation: festiveWalk 0.55s ease-in-out infinite; transform-origin: 50% 100%; }
+.festive-hop { animation: festiveHop 1.3s ease-in-out infinite !important; transform-origin: 50% 100%; }
 
 /* Người tắt hiệu ứng chuyển động ở hệ điều hành: giữ hình, bỏ chuyển động. */
 @media (prefers-reduced-motion: reduce) {
     .festive-float, .festive-sway, .festive-twinkle, .festive-glow, .festive-drift,
-    .festive-fly, .festive-greet { animation: none !important; }
+    .festive-parade, .festive-walk, .festive-hop { animation: none !important; }
 }
 
 @keyframes fadeUp {

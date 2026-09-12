@@ -15,54 +15,62 @@
  * Keyframes ở app.css (festive-*). Thời lượng/độ trễ lệch nhau để không nhún đồng loạt.
  */
 import { useFestive } from '@/composables/useFestive'
+import FestiveKid from '@/Components/FestiveKid.vue'
 
-// Bật khi Home.vue báo tìm mã xong: Cuội (kèm cả cây đa — đúng tích) bay lên cạnh chị Hằng
-// rồi về; chị Hằng nhún chào; thêm mấy ngôi sao loé quanh chỗ hai người gặp nhau.
-const { flying } = useFestive()
+// Bật khi Home.vue báo tìm mã xong: đoàn trẻ con rước đèn diễu hành ngang chân màn hình,
+// hai em đứng sẵn ở góc nhảy cẫng lên, sao loé dọc đường rước.
+const { celebrating } = useFestive()
 
 const items = [
-    // Trăng: to, mờ, nửa lọt ra ngoài góc trên phải để chỉ thấy quầng sáng tràn vào.
+    // Trăng: to, mờ, góc trên phải — lúc chưa cuộn thấy nửa trăng ló dưới header.
     { kind: 'moon', left: '70%', top: '3%', w: 'w-40 md:w-56', anim: 'festive-glow', duration: '7s', delay: '0s', opacity: 0.85 },
 
-    // Chị Hằng bay cạnh trăng, chú Cuội ngồi gốc đa ở góc dưới trái (trên BottomNav một chút).
-    // Lúc ăn mừng hai người GẶP NHAU Ở GIỮA màn hình bên phải (~55vh, xem festiveFly/Greet):
-    // vùng trên cùng bị header + khung dán link dính che (tới ~40vh trên điện thoại thấp) nên
-    // hẹn ở trên đó là khách không thấy gì cả.
-    { kind: 'hang', left: '74%', top: '12%', w: 'w-20 md:w-28', anim: 'festive-float', duration: '8s', delay: '0.5s', opacity: 1 },
-    { kind: 'cuoi', left: '1%', top: '72%', w: 'w-28 md:w-40', anim: 'festive-float', duration: '9s', delay: '1s', opacity: 1 },
+    // Hai em bé cầm đèn đứng hai góc dưới (ngay trên BottomNav), nhấp nhô nhẹ. Lúc ăn mừng
+    // đổi sang nhảy (festive-hop).
+    { kind: 'kid', left: '1%', top: '70%', w: 'w-20 md:w-28', anim: 'festive-float', duration: '6s', delay: '0s', opacity: 1, shirt: '#ff6b4a', shorts: '#2f5fd0', hair: 'boy', lantern: 'star' },
+    { kind: 'kid', left: '80%', top: '72%', w: 'w-16 md:w-24', anim: 'festive-float', duration: '7s', delay: '1.5s', opacity: 1, shirt: '#ffd35c', shorts: '#e0457b', hair: 'girl', lantern: 'round' },
 
     // Đèn lồng treo từ mép trên (có dây), đung đưa quanh điểm treo.
     { kind: 'lantern', left: '3%', top: '2%', w: 'w-12 md:w-16', anim: 'festive-sway', duration: '4.5s', delay: '0s', opacity: 1 },
     { kind: 'lantern', left: '14%', top: '-2%', w: 'w-8 md:w-11', anim: 'festive-sway', duration: '5.5s', delay: '1.3s', opacity: 0.9 },
     { kind: 'lantern', left: '90%', top: '28%', w: 'w-10 md:w-14', anim: 'festive-sway', duration: '5s', delay: '0.7s', opacity: 1 },
-    { kind: 'lantern', left: '2%', top: '46%', w: 'w-9 md:w-12', anim: 'festive-sway', duration: '6s', delay: '2s', opacity: 0.9 },
+    { kind: 'lantern', left: '2%', top: '42%', w: 'w-9 md:w-12', anim: 'festive-sway', duration: '6s', delay: '2s', opacity: 0.9 },
 
-    // Bánh trung thu nhấp nhô nhẹ.
-    { kind: 'mooncake', left: '91%', top: '62%', w: 'w-8 md:w-14', anim: 'festive-float', duration: '6.5s', delay: '0.4s', opacity: 1 },
-    { kind: 'mooncake', left: '34%', top: '90%', w: 'w-7 md:w-11', anim: 'festive-float', duration: '7.5s', delay: '1.8s', opacity: 0.95 },
+    // Bánh trung thu nhỏ, sát mép.
+    { kind: 'mooncake', left: '91%', top: '54%', w: 'w-8 md:w-14', anim: 'festive-float', duration: '6.5s', delay: '0.4s', opacity: 1 },
 
     // Sao lấp lánh: nhỏ, mờ-sáng lệch pha.
     { kind: 'sparkle', left: '26%', top: '14%', w: 'w-4 md:w-5', anim: 'festive-twinkle', duration: '2.6s', delay: '0s', opacity: 1 },
     { kind: 'sparkle', left: '64%', top: '22%', w: 'w-3 md:w-4', anim: 'festive-twinkle', duration: '3.1s', delay: '0.9s', opacity: 1 },
-    { kind: 'sparkle', left: '88%', top: '50%', w: 'w-4', anim: 'festive-twinkle', duration: '2.3s', delay: '1.5s', opacity: 1 },
-    { kind: 'sparkle', left: '18%', top: '46%', w: 'w-3', anim: 'festive-twinkle', duration: '2.9s', delay: '0.4s', opacity: 1 },
-    { kind: 'sparkle', left: '52%', top: '88%', w: 'w-4 md:w-5', anim: 'festive-twinkle', duration: '2.7s', delay: '2s', opacity: 1 },
+    { kind: 'sparkle', left: '88%', top: '46%', w: 'w-4', anim: 'festive-twinkle', duration: '2.3s', delay: '1.5s', opacity: 1 },
+    { kind: 'sparkle', left: '18%', top: '56%', w: 'w-3', anim: 'festive-twinkle', duration: '2.9s', delay: '0.4s', opacity: 1 },
+    { kind: 'sparkle', left: '52%', top: '84%', w: 'w-4 md:w-5', anim: 'festive-twinkle', duration: '2.7s', delay: '2s', opacity: 1 },
 
     // Mây trôi ngang cả màn hình, rất mờ để chỉ là nền.
     { kind: 'cloud', left: '-20%', top: '34%', w: 'w-32 md:w-56', anim: 'festive-drift', duration: '55s', delay: '0s', opacity: 0.32 },
-    { kind: 'cloud', left: '-20%', top: '74%', w: 'w-24 md:w-40', anim: 'festive-drift', duration: '70s', delay: '-30s', opacity: 0.28 },
+    { kind: 'cloud', left: '-20%', top: '62%', w: 'w-24 md:w-40', anim: 'festive-drift', duration: '70s', delay: '-30s', opacity: 0.28 },
+]
+
+// Đoàn rước đèn: chỉ dựng lúc ăn mừng, đi từ ngoài mép trái sang hết mép phải (festive-parade,
+// 9s = FESTIVE_CELEBRATE_MS). Mỗi em xuất phát lệch nhau một chút để thành hàng chứ không
+// chồng lên nhau; bên trong mỗi em có nhịp bước (festive-walk) riêng.
+const parade = [
+    { left: '-14%', top: '66%', w: 'w-20 md:w-28', walk: '0.55s', shirt: '#2fbf71', shorts: '#2f5fd0', hair: 'boy', lantern: 'star' },
+    { left: '-30%', top: '69%', w: 'w-16 md:w-24', walk: '0.62s', shirt: '#ff6b4a', shorts: '#ffd35c', hair: 'girl', lantern: 'fish' },
+    { left: '-46%', top: '67%', w: 'w-[4.5rem] md:w-[6.5rem]', walk: '0.5s', shirt: '#7c5cff', shorts: '#e0457b', hair: 'boy', lantern: 'round' },
+    { left: '-62%', top: '70%', w: 'w-14 md:w-[5.5rem]', walk: '0.58s', shirt: '#ffd35c', shorts: '#2fbf71', hair: 'girl', lantern: 'star' },
+]
+
+// Sao loé dọc đường rước, hiện lệch pha theo hướng đoàn đi (trái -> phải).
+const paradeSparkles = [
+    { left: '12%', top: '62%', w: 'w-4 md:w-5', duration: '1.1s', delay: '1.5s' },
+    { left: '30%', top: '80%', w: 'w-3 md:w-4', duration: '1.3s', delay: '2.6s' },
+    { left: '48%', top: '60%', w: 'w-4', duration: '1s', delay: '3.7s' },
+    { left: '66%', top: '82%', w: 'w-3', duration: '1.2s', delay: '4.8s' },
+    { left: '84%', top: '64%', w: 'w-4 md:w-5', duration: '1.1s', delay: '5.9s' },
 ]
 
 const petals = [0, 45, 90, 135, 180, 225, 270, 315]
-
-// Rải quanh điểm hẹn (bên phải, ~50-70vh) — nơi Cuội bay lên và chị Hằng bay xuống gặp nhau.
-const meetSparkles = [
-    { left: '58%', top: '48%', w: 'w-4 md:w-5', duration: '1.1s', delay: '2.5s' },
-    { left: '66%', top: '72%', w: 'w-3 md:w-4', duration: '1.3s', delay: '2.9s' },
-    { left: '93%', top: '52%', w: 'w-4', duration: '1s', delay: '3.2s' },
-    { left: '54%', top: '62%', w: 'w-3', duration: '1.2s', delay: '3.6s' },
-    { left: '86%', top: '76%', w: 'w-4 md:w-5', duration: '1.1s', delay: '4s' },
-]
 </script>
 
 <template>
@@ -95,31 +103,38 @@ const meetSparkles = [
                     <stop offset="0%" stop-color="#f7c874" />
                     <stop offset="100%" stop-color="#c4801f" />
                 </radialGradient>
-                <linearGradient id="fd-dress" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="0%" stop-color="#ffffff" />
-                    <stop offset="60%" stop-color="#ffd9e8" />
-                    <stop offset="100%" stop-color="#f6a5c9" stop-opacity="0.85" />
-                </linearGradient>
-                <linearGradient id="fd-ribbon" x1="0" y1="0" x2="1" y2="1">
-                    <stop offset="0%" stop-color="#bde3ff" />
-                    <stop offset="100%" stop-color="#e9c8ff" />
-                </linearGradient>
-                <radialGradient id="fd-leaf" cx="40%" cy="35%" r="65%">
-                    <stop offset="0%" stop-color="#8fd66a" />
-                    <stop offset="100%" stop-color="#2f8f3f" />
-                </radialGradient>
                 <radialGradient id="fd-spark" cx="50%" cy="50%" r="50%">
                     <stop offset="0%" stop-color="#fffbe6" />
                     <stop offset="100%" stop-color="#ffd35c" />
                 </radialGradient>
+                <radialGradient id="fd-star-glow" cx="50%" cy="50%" r="50%">
+                    <stop offset="30%" stop-color="#ffb84a" stop-opacity="0.6" />
+                    <stop offset="100%" stop-color="#ffb84a" stop-opacity="0" />
+                </radialGradient>
+                <linearGradient id="fd-fish" x1="0" y1="0" x2="1" y2="0">
+                    <stop offset="0%" stop-color="#ff8a3d" />
+                    <stop offset="100%" stop-color="#e0342e" />
+                </linearGradient>
             </defs>
         </svg>
 
-        <!-- Sao loé quanh chỗ Cuội gặp chị Hằng, chỉ hiện trong lúc bay. -->
-        <template v-if="flying">
+        <!-- Đoàn rước đèn + sao dọc đường: chỉ dựng lúc ăn mừng. -->
+        <template v-if="celebrating">
             <div
-                v-for="(spot, i) in meetSparkles"
-                :key="'meet-' + i"
+                v-for="(kid, i) in parade"
+                :key="'parade-' + i"
+                class="absolute festive-parade"
+                :class="kid.w"
+                :style="{ left: kid.left, top: kid.top }"
+            >
+                <div class="festive-walk" :style="{ animationDuration: kid.walk }">
+                    <FestiveKid :shirt="kid.shirt" :shorts="kid.shorts" :hair="kid.hair" :lantern="kid.lantern" />
+                </div>
+            </div>
+
+            <div
+                v-for="(spot, i) in paradeSparkles"
+                :key="'pspark-' + i"
                 class="absolute festive-twinkle"
                 :class="spot.w"
                 :style="{ left: spot.left, top: spot.top, animationDuration: spot.duration, animationDelay: spot.delay }"
@@ -134,7 +149,7 @@ const meetSparkles = [
             v-for="(item, i) in items"
             :key="i"
             class="absolute will-change-transform"
-            :class="[item.w, item.anim, flying && item.kind === 'cuoi' ? 'festive-fly' : '', flying && item.kind === 'hang' ? 'festive-greet' : '']"
+            :class="[item.w, item.anim, celebrating && item.kind === 'kid' ? 'festive-hop' : '']"
             :style="{ left: item.left, top: item.top, opacity: item.opacity, animationDuration: item.duration, animationDelay: item.delay }"
         >
             <!-- Trăng: quầng sáng rộng + đĩa trăng gradient + vài vết mờ. -->
@@ -146,54 +161,8 @@ const meetSparkles = [
                 <circle cx="96" cy="126" r="4" fill="#e9b24a" opacity="0.2" />
             </svg>
 
-            <!-- Chị Hằng: kiểu chibi đầu to, áo dài trắng hồng bay, dải lụa xanh tím uốn quanh. -->
-            <svg v-else-if="item.kind === 'hang'" viewBox="0 0 140 220" class="w-full h-auto drop-shadow-[0_6px_12px_rgba(120,80,160,0.3)]">
-                <path d="M18 120 C0 90 30 60 60 78 C90 96 120 60 132 30" fill="none" stroke="url(#fd-ribbon)" stroke-width="9" stroke-linecap="round" opacity="0.9" />
-                <path d="M96 150 C120 140 134 165 122 190" fill="none" stroke="url(#fd-ribbon)" stroke-width="8" stroke-linecap="round" opacity="0.85" />
-                <path d="M70 92 C40 110 30 160 40 210 C60 200 80 200 100 210 C110 160 100 110 70 92 Z" fill="url(#fd-dress)" />
-                <path d="M52 100 C34 106 26 122 24 140 C34 132 44 128 52 128 Z" fill="#fff" opacity="0.95" />
-                <path d="M88 100 C106 106 114 122 116 140 C106 132 96 128 88 128 Z" fill="#fff" opacity="0.95" />
-                <path d="M58 96 L82 96 L86 120 L54 120 Z" fill="#f6a5c9" opacity="0.6" />
-                <circle cx="70" cy="60" r="27" fill="#ffe4cf" />
-                <path d="M43 56 C43 30 97 30 97 56 C90 44 82 40 70 40 C58 40 50 44 43 56 Z" fill="#2b2140" />
-                <circle cx="70" cy="30" r="10" fill="#2b2140" />
-                <circle cx="54" cy="36" r="6" fill="#2b2140" />
-                <circle cx="86" cy="36" r="6" fill="#2b2140" />
-                <path d="M62 26 L78 22" stroke="#ffd35c" stroke-width="3" stroke-linecap="round" />
-                <circle cx="80" cy="21" r="3.5" fill="#ffd35c" />
-                <path d="M58 60 q4 -4 8 0 M74 60 q4 -4 8 0" fill="none" stroke="#2b2140" stroke-width="2.4" stroke-linecap="round" />
-                <path d="M64 72 q6 5 12 0" fill="none" stroke="#d9707a" stroke-width="2" stroke-linecap="round" />
-                <circle cx="56" cy="68" r="4" fill="#ffb3b3" opacity="0.6" />
-                <circle cx="84" cy="68" r="4" fill="#ffb3b3" opacity="0.6" />
-            </svg>
-
-            <!-- Chú Cuội ngồi gốc cây đa: tán lá 3 tầng, rễ phụ rủ xuống, cậu bé áo nâu ôm gối. -->
-            <svg v-else-if="item.kind === 'cuoi'" viewBox="0 0 200 200" class="w-full h-auto drop-shadow-[0_6px_10px_rgba(20,60,20,0.3)]">
-                <ellipse cx="100" cy="190" rx="80" ry="8" fill="#2f8f3f" opacity="0.25" />
-                <path d="M96 190 C94 150 92 120 100 92 C108 120 106 150 104 190 Z" fill="#7a4a22" />
-                <path d="M100 100 C80 110 70 130 62 150 M100 100 C120 110 130 130 138 150" fill="none" stroke="#7a4a22" stroke-width="5" stroke-linecap="round" />
-                <path d="M78 118 L74 166 M124 118 L128 166 M90 106 L84 150" fill="none" stroke="#9a6a3a" stroke-width="2.5" stroke-linecap="round" />
-                <circle cx="100" cy="78" r="46" fill="url(#fd-leaf)" />
-                <circle cx="60" cy="90" r="30" fill="url(#fd-leaf)" />
-                <circle cx="142" cy="88" r="32" fill="url(#fd-leaf)" />
-                <circle cx="82" cy="46" r="22" fill="url(#fd-leaf)" />
-                <circle cx="122" cy="50" r="24" fill="url(#fd-leaf)" />
-                <circle cx="78" cy="62" r="7" fill="#c8f0a8" opacity="0.5" />
-                <circle cx="116" cy="40" r="5" fill="#c8f0a8" opacity="0.5" />
-                <ellipse cx="128" cy="176" rx="20" ry="9" fill="#5b3a86" />
-                <path d="M110 150 C108 168 122 176 140 174 C146 160 140 146 128 144 Z" fill="#8b5a2b" />
-                <rect x="112" y="166" width="16" height="10" rx="4" fill="#ffe4cf" />
-                <rect x="126" y="166" width="16" height="10" rx="4" fill="#ffe4cf" />
-                <circle cx="128" cy="134" r="18" fill="#ffe4cf" />
-                <path d="M110 130 C112 112 144 112 146 130 C140 122 134 120 128 120 C122 120 116 122 110 130 Z" fill="#1f1a2e" />
-                <path d="M126 116 q4 -10 10 -6" fill="none" stroke="#1f1a2e" stroke-width="3" stroke-linecap="round" />
-                <path d="M120 134 q3 -3 6 0 M132 134 q3 -3 6 0" fill="none" stroke="#1f1a2e" stroke-width="2.2" stroke-linecap="round" />
-                <path d="M124 142 q4 4 8 0" fill="none" stroke="#c0605a" stroke-width="2" stroke-linecap="round" />
-                <circle cx="118" cy="140" r="3.5" fill="#ffb3b3" opacity="0.6" />
-                <circle cx="138" cy="140" r="3.5" fill="#ffb3b3" opacity="0.6" />
-                <path d="M146 150 L164 138" stroke="#d6b27a" stroke-width="4" stroke-linecap="round" />
-                <circle cx="166" cy="136" r="4" fill="#ffd35c" />
-            </svg>
+            <!-- Em bé cầm đèn đứng ở góc. -->
+            <FestiveKid v-else-if="item.kind === 'kid'" :shirt="item.shirt" :shorts="item.shorts" :hair="item.hair" :lantern="item.lantern" />
 
             <!-- Đèn lồng: dây treo, nắp, thân gradient với gân, đáy, tua. Xoay quanh điểm treo
                  (transform-origin đặt ở CSS .festive-sway). -->

@@ -183,7 +183,7 @@ function resolveVoucher() {
             // autoRedirect: nhánh đó return sớm, trước đây vì thế mà chế độ Facebook (đi qua
             // goStraightToVoucher) không bao giờ cuộn, khách tìm xong vẫn đứng ở đầu trang.
             scrollToResult()
-            // Tìm ra mã thì lớp trang trí (nếu đang bật) cho chú Cuội bay lên chơi với chị Hằng —
+            // Tìm ra mã thì lớp trang trí (nếu đang bật) cho trẻ con rước đèn đi ngang màn hình —
             // chỉ khi có mã thật, không ăn mừng lúc trả về "chưa lấy được mã".
             if (result?.voucher_ref) celebrate()
             if (props.autoRedirect && result?.voucher_ref) {
