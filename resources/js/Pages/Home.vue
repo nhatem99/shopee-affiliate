@@ -503,7 +503,7 @@ onUnmounted(() => {
                             class="mt-2 flex items-center gap-2 rounded-xl bg-amber-500 text-[#1c0a00] px-3 py-1.5"
                         >
                             <span class="text-[11px] font-semibold leading-tight truncate flex-1 min-w-0">
-                                🔒 Chưa đăng nhập = đơn này không được hoàn tiền
+                                💰 Đăng nhập trước, đơn này mới được hoàn tiền
                             </span>
                             <Link
                                 href="/login"
