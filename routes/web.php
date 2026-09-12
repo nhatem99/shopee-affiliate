@@ -9,6 +9,7 @@ use App\Http\Controllers\Admin\OrderController;
 use App\Http\Controllers\Admin\PromoContentController;
 use App\Http\Controllers\Admin\SettingsController;
 use App\Http\Controllers\Admin\ShopeeOrderController;
+use App\Http\Controllers\Admin\UserController as AdminUserController;
 use App\Http\Controllers\Admin\VoucherButtonConfigController;
 use App\Http\Controllers\Admin\VoucherController;
 use App\Http\Controllers\Admin\WithdrawalController as AdminWithdrawalController;
@@ -18,6 +19,7 @@ use App\Http\Controllers\Auth\GoogleController;
 use App\Http\Controllers\Auth\LoginController;
 use App\Http\Controllers\Auth\RegisterController;
 use App\Http\Controllers\BlogController;
+use App\Http\Controllers\OrderHistoryController;
 use App\Http\Controllers\ProfileController;
 use App\Http\Controllers\ShopeeVoucherController;
 use App\Http\Controllers\ShortLinkController;
@@ -106,6 +108,8 @@ Route::get('/blog/{slug}', [BlogController::class, 'show'])->name('blog.show');
 // Authenticated user routes
 Route::middleware('auth')->group(function () {
     Route::get('/history', [AffiliateController::class, 'history'])->name('history');
+    // Lich su tung don mua kem so tien hoan cua don do.
+    Route::get('/don-hang', [OrderHistoryController::class, 'index'])->name('orders');
     Route::get('/profile', [ProfileController::class, 'show'])->name('profile');
     Route::patch('/profile', [ProfileController::class, 'updateProfile'])->name('profile.update');
     Route::post('/profile/payout', [ProfileController::class, 'storePayoutAccount'])->name('profile.payout');
@@ -132,6 +136,13 @@ Route::middleware(['auth', 'auth.admin'])->prefix('admin')->name('admin.')->grou
     Route::delete('/vouchers/{voucher}', [VoucherController::class, 'destroy'])->name('vouchers.destroy');
     Route::get('/withdrawals', [AdminWithdrawalController::class, 'index'])->name('withdrawals');
     Route::patch('/withdrawals/{withdrawal}', [AdminWithdrawalController::class, 'update'])->name('withdrawals.update');
+    // Quan ly tai khoan khach: tim kiem, sua thong tin, doi quyen, dat lai mat khau, khoa/mo.
+    Route::get('/users', [AdminUserController::class, 'index'])->name('users');
+    Route::patch('/users/{user}', [AdminUserController::class, 'update'])->name('users.update');
+    Route::patch('/users/{user}/role', [AdminUserController::class, 'updateRole'])->name('users.role');
+    Route::post('/users/{user}/password', [AdminUserController::class, 'resetPassword'])->name('users.password');
+    Route::post('/users/{user}/ban', [AdminUserController::class, 'ban'])->name('users.ban');
+    Route::delete('/users/{user}/ban', [AdminUserController::class, 'unban'])->name('users.unban');
     Route::get('/settings', [SettingsController::class, 'index'])->name('settings');
     Route::post('/settings', [SettingsController::class, 'update'])->name('settings.update');
     // Kho mẫu bài đăng để admin copy đi giới thiệu web (nhóm Facebook, Zalo, TikTok...).

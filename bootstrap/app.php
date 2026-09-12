@@ -3,6 +3,7 @@
 use App\Http\Middleware\AdminMiddleware;
 use App\Http\Middleware\BlockIps;
 use App\Http\Middleware\EnsureCustomerAuthEnabled;
+use App\Http\Middleware\EnsureUserNotBanned;
 use App\Http\Middleware\GeoBlock;
 use App\Http\Middleware\HandleInertiaRequests;
 use App\Http\Middleware\MaintenanceMode;
@@ -24,6 +25,7 @@ return Application::configure(basePath: dirname(__DIR__))
     ->withMiddleware(function (Middleware $middleware): void {
         $middleware->web(append: [
             HandleInertiaRequests::class,
+            EnsureUserNotBanned::class,
             BlockIps::class,
             GeoBlock::class,
             MaintenanceMode::class,

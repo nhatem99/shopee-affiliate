@@ -122,6 +122,11 @@ const providerLabels = { momo: 'MoMo', zalopay: 'ZaloPay' }
                         <p class="text-xs text-[var(--color-muted)] mt-1">
                             Đã duyệt: {{ vnd(balance.earned) }} · Đang giữ: {{ vnd(balance.reserved) }}
                         </p>
+                        <!-- Con số ở trên là tổng; đây là đường tới phần giải thích nó được cộng
+                             từ những đơn nào. -->
+                        <Link href="/don-hang" class="text-xs font-semibold text-[var(--color-accent)] hover:underline mt-1 inline-block">
+                            Xem từng đơn và tiền hoàn →
+                        </Link>
                     </div>
                     <button
                         @click="openWithdraw"

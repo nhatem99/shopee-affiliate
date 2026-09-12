@@ -37,6 +37,20 @@ class AdminLoginController extends Controller
             ]);
         }
 
+        if (Auth::user()->isBanned()) {
+            Auth::logout();
+            $request->session()->invalidate();
+            $request->session()->regenerateToken();
+
+            $this->tracking->logSecurityEvent('login_banned', $request, [
+                'metadata' => ['email' => $credentials['email']],
+            ]);
+
+            throw ValidationException::withMessages([
+                'email' => 'Tài khoản đã bị khoá.',
+            ]);
+        }
+
         if (! Auth::user()->isAdmin()) {
             $this->tracking->logSecurityEvent('admin_login_denied', $request, [
                 'metadata' => ['email' => $credentials['email']],

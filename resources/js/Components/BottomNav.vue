@@ -21,6 +21,9 @@ const items = computed(() => [
         ] : []),
         ...(auth.isLoggedIn ? [
             { href: '/history', icon: '📋', label: 'Lịch sử' },
+            // Chỗ khách đi tìm câu trả lời "mua rồi, tiền đâu" — để cạnh ví chứ không giấu
+            // trong trang Tài khoản.
+            ...(cashbackOn.value ? [{ href: '/don-hang', icon: '🧾', label: 'Đơn hàng' }] : []),
             { href: '/profile', icon: '👤', label: 'Tài khoản' },
         ] : []),
     ]),
