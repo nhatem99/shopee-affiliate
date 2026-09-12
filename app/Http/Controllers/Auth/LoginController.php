@@ -37,6 +37,24 @@ class LoginController extends Controller
             ]);
         }
 
+        // Nói thẳng lý do ngay tại form: EnsureUserNotBanned cũng chặn được ca này, nhưng nó chỉ
+        // đá về /login trắng trơn — người bị khoá sẽ thử lại mãi vì tưởng gõ sai mật khẩu.
+        if (Auth::user()->isBanned()) {
+            $reason = Auth::user()->banned_reason;
+
+            Auth::logout();
+            $request->session()->invalidate();
+            $request->session()->regenerateToken();
+
+            $this->tracking->logSecurityEvent('login_banned', $request, [
+                'metadata' => ['email' => $credentials['email']],
+            ]);
+
+            throw ValidationException::withMessages([
+                'email' => 'Tài khoản đã bị khoá.'.($reason ? ' Lý do: '.$reason : ''),
+            ]);
+        }
+
         if (Auth::user()->isAdmin()) {
             Auth::logout();
             $request->session()->invalidate();

@@ -114,7 +114,11 @@ const platformLabels = {
 
                     <!-- Affiliate link -->
                     <div class="card-glass rounded-2xl p-5">
-                        <p class="text-xs font-semibold text-[var(--color-muted)] uppercase tracking-wide mb-2">Link mua hàng (có hoàn tiền)</p>
+                        <!-- Bỏ chữ "(có hoàn tiền)": link ở trang này KHÔNG đi qua
+                             ShortLinkController::store nên không mang sub_id của khách, tức đơn đặt
+                             từ đây không quy về ai được. Hứa hoàn tiền ở đúng chỗ chắc chắn không
+                             hoàn được là lỗi nặng nhất trong cả nhóm này. -->
+                        <p class="text-xs font-semibold text-[var(--color-muted)] uppercase tracking-wide mb-2">Link mua hàng</p>
                         <div class="flex items-center gap-2">
                             <input :value="affiliateLink" readonly class="flex-1 text-xs font-mono bg-[var(--color-peach-soft)] rounded-lg px-3 py-2 border border-[var(--color-line)] truncate" />
                             <a :href="affiliateLink" target="_blank" rel="noopener"

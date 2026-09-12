@@ -7,8 +7,11 @@ import { useToast } from '@/composables/useToast'
 const props = defineProps({
     customerAuthEnabled: { type: Boolean, required: true },
     maintenanceMode: { type: Boolean, required: true },
+    festiveDecor: { type: Boolean, default: false },
     communityUrl: { type: String, default: '' },
     cashbackRate: { type: Number, default: 0 },
+    // null = chưa đặt riêng, khách đang thấy đúng tỉ lệ thực.
+    cashbackDisplayRate: { type: Number, default: null },
 })
 
 const toast = useToast()
@@ -16,16 +19,22 @@ const customerAuthEnabled = ref(props.customerAuthEnabled)
 const maintenanceMode = ref(props.maintenanceMode)
 const savingCustomerAuth = ref(false)
 const savingMaintenance = ref(false)
+const festiveDecor = ref(props.festiveDecor)
+const savingFestive = ref(false)
 const communityUrl = ref(props.communityUrl)
 const savingCommunityUrl = ref(false)
 const cashbackRate = ref(props.cashbackRate)
 const savingCashbackRate = ref(false)
+const cashbackDisplayRate = ref(props.cashbackDisplayRate ?? '')
+const savingCashbackDisplayRate = ref(false)
 
 // Đồng bộ lại nếu server trả về giá trị khác (ví dụ sau khi lưu xong)
 watch(() => props.customerAuthEnabled, (v) => { customerAuthEnabled.value = v })
 watch(() => props.maintenanceMode, (v) => { maintenanceMode.value = v })
+watch(() => props.festiveDecor, (v) => { festiveDecor.value = v })
 watch(() => props.communityUrl, (v) => { communityUrl.value = v })
 watch(() => props.cashbackRate, (v) => { cashbackRate.value = v })
+watch(() => props.cashbackDisplayRate, (v) => { cashbackDisplayRate.value = v ?? '' })
 
 function toggleCustomerAuth() {
     const next = !customerAuthEnabled.value
@@ -59,6 +68,22 @@ function toggleMaintenance() {
     })
 }
 
+function toggleFestive() {
+    const next = !festiveDecor.value
+    festiveDecor.value = next
+    savingFestive.value = true
+
+    router.post('/admin/settings', { festive_decor: next }, {
+        preserveScroll: true,
+        onSuccess: () => toast.success(next ? 'Đã bật trang trí Trung thu trên trang khách.' : 'Đã tắt trang trí.'),
+        onError: () => {
+            festiveDecor.value = !next // rollback nếu lưu lỗi
+            toast.error('Không lưu được cài đặt, vui lòng thử lại.')
+        },
+        onFinish: () => { savingFestive.value = false },
+    })
+}
+
 function saveCommunityUrl() {
     savingCommunityUrl.value = true
 
@@ -81,6 +106,23 @@ function saveCashbackRate() {
             : 'Đã tắt hoàn tiền — đơn mới sẽ không sinh hoa hồng cho khách.'),
         onError: (errors) => toast.error(errors.cashback_rate || 'Không lưu được tỉ lệ, vui lòng thử lại.'),
         onFinish: () => { savingCashbackRate.value = false },
+    })
+}
+
+// Ô để trống = gửi null = xoá số riêng, khách quay về thấy đúng tỉ lệ thực. Không sync tiền
+// vì con số này chỉ để hiển thị.
+function saveCashbackDisplayRate() {
+    savingCashbackDisplayRate.value = true
+    const raw = String(cashbackDisplayRate.value).trim()
+    const value = raw === '' ? null : Number(raw)
+
+    router.post('/admin/settings', { cashback_display_rate: value }, {
+        preserveScroll: true,
+        onSuccess: () => toast.success(value === null
+            ? 'Đã bỏ số riêng — khách sẽ thấy đúng tỉ lệ thực trả.'
+            : `Khách sẽ thấy "hoàn ${value}%" trên trang chủ và bài mẫu.`),
+        onError: (errors) => toast.error(errors.cashback_display_rate || 'Không lưu được, vui lòng thử lại.'),
+        onFinish: () => { savingCashbackDisplayRate.value = false },
     })
 }
 </script>
@@ -164,6 +206,33 @@ function saveCashbackRate() {
             </div>
 
             <div class="bg-[var(--color-surface)] rounded-2xl border border-[var(--color-line)] p-6">
+                <div class="flex items-start justify-between gap-6">
+                    <div class="min-w-0">
+                        <h2 class="font-bold text-[var(--color-ink)] mb-1">🏮 Trang trí Trung thu</h2>
+                        <p class="text-sm text-[var(--color-muted)] leading-relaxed">
+                            Đèn lồng, bánh trung thu, trăng và mây trôi lơ lửng trên mọi trang khách. Chỉ là lớp
+                            trang trí, không che nút bấm. Hết mùa thì tắt ở đây — không cần sửa gì khác.
+                        </p>
+                    </div>
+
+                    <button
+                        type="button"
+                        role="switch"
+                        :aria-checked="festiveDecor"
+                        @click="toggleFestive"
+                        :disabled="savingFestive"
+                        class="relative flex-none w-14 h-8 rounded-full transition-colors duration-200 disabled:opacity-60"
+                        :class="festiveDecor ? 'bg-[var(--color-accent)]' : 'bg-[var(--color-line)]'"
+                    >
+                        <span
+                            class="absolute top-1 left-1 w-6 h-6 rounded-full bg-white shadow-md transition-transform duration-200"
+                            :class="festiveDecor ? 'translate-x-6' : 'translate-x-0'"
+                        ></span>
+                    </button>
+                </div>
+            </div>
+
+            <div class="bg-[var(--color-surface)] rounded-2xl border border-[var(--color-line)] p-6">
                 <h2 class="font-bold text-[var(--color-ink)] mb-1">Tỉ lệ hoàn tiền cho khách</h2>
                 <p class="text-sm text-[var(--color-muted)] leading-relaxed mb-4">
                     Phần trăm <strong class="text-[var(--color-ink)]">hoa hồng ròng</strong> (đã trừ phí MCN) trả lại cho khách
@@ -200,6 +269,45 @@ function saveCashbackRate() {
                             ? `Đang hoàn ${Number(cashbackRate)}% hoa hồng ròng cho khách.`
                             : 'Đang tắt — chưa trả hoa hồng cho khách nào.' }}
                     </span>
+                </div>
+            </div>
+
+            <div class="bg-[var(--color-surface)] rounded-2xl border border-[var(--color-line)] p-6">
+                <h2 class="font-bold text-[var(--color-ink)] mb-1">Tỉ lệ hiển thị cho khách</h2>
+                <p class="text-sm text-[var(--color-muted)] leading-relaxed mb-4">
+                    Con số khách <strong class="text-[var(--color-ink)]">nhìn thấy</strong> trên trang chủ, trang Hoàn tiền và các bài mẫu ở mục Nội dung quảng bá.
+                    <strong class="text-[var(--color-ink)]">Không dùng để tính tiền</strong> — tiền vào ví luôn tính theo tỉ lệ ở khung trên.
+                    Để trống là khách thấy đúng tỉ lệ thực. Tắt hoàn tiền (tỉ lệ thực = 0) thì số này cũng tự ẩn.
+                </p>
+
+                <div class="flex flex-col sm:flex-row gap-2">
+                    <div class="relative flex-1 min-w-0">
+                        <input
+                            v-model="cashbackDisplayRate"
+                            type="number"
+                            min="0"
+                            max="100"
+                            step="1"
+                            :placeholder="`Trống = theo tỉ lệ thực (${Number(cashbackRate)}%)`"
+                            @keydown.enter="saveCashbackDisplayRate"
+                            class="w-full px-4 py-2.5 pr-10 rounded-xl border border-[var(--color-line)] bg-[var(--color-bg)] text-sm text-[var(--color-ink)] tabular-nums focus:outline-none focus:border-[var(--color-accent)]"
+                        />
+                        <span class="absolute right-4 top-1/2 -translate-y-1/2 text-sm text-[var(--color-muted)] pointer-events-none">%</span>
+                    </div>
+                    <button
+                        type="button"
+                        @click="saveCashbackDisplayRate"
+                        :disabled="savingCashbackDisplayRate"
+                        class="btn-fire px-6 py-2.5 rounded-xl text-sm whitespace-nowrap disabled:opacity-60"
+                    >{{ savingCashbackDisplayRate ? 'Đang lưu...' : 'Lưu số hiển thị' }}</button>
+                </div>
+
+                <div
+                    v-if="String(cashbackDisplayRate).trim() !== '' && Number(cashbackDisplayRate) !== Number(cashbackRate)"
+                    class="mt-4 pt-4 border-t border-[var(--color-line)] text-sm text-amber-700 dark:text-amber-400"
+                >
+                    ⚠️ Khách đang thấy <strong>{{ Number(cashbackDisplayRate) }}%</strong> nhưng ví thực trả <strong>{{ Number(cashbackRate) }}%</strong>.
+                    Trang Đơn hàng của khách vẫn ghi tỉ lệ thực vì nó giải thích cách tính từng khoản tiền.
                 </div>
             </div>
 

@@ -1,6 +1,6 @@
 <script setup>
 import { ref, computed } from 'vue'
-import { Head, useForm } from '@inertiajs/vue3'
+import { Head, Link, useForm } from '@inertiajs/vue3'
 import AppLayout from '@/Layouts/AppLayout.vue'
 import { useToast } from '@/composables/useToast'
 
@@ -114,11 +114,19 @@ const providerLabels = { momo: 'MoMo', zalopay: 'ZaloPay' }
             <div class="card-glass rounded-2xl p-6">
                 <div class="flex items-end justify-between flex-wrap gap-4">
                     <div>
+                        <!-- Giữ nhãn "khả dụng" chứ không đổi thành "rút được": con số này là hiệu
+                             của hoa hồng đã duyệt trừ phần đang giữ cho các lệnh rút, nên có thể
+                             bằng 0 hoặc âm, và kể cả khi dương vẫn chưa rút được nếu chưa khai ví. -->
                         <p class="text-sm text-[var(--color-muted)]">Số dư khả dụng</p>
                         <p class="text-3xl font-extrabold text-[var(--color-brand-green)]">{{ vnd(balance.available) }}</p>
                         <p class="text-xs text-[var(--color-muted)] mt-1">
                             Đã duyệt: {{ vnd(balance.earned) }} · Đang giữ: {{ vnd(balance.reserved) }}
                         </p>
+                        <!-- Con số ở trên là tổng; đây là đường tới phần giải thích nó được cộng
+                             từ những đơn nào. -->
+                        <Link href="/don-hang" class="text-xs font-semibold text-[var(--color-accent)] hover:underline mt-1 inline-block">
+                            Xem từng đơn và tiền hoàn →
+                        </Link>
                     </div>
                     <button
                         @click="openWithdraw"
@@ -128,9 +136,57 @@ const providerLabels = { momo: 'MoMo', zalopay: 'ZaloPay' }
                         Rút tiền
                     </button>
                 </div>
+
+                <!-- Thanh tiến độ tới mốc rút. Chỉ hiện khi đã có tiền thật trong ví: hiện với ví
+                     rỗng thì thành lời trách "bạn còn thiếu 50.000đ" ngay khi khách vừa đăng ký.
+                     Điều kiện > 0 còn chặn luôn trường hợp số âm — availableBalance() là hiệu của
+                     hoa hồng đã duyệt trừ phần đang giữ nên hoàn toàn có thể âm (xem User.php). -->
+                <div v-if="balance.available > 0 && balance.available < minWithdrawal" class="mt-4">
+                    <div class="h-2 rounded-full bg-[var(--color-peach-soft)] overflow-hidden">
+                        <div
+                            class="h-full rounded-full bg-[var(--color-brand-green)] transition-all duration-500"
+                            :style="{ width: Math.min(100, (balance.available / minWithdrawal) * 100) + '%' }"
+                        ></div>
+                    </div>
+                    <p class="text-xs text-[var(--color-muted)] mt-2">
+                        Còn <b class="text-[var(--color-ink)]">{{ vnd(minWithdrawal - balance.available) }}</b> nữa là đủ mức rút tối thiểu{{ hasAnyAccount ? '' : ' — nhớ khai sẵn ví nhận tiền bên dưới' }}.
+                    </p>
+                </div>
+
                 <p v-if="!canWithdraw" class="text-xs text-[var(--color-muted)] mt-3">
                     Cần số dư tối thiểu {{ vnd(minWithdrawal) }} và ít nhất một ví nhận tiền để rút.
                 </p>
+                <!-- Nói trước việc duyệt tay. Đây là câu đứng giữa khách và cơn giận "gửi lệnh rút
+                     cả tiếng rồi mà chưa thấy tiền đâu" — WithdrawalController tạo lệnh ở trạng
+                     thái pending và admin chuyển khoản thủ công, không có tự động ở bất kỳ khâu nào. -->
+                <p class="text-xs text-[var(--color-muted)] mt-2">
+                    Gửi yêu cầu xong, bên mình duyệt rồi chuyển tay về ví của bạn — không phải tự động, nên bạn chờ một chút nhé.
+                </p>
+            </div>
+
+            <!-- Ví rỗng và chưa từng rút: chỉ đường thay vì để khách nhìn số 0 rồi thoát. Đây là
+                 điểm rơi lớn nhất của nhóm khách đã chịu đăng ký — họ vào xem ví ngay sau khi đăng
+                 ký, thấy ₫0 và nút Rút tiền xám ngắt. -->
+            <div v-if="balance.earned <= 0 && !withdrawals?.length" class="card-glass rounded-2xl p-6">
+                <h2 class="font-bold text-[var(--color-ink)] mb-1">Ví chưa có gì — bắt đầu thế nào?</h2>
+                <p class="text-xs text-[var(--color-muted)] mb-4">Ba bước, làm một lần rồi thôi.</p>
+                <ol class="space-y-3 text-sm text-[var(--color-ink)]">
+                    <li class="flex gap-3">
+                        <span class="flex-none w-6 h-6 rounded-full bg-[var(--color-peach-soft)] text-[var(--color-accent)] text-xs font-extrabold flex items-center justify-center">1</span>
+                        <span>Khai sẵn ví MoMo hoặc ZaloPay ở ngay bên dưới — làm sớm cho xong, đừng đợi đủ tiền mới khai.</span>
+                    </li>
+                    <li class="flex gap-3">
+                        <span class="flex-none w-6 h-6 rounded-full bg-[var(--color-peach-soft)] text-[var(--color-accent)] text-xs font-extrabold flex items-center justify-center">2</span>
+                        <span>Về trang chủ, dán link sản phẩm Shopee và bấm mua <b>trong lúc đang đăng nhập</b>.</span>
+                    </li>
+                    <li class="flex gap-3">
+                        <span class="flex-none w-6 h-6 rounded-full bg-[var(--color-peach-soft)] text-[var(--color-accent)] text-xs font-extrabold flex items-center justify-center">3</span>
+                        <span>Đợi đơn sang trạng thái Hoàn thành bên Shopee. Qua kỳ đối soát gần nhất là tiền hiện ở đây.</span>
+                    </li>
+                </ol>
+                <Link href="/" class="btn-fire inline-block mt-5 px-5 py-2.5 rounded-xl text-sm no-underline">
+                    Về trang chủ lấy mã →
+                </Link>
             </div>
 
             <!-- Thông tin cá nhân -->
@@ -217,7 +273,9 @@ const providerLabels = { momo: 'MoMo', zalopay: 'ZaloPay' }
                             </td>
                         </tr>
                         <tr v-if="!withdrawals?.length">
-                            <td colspan="4" class="px-6 py-10 text-center text-[var(--color-muted)]">Chưa có yêu cầu rút tiền nào.</td>
+                            <td colspan="4" class="px-6 py-10 text-center text-[var(--color-muted)]">
+                                Chưa rút lần nào. Đủ {{ vnd(minWithdrawal) }} là nút Rút tiền ở trên tự sáng lên.
+                            </td>
                         </tr>
                     </tbody>
                 </table>

@@ -33,14 +33,13 @@ function vnd(n) {
             </div>
         </div>
 
-        <div v-if="cashback > 0" class="mt-4 bg-[var(--color-green-soft)] rounded-xl px-4 py-3 flex items-center gap-2">
-            <span class="text-[var(--color-brand-green)]">💰</span>
-            <div>
-                <p class="text-xs text-[var(--color-brand-green)] font-semibold">Hoàn tiền dự kiến (ước tính)</p>
-                <p class="font-extrabold text-[var(--color-brand-green)]">+{{ vnd(cashback) }}</p>
-                <p class="text-[10px] text-[var(--color-brand-green)]/70 mt-0.5">Ước tính theo tỷ lệ hoa hồng hiện tại, có thể thay đổi và chưa phải số tiền cam kết.</p>
-            </div>
-        </div>
+        <!-- Đã gỡ khối "Hoàn tiền dự kiến (ước tính)".
+             Con số đó tính bằng GIÁ BÁN nhân một tỉ lệ hoa hồng đoán sẵn, trong khi tiền hoàn thật
+             lại tính trên hoa hồng RÒNG mà Shopee báo về sau khi đơn hoàn thành, nhân tỉ lệ admin
+             đặt (xem CashbackService::sync). Hai cách tính lệch nhau cả chục lần.
+             Hiện một con số rồi trả về ví một con số khác hẳn là cách nhanh nhất để mất niềm tin
+             của đúng nhóm khách chịu đăng nhập để nhận hoàn tiền. Prop `cashback` giữ nguyên để
+             không phải sửa nơi gọi; chỉ thôi hiển thị. -->
 
         <div class="mt-4 bg-[var(--color-peach-soft)] rounded-xl px-4 py-3 text-center">
             <p class="text-xs text-[var(--color-muted)]">Bạn tiết kiệm</p>
