@@ -564,36 +564,24 @@ onUnmounted(() => {
                         <p class="text-sm text-[var(--color-muted)] mt-1">Vui lòng mở tietkiemvi.com bằng trình duyệt trên điện thoại.</p>
                     </div>
 
-                    <!-- Dải nhắc hoàn tiền, dính theo ô dán link nên khách lúc nào cũng thấy.
-                         Bắt buộc gói gọn MỘT DÒNG (text-[11px], truncate): vùng này đã chiếm chỗ
-                         của ô nhập trên màn hình điện thoại, dài thêm một dòng nữa là đẩy chính
-                         công cụ ra khỏi tầm nhìn. -->
+                    <!-- Dải xác nhận cho khách ĐÃ đăng nhập, dính theo ô dán link. Bắt buộc gói
+                         gọn MỘT DÒNG (text-[11px], truncate): vùng này đã chiếm chỗ của ô nhập
+                         trên màn hình điện thoại, dài thêm một dòng nữa là đẩy chính công cụ ra
+                         khỏi tầm nhìn.
+
+                         Khách VÃNG LAI không có dải nào ở đây nữa: dải vàng "Đăng nhập trước, đơn
+                         này mới được hoàn tiền" từng nằm ngay dưới ô dán link làm khách tưởng
+                         PHẢI đăng nhập mới lấy được mã — trong khi lấy mã là miễn phí, không cần
+                         tài khoản. Lời mời đăng nhập giờ chỉ còn ở khối trước nút mua (khi có
+                         kết quả) và phần cuối trang. -->
                     <template v-if="canUseVoucherTool">
-                        <!-- Dải cảnh báo: dùng đúng cặp màu của thanh bảo trì trong AppLayout
-                             (amber-500 + #1c0a00) — màu cố định nên đọc được y hệt ở cả hai theme.
-                             TUYỆT ĐỐI không lấy --color-ink làm nền: đó là màu CHỮ, và nó LẬT ở
-                             dark mode (#1B1B1F -> #f1f5f9) nên thành nền trắng chữ trắng, mất hút.
-                             Cần một khối tối ở cả hai theme thì dùng --color-side (xem khối nhắc
-                             trước nút mua bên dưới, và AdminLayout). -->
-                        <div
-                            v-if="showGuestCashbackNudge"
-                            class="mt-2 flex items-center gap-2 rounded-xl bg-amber-500 text-[#1c0a00] px-3 py-1.5"
-                        >
-                            <span class="text-[11px] font-semibold leading-tight truncate flex-1 min-w-0">
-                                💰 Đăng nhập trước, đơn này mới được hoàn tiền
-                            </span>
-                            <Link
-                                href="/login"
-                                class="flex-none text-[11px] font-bold bg-[#1c0a00] text-amber-50 hover:bg-[#3a1a00] rounded-lg px-2.5 py-1 transition no-underline"
-                            >Đăng nhập</Link>
-                        </div>
                         <!-- Câu ĐIỀU KIỆN, không phải cam kết: "mua từ link này thì mới được tính"
                              nói đúng thứ khách cần biết (đi đường khác là mất) mà không hứa thay
                              cho những khâu phía sau vốn có thể hỏng — rewriteToOwnAffiliate() gặp
                              lỗi thì trả nguyên link của nguồn, và mã khách chỉ gắn được khi link
                              đích đã có sẵn tham số utm_content. -->
                         <div
-                            v-else-if="showLoggedInCashbackBadge"
+                            v-if="showLoggedInCashbackBadge"
                             title="Đơn được tính hoàn tiền sau khi Shopee chốt ở trạng thái Hoàn thành và tụi mình đối soát báo cáo."
                             class="mt-2 flex items-center gap-2 rounded-xl bg-[var(--color-green-soft)] border border-[var(--color-brand-green)]/25 px-3 py-1.5"
                         >
