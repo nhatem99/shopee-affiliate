@@ -23,6 +23,10 @@ function submitEmail() {
                 <p class="text-[var(--color-muted)] text-sm mt-1">Chào mừng bạn trở lại!</p>
             </div>
 
+            <p v-if="$page.props.flash?.error" class="mb-4 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+                {{ $page.props.flash.error }}
+            </p>
+
             <!-- Google Sign-in -->
             <a href="/auth/google/redirect"
                 class="flex items-center justify-center gap-3 w-full py-3 rounded-xl border border-[var(--color-line)] bg-[var(--color-surface)] text-sm font-semibold text-[var(--color-ink)] hover:bg-[var(--color-peach)] transition">

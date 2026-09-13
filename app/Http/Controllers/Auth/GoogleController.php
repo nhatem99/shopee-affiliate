@@ -8,6 +8,7 @@ use App\Services\TrackingService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Log;
 use Laravel\Socialite\Facades\Socialite;
 use Laravel\Socialite\Two\InvalidStateException;
 
@@ -24,7 +25,15 @@ class GoogleController extends Controller
     {
         try {
             $googleUser = Socialite::driver('google')->user();
-        } catch (InvalidStateException|\Exception $e) {
+        } catch (InvalidStateException $e) {
+            // Thường do mở trang ở host này (127.0.0.1) nhưng Google trả về host khác (localhost)
+            // nên cookie session không khớp → state không hợp lệ.
+            Log::warning('Google login: invalid state', ['host' => $request->getHost()]);
+
+            return redirect()->route('login')->with('error', 'Phiên đăng nhập Google không hợp lệ. Hãy mở lại trang đăng nhập rồi thử lại.');
+        } catch (\Exception $e) {
+            Log::error('Google login failed', ['error' => $e->getMessage(), 'class' => get_class($e)]);
+
             return redirect()->route('login')->with('error', 'Đăng nhập Google thất bại. Vui lòng thử lại.');
         }
 
