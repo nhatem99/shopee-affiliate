@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
 use App\Models\Setting;
+use App\Services\CashbackLeaderboardService;
 use App\Services\CashbackService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -18,6 +19,7 @@ class SettingsController extends Controller
             'customerAuthEnabled' => Setting::getBool('customer_auth_enabled', true),
             'maintenanceMode' => Setting::getBool('maintenance_mode', false),
             'festiveDecor' => Setting::getBool('festive_decor', false),
+            'leaderboardDemo' => Setting::getBool(CashbackLeaderboardService::DEMO_KEY, false),
             'communityUrl' => Setting::get('community_url') ?: '',
             'cashbackRate' => (float) Setting::get(CashbackService::RATE_KEY, 0),
             // Trả về null (không phải 0) khi chưa đặt, để ô nhập hiện trống = "theo tỉ lệ thực".
@@ -36,6 +38,7 @@ class SettingsController extends Controller
             'customer_auth_enabled' => ['sometimes', 'boolean'],
             'maintenance_mode' => ['sometimes', 'boolean'],
             'festive_decor' => ['sometimes', 'boolean'],
+            'leaderboard_demo' => ['sometimes', 'boolean'],
             'community_url' => ['sometimes', 'nullable', 'url', 'max:255'],
             'cashback_rate' => ['sometimes', 'numeric', 'min:0', 'max:100'],
             'cashback_display_rate' => ['sometimes', 'nullable', 'numeric', 'min:0', 'max:100'],
@@ -51,6 +54,10 @@ class SettingsController extends Controller
 
         if (array_key_exists('festive_decor', $validated)) {
             Setting::set('festive_decor', $validated['festive_decor'] ? '1' : '0');
+        }
+
+        if (array_key_exists('leaderboard_demo', $validated)) {
+            Setting::set(CashbackLeaderboardService::DEMO_KEY, $validated['leaderboard_demo'] ? '1' : '0');
         }
 
         if (array_key_exists('community_url', $validated)) {

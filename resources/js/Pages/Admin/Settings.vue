@@ -8,6 +8,7 @@ const props = defineProps({
     customerAuthEnabled: { type: Boolean, required: true },
     maintenanceMode: { type: Boolean, required: true },
     festiveDecor: { type: Boolean, default: false },
+    leaderboardDemo: { type: Boolean, default: false },
     communityUrl: { type: String, default: '' },
     cashbackRate: { type: Number, default: 0 },
     // null = chưa đặt riêng, khách đang thấy đúng tỉ lệ thực.
@@ -21,6 +22,8 @@ const savingCustomerAuth = ref(false)
 const savingMaintenance = ref(false)
 const festiveDecor = ref(props.festiveDecor)
 const savingFestive = ref(false)
+const leaderboardDemo = ref(props.leaderboardDemo)
+const savingLeaderboardDemo = ref(false)
 const communityUrl = ref(props.communityUrl)
 const savingCommunityUrl = ref(false)
 const cashbackRate = ref(props.cashbackRate)
@@ -32,6 +35,7 @@ const savingCashbackDisplayRate = ref(false)
 watch(() => props.customerAuthEnabled, (v) => { customerAuthEnabled.value = v })
 watch(() => props.maintenanceMode, (v) => { maintenanceMode.value = v })
 watch(() => props.festiveDecor, (v) => { festiveDecor.value = v })
+watch(() => props.leaderboardDemo, (v) => { leaderboardDemo.value = v })
 watch(() => props.communityUrl, (v) => { communityUrl.value = v })
 watch(() => props.cashbackRate, (v) => { cashbackRate.value = v })
 watch(() => props.cashbackDisplayRate, (v) => { cashbackDisplayRate.value = v ?? '' })
@@ -81,6 +85,22 @@ function toggleFestive() {
             toast.error('Không lưu được cài đặt, vui lòng thử lại.')
         },
         onFinish: () => { savingFestive.value = false },
+    })
+}
+
+function toggleLeaderboardDemo() {
+    const next = !leaderboardDemo.value
+    leaderboardDemo.value = next
+    savingLeaderboardDemo.value = true
+
+    router.post('/admin/settings', { leaderboard_demo: next }, {
+        preserveScroll: true,
+        onSuccess: () => toast.success(next ? 'Đã bật số liệu minh hoạ cho bảng xếp hạng.' : 'Đã tắt số liệu minh hoạ.'),
+        onError: () => {
+            leaderboardDemo.value = !next
+            toast.error('Không lưu được cài đặt, vui lòng thử lại.')
+        },
+        onFinish: () => { savingLeaderboardDemo.value = false },
     })
 }
 
@@ -227,6 +247,34 @@ function saveCashbackDisplayRate() {
                         <span
                             class="absolute top-1 left-1 w-6 h-6 rounded-full bg-white shadow-md transition-transform duration-200"
                             :class="festiveDecor ? 'translate-x-6' : 'translate-x-0'"
+                        ></span>
+                    </button>
+                </div>
+            </div>
+
+            <div class="bg-[var(--color-surface)] rounded-2xl border border-[var(--color-line)] p-6">
+                <div class="flex items-start justify-between gap-6">
+                    <div class="min-w-0">
+                        <h2 class="font-bold text-[var(--color-ink)] mb-1">🏆 Số liệu minh hoạ cho bảng xếp hạng</h2>
+                        <p class="text-sm text-[var(--color-muted)] leading-relaxed">
+                            Khi tháng này <strong class="text-[var(--color-ink)]">chưa có ai</strong> được hoàn tiền, bảng vàng ở trang chủ
+                            và /hoan-tien sẽ hiện 7 người mẫu (tên che sẵn) kèm nhãn nhỏ "số liệu minh hoạ" thay vì để trống.
+                            Có người thật đầu tiên là mẫu tự biến mất. Chỉ hiện khi chương trình hoàn tiền đang bật.
+                        </p>
+                    </div>
+
+                    <button
+                        type="button"
+                        role="switch"
+                        :aria-checked="leaderboardDemo"
+                        @click="toggleLeaderboardDemo"
+                        :disabled="savingLeaderboardDemo"
+                        class="relative flex-none w-14 h-8 rounded-full transition-colors duration-200 disabled:opacity-60"
+                        :class="leaderboardDemo ? 'bg-[var(--color-accent)]' : 'bg-[var(--color-line)]'"
+                    >
+                        <span
+                            class="absolute top-1 left-1 w-6 h-6 rounded-full bg-white shadow-md transition-transform duration-200"
+                            :class="leaderboardDemo ? 'translate-x-6' : 'translate-x-0'"
                         ></span>
                     </button>
                 </div>

@@ -2,7 +2,12 @@
 import { Head, Link } from '@inertiajs/vue3'
 import AppLayout from '@/Layouts/AppLayout.vue'
 import CashbackExplainer from '@/Components/CashbackExplainer.vue'
+import CashbackLeaderboard from '@/Components/CashbackLeaderboard.vue'
 import { useCashback } from '@/composables/useCashback'
+
+defineProps({
+    leaderboard: { type: Object, default: null },
+})
 
 // Trang riêng cho phần giải thích hoàn tiền, dùng lại đúng component đang nằm ở trang chủ.
 //
@@ -22,6 +27,10 @@ const { cashbackRate } = useCashback()
     </Head>
     <AppLayout>
         <CashbackExplainer />
+
+        <!-- Cùng bảng vàng với trang chủ: trang này là nơi bài đăng Facebook/Zalo trỏ tới, khách
+             mới vào thẳng đây phải thấy được bằng chứng có người đang nhận tiền thật. -->
+        <CashbackLeaderboard v-if="leaderboard" :leaderboard="leaderboard" />
 
         <section class="px-4 pb-14">
             <div class="max-w-3xl mx-auto text-center">

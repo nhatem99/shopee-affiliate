@@ -41,6 +41,7 @@ class CashbackService
 
         if ($rate <= 0) {
             Log::info('CashbackService: chưa đặt tỉ lệ hoàn tiền, không tạo hoa hồng nào.');
+            CashbackLeaderboardService::forget();
 
             return $summary;
         }
@@ -65,6 +66,10 @@ class CashbackService
 
             $this->award($order->order_id, (int) $order->user_id, $amount, $summary);
         }
+
+        // Bảng xếp hạng công khai đọc từ cache — vừa ghi/thu hồi tiền xong thì phải xoá, không
+        // thì khách vừa được cộng tiền vào /hoan-tien vẫn thấy mình chưa có tên.
+        CashbackLeaderboardService::forget();
 
         return $summary;
     }

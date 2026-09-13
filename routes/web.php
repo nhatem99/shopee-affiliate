@@ -26,6 +26,7 @@ use App\Http\Controllers\ShortLinkController;
 use App\Http\Controllers\TrackingController;
 use App\Http\Controllers\WithdrawalController;
 use App\Models\PlatformVoucher;
+use App\Services\CashbackLeaderboardService;
 use App\Services\CashbackService;
 use App\Services\TrackingService;
 use Illuminate\Http\Request;
@@ -33,7 +34,7 @@ use Illuminate\Support\Facades\Route;
 use Inertia\Inertia;
 
 // Home
-Route::get('/', function (Request $request, TrackingService $tracking) {
+Route::get('/', function (Request $request, TrackingService $tracking, CashbackService $cashback, CashbackLeaderboardService $leaderboard) {
     $tracking->log('page_view', $request, ['url' => $request->fullUrl()]);
 
     return Inertia::render('Home', [
@@ -41,6 +42,9 @@ Route::get('/', function (Request $request, TrackingService $tracking) {
         // Công cụ lấy mã chỉ dùng được trên điện thoại — admin luôn xem/test được từ máy tính.
         'canUseVoucherTool' => TrackingService::isMobile($request->userAgent())
             || ($request->user()?->isAdmin() ?? false),
+        // Bảng xếp hạng hoàn tiền tháng này. Chỉ tính khi chương trình đang bật: tắt rồi mà vẫn
+        // truy vấn là tốn công cho một khối frontend đằng nào cũng ẩn (useCashback::cashbackOn).
+        'leaderboard' => $cashback->rate() > 0 ? $leaderboard->forMonth($request->user()) : null,
     ]);
 })->name('home');
 
@@ -95,10 +99,12 @@ Route::post('/track/event', [TrackingController::class, 'store'])
 // Giải thích hoàn tiền — trang riêng để thanh điều hướng dưới và bài đăng trỏ tới được.
 // Chương trình chưa bật (tỉ lệ = 0) thì không có gì để giải thích: đá về trang chủ thay vì
 // hiện một trang nói về thứ hệ thống đang không trả đồng nào.
-Route::get('/hoan-tien', function (CashbackService $cashback) {
+Route::get('/hoan-tien', function (Request $request, CashbackService $cashback, CashbackLeaderboardService $leaderboard) {
     abort_if($cashback->rate() <= 0, 404);
 
-    return Inertia::render('Cashback');
+    return Inertia::render('Cashback', [
+        'leaderboard' => $leaderboard->forMonth($request->user()),
+    ]);
 })->name('cashback.info');
 
 // Blog

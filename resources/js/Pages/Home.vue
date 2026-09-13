@@ -8,6 +8,7 @@ import AppLayout from '@/Layouts/AppLayout.vue'
 import CouponTicket from '@/Components/CouponTicket.vue'
 import RestockSchedule from '@/Components/RestockSchedule.vue'
 import CashbackExplainer from '@/Components/CashbackExplainer.vue'
+import CashbackLeaderboard from '@/Components/CashbackLeaderboard.vue'
 import { useToast } from '@/composables/useToast'
 import { useCashback } from '@/composables/useCashback'
 import { useFestive } from '@/composables/useFestive'
@@ -28,6 +29,8 @@ const props = defineProps({
     // 'reel' = link nằm trong PHẦN MÔ TẢ của reel; 'comment' = link nằm trong BÌNH LUẬN dưới
     // bài viết. Chỉ đúng một chỗ có link, chỉ sai chỗ là khách loay hoay không thấy rồi thoát.
     facebookMode: { type: String, default: 'comment' },
+    // Bảng vàng hoàn tiền tháng này — server chỉ gửi khi chương trình đang bật (null khi tắt).
+    leaderboard: { type: Object, default: null },
 })
 
 // Nơi khách phải bấm sau khi Facebook mở ra — dùng lại ở nhiều câu hướng dẫn nên gom một chỗ.
@@ -75,6 +78,15 @@ const resultCtaEl = ref(null)
 const resolving = ref(false)
 const voucherError = ref(null)
 const history = useLocalStorage('sv_history', [])
+
+// Khối tab ngay dưới ô dán link: "Lịch sử" | "Bảng xếp hạng". Bảng xếp hạng từng nằm tận cuối
+// trang, sau khối giải thích hoàn tiền — trên điện thoại là 3-4 màn hình, không ai kéo tới.
+// Đưa lên đây, cạnh lịch sử, để khách vừa dán link xong là thấy ngay có người đang nhận tiền.
+// Chưa có lịch sử thì mở sẵn tab bảng xếp hạng (tab lịch sử trống chẳng có gì để nhìn);
+// đã có lịch sử thì ưu tiên lịch sử — đó là thứ khách quay lại trang để dùng.
+const hasLeaderboard = computed(() => cashbackOn.value && !!props.leaderboard)
+const activeTab = ref(history.value.length ? 'history' : 'leaderboard')
+const showTabs = computed(() => hasLeaderboard.value && history.value.length > 0)
 
 // Link đã quét xong gần nhất. So với nội dung đang có trong ô để biết có gì mới cần quét hay
 // không — dùng chính chuỗi khách nhập chứ không phải canonical_url của server, vì server đã bung
@@ -693,10 +705,35 @@ onUnmounted(() => {
                     </div>
                 </div>
 
-                <!-- Lịch sử chuyển đổi (lưu trên trình duyệt) -->
-                <div v-if="history.length" class="mt-8">
-                    <h3 class="text-sm font-bold text-[var(--color-ink)] mb-3">Lịch sử chuyển đổi</h3>
-                    <div class="flex flex-col gap-3">
+                <!-- Lịch sử chuyển đổi (lưu trên trình duyệt) + Bảng xếp hạng hoàn tiền, dạng tab.
+                     Chỉ hiện thanh tab khi cả hai cùng có; thiếu một bên thì hiện thẳng bên còn lại
+                     với tiêu đề thường, không bắt khách bấm tab để xem thứ duy nhất đang có. -->
+                <div v-if="history.length || hasLeaderboard" class="mt-8">
+                    <div v-if="showTabs" class="flex gap-2 mb-3">
+                        <button
+                            @click="activeTab = 'history'"
+                            class="flex-1 px-3 py-2.5 rounded-xl text-sm font-bold transition flex items-center justify-center gap-1.5"
+                            :class="activeTab === 'history'
+                                ? 'btn-fire'
+                                : 'bg-[var(--color-surface)] text-[var(--color-muted)] border border-[var(--color-line)] hover:border-[var(--color-accent)] hover:text-[var(--color-accent)]'"
+                        >
+                            <span>🕘</span> Lịch sử
+                            <span class="text-[10px] font-mono px-1.5 py-0.5 rounded-full" :class="activeTab === 'history' ? 'bg-black/15' : 'bg-[var(--color-peach-soft)] text-[var(--color-accent)]'">{{ history.length }}</span>
+                        </button>
+                        <button
+                            @click="activeTab = 'leaderboard'"
+                            class="flex-1 px-3 py-2.5 rounded-xl text-sm font-bold transition flex items-center justify-center gap-1.5"
+                            :class="activeTab === 'leaderboard'
+                                ? 'btn-fire'
+                                : 'bg-[var(--color-surface)] text-[var(--color-muted)] border border-[var(--color-line)] hover:border-[var(--color-accent)] hover:text-[var(--color-accent)]'"
+                        >
+                            <span>🏆</span> Bảng xếp hạng
+                        </button>
+                    </div>
+                    <h3 v-else-if="history.length" class="text-sm font-bold text-[var(--color-ink)] mb-3">Lịch sử chuyển đổi</h3>
+                    <h3 v-else class="text-sm font-bold text-[var(--color-ink)] mb-3">🏆 Bảng vàng hoàn tiền tháng {{ leaderboard.month }}</h3>
+
+                    <div v-if="history.length && (!showTabs || activeTab === 'history')" class="flex flex-col gap-3">
                         <div
                             v-for="(h, hi) in history"
                             :key="hi"
@@ -732,6 +769,12 @@ onUnmounted(() => {
                             </button>
                         </div>
                     </div>
+
+                    <CashbackLeaderboard
+                        v-if="hasLeaderboard && (!showTabs || activeTab === 'leaderboard')"
+                        :leaderboard="leaderboard"
+                        compact
+                    />
                 </div>
             </div>
         </section>
