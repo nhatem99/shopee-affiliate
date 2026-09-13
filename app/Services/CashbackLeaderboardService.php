@@ -27,14 +27,17 @@ class CashbackLeaderboardService
     public const LIMIT = 10;
 
     /**
-     * Công tắc "hiện số liệu minh hoạ khi bảng trống". Mặc định TẮT.
+     * Công tắc "hiện số liệu minh hoạ khi bảng trống". Mặc định BẬT — prod mới mở chưa có ai
+     * đăng ký, deploy xong phải thấy bảng có người ngay chứ không phải nhớ vào admin bật tay.
      *
-     * Trang mới mở chưa có ai được hoàn thì bảng trống suốt tháng đầu, mà một cái bảng trống thì
-     * không kéo được ai tham gia. Dữ liệu mẫu chỉ hiện khi (a) admin bật và (b) tháng này thật sự
-     * chưa có người nào — có người thật đầu tiên là mẫu tự biến mất. Frontend luôn nhận cờ `demo`
+     * Một cái bảng trống thì không kéo được ai tham gia. Dữ liệu mẫu chỉ hiện khi (a) chưa bị
+     * admin tắt và (b) tháng này thật sự chưa có người nào — có người thật đầu tiên là mẫu tự
+     * biến mất. Frontend luôn nhận cờ `demo`
      * để gắn nhãn "minh hoạ": khoe người nhận tiền không có thật mà không nói là lừa khách.
      */
     public const DEMO_KEY = 'cashback_leaderboard_demo';
+
+    public const DEMO_DEFAULT = true;
 
     /** Tên đã che sẵn + số tiền vừa phải, cùng dạng với dữ liệu thật để bố cục không đổi khi thay. */
     private const DEMO_ENTRIES = [
@@ -78,7 +81,7 @@ class CashbackLeaderboardService
 
         $board['demo'] = false;
 
-        if ($board['entries'] === [] && Setting::getBool(self::DEMO_KEY, false)) {
+        if ($board['entries'] === [] && Setting::getBool(self::DEMO_KEY, self::DEMO_DEFAULT)) {
             $board = array_merge($board, $this->demoBoard());
         }
 

@@ -187,6 +187,8 @@ class CashbackLeaderboardTest extends TestCase
 
     public function test_sync_xoa_cache_de_bang_cap_nhat_ngay(): void
     {
+        // Tắt mẫu để nhìn thấy bảng THẬT đang trống trong cache.
+        Setting::set(CashbackLeaderboardService::DEMO_KEY, '0');
         $user = $this->createUser();
         $this->assertSame([], $this->board()['entries']);
 
@@ -199,18 +201,19 @@ class CashbackLeaderboardTest extends TestCase
         $this->assertSame(3000.0, $this->board()['entries'][0]['amount']);
     }
 
-    public function test_mac_dinh_khong_hien_so_lieu_minh_hoa(): void
+    public function test_admin_tat_thi_bang_trong_khong_hien_so_lieu_minh_hoa(): void
     {
+        Setting::set(CashbackLeaderboardService::DEMO_KEY, '0');
+
         $board = $this->board();
 
         $this->assertSame([], $board['entries']);
         $this->assertFalse($board['demo']);
     }
 
-    public function test_bat_minh_hoa_thi_bang_trong_hien_nguoi_mau_co_gan_co_demo(): void
+    public function test_mac_dinh_bang_trong_hien_nguoi_mau_co_gan_co_demo(): void
     {
-        Setting::set(CashbackLeaderboardService::DEMO_KEY, '1');
-
+        // Không đặt setting nào — đúng trạng thái prod vừa deploy, chưa ai đăng ký.
         $board = $this->board($this->createUser());
 
         $this->assertTrue($board['demo']);
@@ -227,7 +230,6 @@ class CashbackLeaderboardTest extends TestCase
 
     public function test_co_nguoi_that_thi_minh_hoa_tu_bien_mat(): void
     {
-        Setting::set(CashbackLeaderboardService::DEMO_KEY, '1');
         $this->credit($this->createUser(['name' => 'Lê Thị Hoa']), 7000);
 
         $board = $this->board();
@@ -241,11 +243,13 @@ class CashbackLeaderboardTest extends TestCase
     {
         $admin = $this->createAdmin();
 
+        $this->actingAs($admin)->post('/admin/settings', ['leaderboard_demo' => false])->assertRedirect();
+        $this->assertFalse(Setting::getBool(CashbackLeaderboardService::DEMO_KEY, true));
+        $this->assertFalse($this->board()['demo']);
+
         $this->actingAs($admin)->post('/admin/settings', ['leaderboard_demo' => true])->assertRedirect();
         $this->assertTrue(Setting::getBool(CashbackLeaderboardService::DEMO_KEY, false));
-
-        $this->actingAs($admin)->post('/admin/settings', ['leaderboard_demo' => false])->assertRedirect();
-        $this->assertFalse(Setting::getBool(CashbackLeaderboardService::DEMO_KEY, false));
+        $this->assertTrue($this->board()['demo']);
     }
 
     public function test_che_ten(): void

@@ -19,7 +19,7 @@ class SettingsController extends Controller
             'customerAuthEnabled' => Setting::getBool('customer_auth_enabled', true),
             'maintenanceMode' => Setting::getBool('maintenance_mode', false),
             'festiveDecor' => Setting::getBool('festive_decor', false),
-            'leaderboardDemo' => Setting::getBool(CashbackLeaderboardService::DEMO_KEY, false),
+            'leaderboardDemo' => Setting::getBool(CashbackLeaderboardService::DEMO_KEY, CashbackLeaderboardService::DEMO_DEFAULT),
             'communityUrl' => Setting::get('community_url') ?: '',
             'cashbackRate' => (float) Setting::get(CashbackService::RATE_KEY, 0),
             // Trả về null (không phải 0) khi chưa đặt, để ô nhập hiện trống = "theo tỉ lệ thực".

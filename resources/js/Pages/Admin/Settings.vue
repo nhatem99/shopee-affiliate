@@ -8,7 +8,7 @@ const props = defineProps({
     customerAuthEnabled: { type: Boolean, required: true },
     maintenanceMode: { type: Boolean, required: true },
     festiveDecor: { type: Boolean, default: false },
-    leaderboardDemo: { type: Boolean, default: false },
+    leaderboardDemo: { type: Boolean, default: true },
     communityUrl: { type: String, default: '' },
     cashbackRate: { type: Number, default: 0 },
     // null = chưa đặt riêng, khách đang thấy đúng tỉ lệ thực.
