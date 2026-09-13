@@ -32,7 +32,10 @@ return [
     |
     */
 
-    'lifetime' => (int) env('SESSION_LIFETIME', 120),
+    // 30 ngày (43200 phút): khách vào lại sau vài tuần vẫn còn đăng nhập — mỗi cú bấm mua khi
+    // đã rớt phiên là một đơn không bao giờ quy về ai được (xem ShortLinkController), nên phiên
+    // ngắn ở đây mất tiền thật của khách chứ không chỉ phiền.
+    'lifetime' => (int) env('SESSION_LIFETIME', 43200),
 
     'expire_on_close' => env('SESSION_EXPIRE_ON_CLOSE', false),
 
