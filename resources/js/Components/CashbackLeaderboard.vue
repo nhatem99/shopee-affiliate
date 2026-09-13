@@ -66,8 +66,6 @@ function avatarColor(name) {
 }
 
 const inTopList = computed(() => entries.value.some(e => e.is_me))
-// Server đang trả số liệu minh hoạ (admin bật, tháng này chưa có ai) — phải nói ra, không giấu.
-const isDemo = computed(() => props.leaderboard?.demo === true)
 </script>
 
 <template>
@@ -79,11 +77,7 @@ const isDemo = computed(() => props.leaderboard?.demo === true)
                 <h2 class="text-2xl md:text-3xl font-extrabold text-[var(--color-ink)] mt-3 mb-3">
                     🏆 Bảng vàng hoàn tiền tháng này
                 </h2>
-                <p v-if="hasData && isDemo" class="text-[var(--color-muted)] text-sm leading-relaxed max-w-xl mx-auto">
-                    Bảng đang hiện <b class="text-[var(--color-ink)]">số liệu minh hoạ</b> để bạn hình dung — tháng này
-                    chưa có đơn nào được đối soát xong. Người thật đầu tiên lên bảng là số mẫu tự biến mất.
-                </p>
-                <p v-else-if="hasData" class="text-[var(--color-muted)] text-sm leading-relaxed max-w-xl mx-auto">
+                <p v-if="hasData" class="text-[var(--color-muted)] text-sm leading-relaxed max-w-xl mx-auto">
                     Tháng này tụi mình đã hoàn
                     <b class="text-[var(--color-brand-green)] text-base">{{ vnd(leaderboard.total_amount) }}</b>
                     vào ví của <b class="text-[var(--color-ink)]">{{ leaderboard.total_users }}</b> người.
@@ -99,8 +93,7 @@ const isDemo = computed(() => props.leaderboard?.demo === true)
                 <!-- Dải tổng của tháng (bản compact) — thay cho tiêu đề lớn ở trên -->
                 <div v-if="compact" class="px-4 py-2.5 bg-gradient-to-r from-[var(--color-accent)] to-[var(--color-accent-deep)] text-white text-xs font-semibold flex flex-wrap items-center justify-between gap-x-3 gap-y-1">
                     <span class="font-mono tracking-wide">🏆 THÁNG {{ leaderboard?.month }}</span>
-                    <span v-if="hasData && isDemo" class="inline-flex items-center gap-1"><span class="px-1.5 py-0.5 rounded bg-white/20 text-[10px] uppercase tracking-wide">Minh hoạ</span> Bảng mẫu, chưa có số thật</span>
-                    <span v-else-if="hasData">Đã hoàn <b class="text-sm">{{ vnd(leaderboard.total_amount) }}</b> cho {{ leaderboard.total_users }} người</span>
+                    <span v-if="hasData">Đã hoàn <b class="text-sm">{{ vnd(leaderboard.total_amount) }}</b> cho {{ leaderboard.total_users }} người</span>
                     <span v-else>Chưa có ai lên bảng — bạn đầu tiên nhé</span>
                 </div>
 
@@ -231,10 +224,7 @@ const isDemo = computed(() => props.leaderboard?.demo === true)
                 </div>
             </div>
 
-            <p v-if="isDemo" class="text-[11px] text-[var(--color-muted)] text-center mt-3 leading-relaxed">
-                Số liệu minh hoạ: tên và số tiền trên bảng là ví dụ, không phải người thật. Khi có đơn đầu tiên được đối soát trong tháng, bảng sẽ tự chuyển sang số thật.
-            </p>
-            <p v-else class="text-[11px] text-[var(--color-muted)] text-center mt-3 leading-relaxed">
+            <p class="text-[11px] text-[var(--color-muted)] text-center mt-3 leading-relaxed">
                 Xếp theo số tiền đã thật sự vào ví trong tháng (đơn hoàn thành + đối soát xong). Bảng làm mới sau mỗi đợt đối soát, không phải tức thì.<template v-if="compact"> Tên đã che một phần để giữ riêng tư.</template>
             </p>
         </div>

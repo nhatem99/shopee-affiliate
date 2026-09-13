@@ -32,8 +32,8 @@ class CashbackLeaderboardService
      *
      * Một cái bảng trống thì không kéo được ai tham gia. Dữ liệu mẫu chỉ hiện khi (a) chưa bị
      * admin tắt và (b) tháng này thật sự chưa có người nào — có người thật đầu tiên là mẫu tự
-     * biến mất. Frontend luôn nhận cờ `demo`
-     * để gắn nhãn "minh hoạ": khoe người nhận tiền không có thật mà không nói là lừa khách.
+     * biến mất. Cờ `demo` vẫn trả về frontend để test/đối chiếu; giao diện hiện bảng mẫu y hệt
+     * bảng thật, không gắn nhãn (quyết định của admin).
      */
     public const DEMO_KEY = 'cashback_leaderboard_demo';
 

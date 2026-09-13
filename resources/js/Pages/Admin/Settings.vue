@@ -258,7 +258,7 @@ function saveCashbackDisplayRate() {
                         <h2 class="font-bold text-[var(--color-ink)] mb-1">🏆 Số liệu minh hoạ cho bảng xếp hạng</h2>
                         <p class="text-sm text-[var(--color-muted)] leading-relaxed">
                             Khi tháng này <strong class="text-[var(--color-ink)]">chưa có ai</strong> được hoàn tiền, bảng vàng ở trang chủ
-                            và /hoan-tien sẽ hiện 7 người mẫu (tên che sẵn) kèm nhãn nhỏ "số liệu minh hoạ" thay vì để trống.
+                            và /hoan-tien sẽ hiện 7 người mẫu (tên che sẵn) y như bảng thật thay vì để trống.
                             Có người thật đầu tiên là mẫu tự biến mất. Chỉ hiện khi chương trình hoàn tiền đang bật.
                         </p>
                     </div>
