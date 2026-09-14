@@ -12,3 +12,7 @@ Artisan::command('inspire', function () {
 // Dọn ref đã hết hạn (xem VoucherRef::prunable). Không dọn thì bảng chỉ phình chứ không sai —
 // resolve() vẫn tự loại ref hết hạn.
 Schedule::command('model:prune', ['--model' => [VoucherRef::class]])->daily();
+
+// Đối soát slot reel với caption thật trên Facebook (xem FacebookReelSyncService). Không bật
+// chế độ reel thì lệnh thoát ngay, không gọi API nào.
+Schedule::command('facebook:sync-reels')->everyFiveMinutes()->withoutOverlapping();

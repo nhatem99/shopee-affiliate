@@ -3,9 +3,9 @@
 namespace Tests\Feature;
 
 use App\Models\ApiConfig;
+use App\Models\FacebookReelSlot;
 use App\Services\FacebookReelSlotService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
-use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Http;
 use Tests\TestCase;
 
@@ -19,13 +19,6 @@ use Tests\TestCase;
 class FacebookReelSlotTest extends TestCase
 {
     use RefreshDatabase;
-
-    protected function setUp(): void
-    {
-        parent::setUp();
-
-        Cache::flush();
-    }
 
     private function config(array $reels, int $leaseMinutes = 10): ApiConfig
     {
@@ -141,7 +134,7 @@ class FacebookReelSlotTest extends TestCase
             $service->reelUrlFor('ao-hoodie', 'Áo Hoodie', 'https://tietkiemvi.com/go/a'),
         );
         // reel/111 phải được thả ra, không bị treo vì lần hỏng vừa rồi.
-        $this->assertNull(Cache::get('fb_reel_lease:111'));
+        $this->assertFalse(FacebookReelSlot::where('reel_id', '111')->first()->isLeased());
     }
 
     /** Cùng một reel nhập bằng link đầy đủ và bằng id trần phải là MỘT slot, không phải hai. */
@@ -155,6 +148,40 @@ class FacebookReelSlotTest extends TestCase
 
         $this->assertSame('https://www.facebook.com/reel/111', $first);
         $this->assertNull($second, 'Chỉ có 1 reel thật nên khách thứ hai phải rơi về Shopee');
+    }
+
+    /**
+     * Lease hết hạn nhưng chưa ai đè caption → reel vẫn đang hiện đúng link của sản phẩm này.
+     * Thuê lại thẳng, không gọi API đổi caption lần nữa.
+     */
+    public function test_reel_still_showing_the_product_is_reclaimed_without_api_call(): void
+    {
+        Http::fake(['graph.facebook.com/*' => Http::response(['success' => true])]);
+        $service = $this->service(['reel/111'], leaseMinutes: 5);
+
+        $service->reelUrlFor('ao-hoodie', 'Áo Hoodie', 'https://tietkiemvi.com/go/a');
+        $this->travel(6)->minutes();
+
+        $this->assertSame(
+            'https://www.facebook.com/reel/111',
+            $service->reelUrlFor('ao-hoodie', 'Áo Hoodie', 'https://tietkiemvi.com/go/a'),
+        );
+        Http::assertSentCount(1);
+        $this->assertTrue(FacebookReelSlot::where('reel_id', '111')->first()->isLeased());
+    }
+
+    /** Cùng sản phẩm nhưng short-link đã đổi (mã mới) thì caption phải được ghi lại. */
+    public function test_reel_showing_a_stale_link_of_the_same_product_is_rewritten(): void
+    {
+        Http::fake(['graph.facebook.com/*' => Http::response(['success' => true])]);
+        $service = $this->service(['reel/111'], leaseMinutes: 5);
+
+        $service->reelUrlFor('ao-hoodie', 'Áo Hoodie', 'https://tietkiemvi.com/go/a');
+        $this->travel(6)->minutes();
+        $service->reelUrlFor('ao-hoodie', 'Áo Hoodie', 'https://tietkiemvi.com/go/b');
+
+        Http::assertSentCount(2);
+        $this->assertSame('https://tietkiemvi.com/go/b', FacebookReelSlot::where('reel_id', '111')->first()->target_url);
     }
 
     public function test_does_nothing_when_no_reel_is_configured(): void

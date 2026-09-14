@@ -49,6 +49,17 @@ class ActivityController extends Controller
 
         $recentWindow = now()->subDays(7);
 
+        // Chuyển đổi = khách bấm "Mở Facebook ngay" (bước cuối của luồng lấy mã qua FB).
+        // source phân biệt link nằm trong bình luận (fb_comment) hay mô tả reel (fb_reel).
+        // Nếu admin đang lọc theo ngày thì thống kê đúng khoảng đó; không lọc thì lấy 7 ngày.
+        $from = $this->date($request->input('from'));
+        $to = $this->date($request->input('to'));
+        $conversionQuery = fn (): Builder => UserActivity::where('event_type', 'facebook_open')
+            ->when($from || $to, function (Builder $q) use ($from, $to) {
+                $q->when($from, fn (Builder $q) => $q->whereDate('created_at', '>=', $from))
+                    ->when($to, fn (Builder $q) => $q->whereDate('created_at', '<=', $to));
+            }, fn (Builder $q) => $q->where('created_at', '>=', $recentWindow));
+
         return Inertia::render('Admin/Activities', [
             'activities' => $activities,
             'filters' => $this->activeFilters($request),
@@ -99,20 +110,14 @@ class ActivityController extends Controller
                     ->orderByDesc('total')
                     ->limit(5)
                     ->pluck('total', 'ip_address'),
-                // Chuyển đổi = khách bấm "Mở Facebook ngay" (bước cuối của luồng lấy mã qua FB).
-                // source phân biệt link nằm trong bình luận (fb_comment) hay mô tả reel (fb_reel).
                 'conversions' => [
-                    'total' => UserActivity::where('created_at', '>=', $recentWindow)
-                        ->where('event_type', 'facebook_open')
-                        ->count(),
-                    'by_mode' => UserActivity::where('created_at', '>=', $recentWindow)
-                        ->where('event_type', 'facebook_open')
+                    'total' => $conversionQuery()->count(),
+                    'by_mode' => $conversionQuery()
                         ->whereNotNull('source')
                         ->selectRaw('source, COUNT(*) as total')
                         ->groupBy('source')
                         ->pluck('total', 'source'),
-                    'top_products' => UserActivity::where('created_at', '>=', $recentWindow)
-                        ->where('event_type', 'facebook_open')
+                    'top_products' => $conversionQuery()
                         ->whereNotNull('product_name')
                         ->selectRaw('product_name, COUNT(*) as total')
                         ->groupBy('product_name')

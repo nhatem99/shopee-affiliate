@@ -9,6 +9,7 @@ use App\Services\FacebookPageService;
 use App\Services\FacebookPostTarget;
 use App\Services\FacebookReelSlotService;
 use App\Services\KieuShopeeService;
+use App\Services\ProductKeyService;
 use App\Services\ShortLinkService;
 use App\Services\TrackingService;
 use App\Services\UrlValidationService;
@@ -20,7 +21,6 @@ use Illuminate\Http\Request;
 use Illuminate\Http\Response;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Log;
-use Illuminate\Support\Str;
 
 class ShortLinkController extends Controller
 {
@@ -33,6 +33,7 @@ class ShortLinkController extends Controller
         private AffiliateLinkRewriterService $rewriter,
         private TrackingService $tracking,
         private VoucherRefService $refs,
+        private ProductKeyService $productKeys,
     ) {}
 
     public function store(Request $request): JsonResponse
@@ -176,7 +177,7 @@ class ShortLinkController extends Controller
      * hot có nhiều lượt bấm liên tục — trong khung đó, các lượt bấm lặp lại tái sử dụng
      * permalink đã đăng thay vì đăng comment mới. Thời salesoc khoá cache còn phải tính thêm
      * loại mã vì mỗi loại trỏ tới voucher khác nhau; kieushopee chỉ trả một link cho mỗi sản
-     * phẩm nên nhận diện theo sản phẩm là đủ — xem productKey().
+     * phẩm nên nhận diện theo sản phẩm là đủ — xem ProductKeyService.
      *
      * Nhiều khách bấm cùng lúc được xử lý ở hai tầng:
      *  • KHÁC sản phẩm → mỗi sản phẩm rơi vào một bài viết khác nhau trong nhóm bài đã cấu hình
@@ -195,7 +196,7 @@ class ShortLinkController extends Controller
             return $fallbackUrl;
         }
 
-        $productKey = $this->productKey($targetUrl, $productName);
+        $productKey = $this->productKeys->fromUrl($targetUrl, $productName);
 
         // Chế độ đổi caption reel được ưu tiên khi bật: đo trên máy thật thì chỉ link /reel/ mới
         // mở được ứng dụng Facebook, VÀ chỉ link trong caption reel mới bấm được (link trong
@@ -249,31 +250,6 @@ class ShortLinkController extends Controller
         } finally {
             $lock->release();
         }
-    }
-
-    /**
-     * Khoá nhận diện sản phẩm cho lớp Facebook: comment đã đăng (nhớ 20 phút) và reel đang thuê
-     * (lease 10 phút) đều được tra theo khoá này.
-     *
-     * Khoá BẮT BUỘC phải ổn định giữa các lượt bấm của cùng một sản phẩm. Trước đây nó rơi về
-     * short-code khi thiếu tên sản phẩm — mà short-code sinh mới mỗi lượt bấm, nên đúng lúc
-     * không đọc được tên sản phẩm thì mỗi cú bấm lại đăng thêm một comment và thuê thêm một
-     * reel, hỏng đúng thứ mà cache sinh ra để chặn.
-     *
-     * Ưu tiên shop_id/item_id trong URL đích: đó là danh tính thật của sản phẩm, không phụ thuộc
-     * việc có đọc được tên hay không, và gộp đúng các lượt bấm của cùng một sản phẩm kể cả khi
-     * nguồn trả về tên khác nhau giữa hai lần.
-     */
-    private function productKey(string $targetUrl, ?string $productName): string
-    {
-        if ($ids = $this->urlValidator->extractShopeeIds($targetUrl)) {
-            return "{$ids['shop_id']}-{$ids['item_id']}";
-        }
-
-        // Không đọc được id (Shopee đổi dạng đường dẫn, hoặc chuỗi redirect dừng giữa chừng):
-        // tên sản phẩm là lựa chọn tiếp theo, cuối cùng mới tới băm của URL đích — vẫn giống
-        // nhau giữa các lượt bấm của cùng một sản phẩm, khác hẳn short-code.
-        return Str::slug($productName ?: '') ?: 'url-'.substr(sha1($targetUrl), 0, 16);
     }
 
     /**

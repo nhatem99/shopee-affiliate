@@ -143,6 +143,15 @@ const exportUrl = computed(() => {
 
 const hasSearch = computed(() => !!(props.filters?.ip || props.filters?.from || props.filters?.to))
 
+// Box chuyển đổi tính theo khoảng ngày đang lọc; không lọc thì backend lấy 7 ngày.
+const conversionRangeLabel = computed(() => {
+    const from = props.filters?.from
+    const to = props.filters?.to
+    if (!from && !to) return '7 ngày'
+    if (from && from === to) return from
+    return `${from || 'đầu'} → ${to || 'nay'}`
+})
+
 function goPage(url) {
     if (url) router.get(url, {}, { preserveState: true })
 }
@@ -325,7 +334,7 @@ function pickDay(date) {
             <div class="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1 mb-3">
                 <button @click="filter('event_type', 'facebook_open')"
                     class="text-xs font-semibold text-[#1877F2] hover:underline text-left">
-                    🎯 Chuyển đổi — bấm "Mở Facebook ngay" (7 ngày)
+                    🎯 Chuyển đổi — bấm "Mở Facebook ngay" ({{ conversionRangeLabel }})
                 </button>
                 <p class="text-xs text-[var(--color-muted)]">
                     <span v-for="(label, mode) in conversionModeLabels" :key="mode" class="mr-3">

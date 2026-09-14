@@ -3,7 +3,7 @@
 namespace App\Services;
 
 use App\Models\ApiConfig;
-use Illuminate\Support\Facades\Cache;
+use App\Models\FacebookReelSlot;
 use Illuminate\Support\Facades\Log;
 
 /**
@@ -23,6 +23,12 @@ use Illuminate\Support\Facades\Log;
  * reel là một slot, thuê trong $leaseMinutes phút. Số reel trong nhóm chính là số sản phẩm
  * khác nhau có thể phục vụ đồng thời — đây là lý do phải tạo sẵn 5–10 reel chứ không phải một.
  *
+ * Trạng thái slot nằm ở bảng facebook_reel_slots, không phải cache: cache bị xoá mỗi lần deploy,
+ * và quan trọng hơn, cache chỉ ghi lại thứ MÌNH ĐÃ LÀM chứ không phải thứ ĐANG CÓ trên Facebook.
+ * Job facebook:sync-reels (5 phút/lần) đọc caption thật và ghi đè product_key/target_url cho
+ * khớp thực tế — xem FacebookReelSync. Nhờ đó khi reel vẫn còn hiện đúng link (lease hết hạn
+ * nhưng chưa ai lấy) thì thuê lại được mà không tốn lời gọi API.
+ *
  * Hết slot thì trả null để người gọi đưa khách đi thẳng Shopee. Thà mất một lượt đi qua
  * Facebook còn hơn đưa khách tới reel đang hiện link của SẢN PHẨM KHÁC — khách bấm nhầm là
  * mua nhầm hàng.
@@ -37,42 +43,62 @@ class FacebookReelSlotService
      */
     public function reelUrlFor(string $productKey, string $displayName, string $targetUrl): ?string
     {
-        $pool = $this->config->facebookTargetReelIds();
+        $pool = $this->pool();
 
         if (! $pool) {
             return null;
         }
 
         $leaseMinutes = $this->config->facebookReelLeaseMinutes();
+        $leasedUntil = now()->addMinutes($leaseMinutes);
 
-        // Sản phẩm này đã thuê reel nào chưa? Kiểm tra hai chiều: bản ghi sản phẩm→reel còn
-        // sống, VÀ reel đó vẫn đang thuộc về đúng sản phẩm này (slot chưa bị người khác lấy).
-        // Trúng thì không gọi API lần nữa — nhiều khách cùng xem một sản phẩm dùng chung reel.
-        $leased = Cache::get($this->productKey($productKey));
+        // Sản phẩm này đang giữ reel nào chưa? Trúng thì không gọi API lần nữa — nhiều khách
+        // cùng xem một sản phẩm dùng chung reel.
+        $held = FacebookReelSlot::whereIn('reel_id', $pool)
+            ->where('product_key', $productKey)
+            ->where('leased_until', '>', now())
+            ->first();
 
-        if ($leased && Cache::get($this->leaseKey($leased)) === $productKey) {
-            return $this->reelUrl($leased);
+        if ($held) {
+            return $held->url();
+        }
+
+        // Reel vẫn ĐANG HIỆN đúng link này (lease hết hạn nhưng chưa ai đè, hoặc job đối soát
+        // đọc thấy trên Facebook như vậy): thuê lại thẳng, caption không cần đổi.
+        $showing = FacebookReelSlot::whereIn('reel_id', $pool)
+            ->where('product_key', $productKey)
+            ->where('target_url', $targetUrl)
+            ->first();
+
+        if ($showing && $this->claim($showing, $leasedUntil)) {
+            return $showing->url();
         }
 
         $service = new FacebookPageService($this->config->app_id, $this->config->app_secret);
         $caption = $this->caption($displayName, $targetUrl);
 
-        foreach ($pool as $entry) {
-            // Admin dán cả link reel chứ không phải id trần, mà Graph API cần đúng id. Phân giải
-            // ngay tại đây rồi dùng id cho mọi thứ phía sau — kể cả khoá cache, để hai cách nhập
-            // cùng một reel (link đầy đủ và id trần) không thành hai slot riêng.
-            $reelId = FacebookPostTarget::parse($entry)->graphId;
+        foreach ($pool as $reelId) {
+            $slot = FacebookReelSlot::where('reel_id', $reelId)->first();
 
-            // Cache::add là thao tác nguyên tử: chỉ một request giành được slot trống, các
-            // request cùng lúc khác nhận false và đi thử reel tiếp theo.
-            if (! Cache::add($this->leaseKey($reelId), $productKey, now()->addMinutes($leaseMinutes))) {
+            if (! $this->claim($slot, $leasedUntil, [
+                'product_key' => $productKey,
+                'product_name' => $displayName,
+                'target_url' => $targetUrl,
+            ])) {
                 continue;
             }
 
             if (! $service->updateReelCaption($reelId, $caption)) {
-                // Trả slot lại ngay, nếu không reel này bị khoá vô ích suốt thời gian thuê
-                // dù caption chưa hề đổi.
-                Cache::forget($this->leaseKey($reelId));
+                // Caption trên Facebook chưa hề đổi — trả slot về đúng trạng thái trước đó,
+                // nếu không reel này vừa bị khoá vô ích suốt thời gian thuê vừa ghi sai là
+                // đang hiện sản phẩm này.
+                FacebookReelSlot::where('id', $slot->id)->update([
+                    'product_key' => $slot->product_key,
+                    'product_name' => $slot->product_name,
+                    'target_url' => $slot->target_url,
+                    'leased_until' => null,
+                    'sync_error' => $service->lastError,
+                ]);
 
                 Log::warning('FacebookReelSlotService: không đổi được caption reel, thử reel khác', [
                     'reel_id' => $reelId,
@@ -82,9 +108,9 @@ class FacebookReelSlotService
                 continue;
             }
 
-            Cache::put($this->productKey($productKey), $reelId, now()->addMinutes($leaseMinutes));
+            FacebookReelSlot::where('id', $slot->id)->update(['caption' => $caption, 'sync_error' => null]);
 
-            return $this->reelUrl($reelId);
+            return $slot->url();
         }
 
         Log::warning('FacebookReelSlotService: hết slot reel, khách đi thẳng Shopee', [
@@ -94,6 +120,42 @@ class FacebookReelSlotService
         ]);
 
         return null;
+    }
+
+    /**
+     * Giữ slot bằng UPDATE có điều kiện "chưa ai thuê" — thao tác nguyên tử: hai request cùng
+     * lúc thì chỉ một bên thấy 1 hàng bị đổi, bên kia thấy 0 và đi thử reel kế tiếp.
+     *
+     * @param  array<string, mixed>  $attributes  Ghi kèm khi giành được slot (sản phẩm mới).
+     */
+    private function claim(FacebookReelSlot $slot, \DateTimeInterface $leasedUntil, array $attributes = []): bool
+    {
+        return FacebookReelSlot::where('id', $slot->id)
+            ->where(fn ($q) => $q->whereNull('leased_until')->orWhere('leased_until', '<=', now()))
+            ->update($attributes + ['leased_until' => $leasedUntil]) === 1;
+    }
+
+    /**
+     * Danh sách reel id trần trong nhóm đã cấu hình, và bảo đảm mỗi reel có một hàng trong bảng.
+     *
+     * Admin dán cả link reel chứ không phải id trần, mà Graph API cần đúng id. Phân giải ngay
+     * tại đây rồi dùng id cho mọi thứ phía sau — kể cả khoá hàng, để hai cách nhập cùng một reel
+     * (link đầy đủ và id trần) không thành hai slot riêng.
+     *
+     * @return list<string>
+     */
+    public function pool(): array
+    {
+        $ids = array_values(array_unique(array_map(
+            fn (string $entry) => FacebookPostTarget::parse($entry)->graphId,
+            $this->config->facebookTargetReelIds(),
+        )));
+
+        foreach ($ids as $reelId) {
+            FacebookReelSlot::firstOrCreate(['reel_id' => $reelId]);
+        }
+
+        return $ids;
     }
 
     /**
@@ -111,23 +173,5 @@ class FacebookReelSlotService
             '',
             '⚠️ Phải bấm đúng link này mới được giảm — tự tìm sản phẩm trên Shopee thì mã không áp được.',
         ]);
-    }
-
-    /** $reelId ở đây luôn là id trần (đã qua FacebookPostTarget), nên ghép thẳng. */
-    private function reelUrl(string $reelId): string
-    {
-        return "https://www.facebook.com/reel/{$reelId}";
-    }
-
-    /** Slot đang thuộc về sản phẩm nào. */
-    private function leaseKey(string $reelId): string
-    {
-        return "fb_reel_lease:{$reelId}";
-    }
-
-    /** Sản phẩm đang giữ reel nào. */
-    private function productKey(string $productKey): string
-    {
-        return "fb_reel_for_product:{$productKey}";
     }
 }
