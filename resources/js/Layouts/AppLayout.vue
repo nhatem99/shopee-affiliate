@@ -8,6 +8,7 @@ import ThemeToggle from '@/Components/ThemeToggle.vue'
 import FestiveDecor from '@/Components/FestiveDecor.vue'
 import NotificationBell from '@/Components/NotificationBell.vue'
 import AccountDrawer from '@/Components/AccountDrawer.vue'
+import MessengerButton from '@/Components/MessengerButton.vue'
 import { useCashback } from '@/composables/useCashback'
 
 const auth = useAuthStore()
@@ -134,6 +135,7 @@ const accountDrawerOpen = ref(false)
         </main>
 
         <BottomNav />
+        <MessengerButton v-if="!auth.isAdmin" />
         <ToastContainer />
         <AccountDrawer v-if="auth.isLoggedIn && !auth.isAdmin" :open="accountDrawerOpen" @close="accountDrawerOpen = false" />
     </div>

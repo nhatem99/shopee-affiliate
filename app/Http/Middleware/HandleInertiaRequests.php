@@ -45,6 +45,9 @@ class HandleInertiaRequests extends Middleware
                 // Link nhóm/cộng đồng săn sale hiện ở banner "Khung giờ back mã"
                 // (RestockSchedule.vue). Chưa đặt thì banner tự ẩn dòng link đi.
                 'communityUrl' => Setting::get('community_url') ?: null,
+                // Icon Messenger nổi (AppLayout.vue) — khách bấm là nhảy thẳng sang chat trên
+                // Messenger. Chưa đặt thì icon tự ẩn, không hiện nút chết dẫn về đâu cả.
+                'messengerUrl' => Setting::get('messenger_url') ?: null,
                 // Chỉ admin cần cờ này: admin duyệt trang khách y như bình thường khi đang bảo
                 // trì (xem MaintenanceMode) nên rất dễ quên là khách vẫn đang bị chặn — AppLayout
                 // dựa vào đây để hiện thanh nhắc.

@@ -22,6 +22,7 @@ class SettingsController extends Controller
             'festiveDecor' => Setting::getBool('festive_decor', false),
             'leaderboardDemo' => Setting::getBool(CashbackLeaderboardService::DEMO_KEY, CashbackLeaderboardService::DEMO_DEFAULT),
             'communityUrl' => Setting::get('community_url') ?: '',
+            'messengerUrl' => Setting::get('messenger_url') ?: '',
             'cashbackRate' => (float) Setting::get(CashbackService::RATE_KEY, 0),
             'welcomeBonusEnabled' => Setting::getBool(WelcomeBonusService::ENABLED_KEY, true),
             'welcomeBonusAmount' => (float) Setting::get(WelcomeBonusService::AMOUNT_KEY, WelcomeBonusService::DEFAULT_AMOUNT),
@@ -43,6 +44,7 @@ class SettingsController extends Controller
             'festive_decor' => ['sometimes', 'boolean'],
             'leaderboard_demo' => ['sometimes', 'boolean'],
             'community_url' => ['sometimes', 'nullable', 'url', 'max:255'],
+            'messenger_url' => ['sometimes', 'nullable', 'url', 'max:255'],
             'cashback_rate' => ['sometimes', 'numeric', 'min:0', 'max:100'],
             'cashback_display_rate' => ['sometimes', 'nullable', 'numeric', 'min:0', 'max:100'],
             'welcome_bonus_enabled' => ['sometimes', 'boolean'],
@@ -76,6 +78,10 @@ class SettingsController extends Controller
 
         if (array_key_exists('community_url', $validated)) {
             Setting::set('community_url', $validated['community_url'] ?? '');
+        }
+
+        if (array_key_exists('messenger_url', $validated)) {
+            Setting::set('messenger_url', $validated['messenger_url'] ?? '');
         }
 
         if (array_key_exists('cashback_rate', $validated)) {

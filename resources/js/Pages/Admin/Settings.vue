@@ -10,6 +10,7 @@ const props = defineProps({
     festiveDecor: { type: Boolean, default: false },
     leaderboardDemo: { type: Boolean, default: true },
     communityUrl: { type: String, default: '' },
+    messengerUrl: { type: String, default: '' },
     cashbackRate: { type: Number, default: 0 },
     // null = chưa đặt riêng, khách đang thấy đúng tỉ lệ thực.
     cashbackDisplayRate: { type: Number, default: null },
@@ -28,6 +29,8 @@ const leaderboardDemo = ref(props.leaderboardDemo)
 const savingLeaderboardDemo = ref(false)
 const communityUrl = ref(props.communityUrl)
 const savingCommunityUrl = ref(false)
+const messengerUrl = ref(props.messengerUrl)
+const savingMessengerUrl = ref(false)
 const cashbackRate = ref(props.cashbackRate)
 const savingCashbackRate = ref(false)
 const cashbackDisplayRate = ref(props.cashbackDisplayRate ?? '')
@@ -43,6 +46,7 @@ watch(() => props.maintenanceMode, (v) => { maintenanceMode.value = v })
 watch(() => props.festiveDecor, (v) => { festiveDecor.value = v })
 watch(() => props.leaderboardDemo, (v) => { leaderboardDemo.value = v })
 watch(() => props.communityUrl, (v) => { communityUrl.value = v })
+watch(() => props.messengerUrl, (v) => { messengerUrl.value = v })
 watch(() => props.cashbackRate, (v) => { cashbackRate.value = v })
 watch(() => props.cashbackDisplayRate, (v) => { cashbackDisplayRate.value = v ?? '' })
 watch(() => props.welcomeBonusEnabled, (v) => { welcomeBonusEnabled.value = v })
@@ -122,6 +126,19 @@ function saveCommunityUrl() {
             : 'Đã bỏ link cộng đồng — banner sẽ ẩn dòng đó đi.'),
         onError: (errors) => toast.error(errors.community_url || 'Không lưu được link, vui lòng thử lại.'),
         onFinish: () => { savingCommunityUrl.value = false },
+    })
+}
+
+function saveMessengerUrl() {
+    savingMessengerUrl.value = true
+
+    router.post('/admin/settings', { messenger_url: messengerUrl.value.trim() || null }, {
+        preserveScroll: true,
+        onSuccess: () => toast.success(messengerUrl.value.trim()
+            ? 'Đã lưu link Messenger — icon chat sẽ hiện trên trang khách.'
+            : 'Đã bỏ link Messenger — icon chat sẽ ẩn đi.'),
+        onError: (errors) => toast.error(errors.messenger_url || 'Không lưu được link, vui lòng thử lại.'),
+        onFinish: () => { savingMessengerUrl.value = false },
     })
 }
 function saveCashbackRate() {
@@ -469,6 +486,38 @@ function saveCashbackDisplayRate() {
                         :disabled="savingCommunityUrl"
                         class="btn-fire px-6 py-2.5 rounded-xl text-sm whitespace-nowrap disabled:opacity-60"
                     >{{ savingCommunityUrl ? 'Đang lưu...' : 'Lưu link' }}</button>
+                </div>
+            </div>
+
+            <div class="bg-[var(--color-surface)] rounded-2xl border border-[var(--color-line)] p-6">
+                <h2 class="font-bold text-[var(--color-ink)] mb-1">💬 Icon Messenger cho khách nhắn tin</h2>
+                <p class="text-sm text-[var(--color-muted)] leading-relaxed mb-4">
+                    Hiện icon Messenger nổi ở góc màn hình trên mọi trang khách — bấm vào sẽ nhảy thẳng sang
+                    Messenger để chat với fanpage. Dán link dạng <span class="font-mono text-xs">https://m.me/tenpage</span>
+                    (lấy trong phần Cài đặt trang trên Facebook). Để trống thì icon tự ẩn.
+                </p>
+
+                <div class="flex flex-col sm:flex-row gap-2">
+                    <input
+                        v-model="messengerUrl"
+                        type="url"
+                        placeholder="https://m.me/tenpage"
+                        @keydown.enter="saveMessengerUrl"
+                        class="flex-1 min-w-0 px-4 py-2.5 rounded-xl border border-[var(--color-line)] bg-[var(--color-bg)] text-sm text-[var(--color-ink)] focus:outline-none focus:border-[var(--color-accent)]"
+                    />
+                    <button
+                        type="button"
+                        @click="saveMessengerUrl"
+                        :disabled="savingMessengerUrl"
+                        class="btn-fire px-6 py-2.5 rounded-xl text-sm whitespace-nowrap disabled:opacity-60"
+                    >{{ savingMessengerUrl ? 'Đang lưu...' : 'Lưu link' }}</button>
+                </div>
+
+                <div class="mt-4 pt-4 border-t border-[var(--color-line)] flex items-center gap-2 text-sm">
+                    <span class="w-2 h-2 rounded-full flex-none" :class="messengerUrl.trim() ? 'bg-[var(--color-brand-green)]' : 'bg-[var(--color-muted)]'"></span>
+                    <span class="text-[var(--color-ink)] font-medium">
+                        {{ messengerUrl.trim() ? 'Đang hiện icon Messenger trên trang khách.' : 'Đang ẩn — chưa đặt link Messenger.' }}
+                    </span>
                 </div>
             </div>
         </div>
