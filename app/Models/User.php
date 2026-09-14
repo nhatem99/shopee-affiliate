@@ -148,4 +148,18 @@ class User extends Authenticatable
     {
         return $this->approvedCommissionTotal() - $this->reservedWithdrawalTotal();
     }
+
+    /**
+     * Đã có ít nhất một khoản hoàn tiền THẬT (từ đơn hàng) được duyệt chưa.
+     *
+     * Điều kiện để rút: thưởng người mới là tiền cho không, ai đăng nhập Google 5 giây cũng có —
+     * nếu rút được luôn thì cày tài khoản ảo là ra tiền. Bắt phải có một đơn thật trước.
+     */
+    public function hasRealCashback(): bool
+    {
+        return $this->commissions()
+            ->where('type', Commission::TYPE_CASHBACK)
+            ->whereIn('status', ['approved', 'paid'])
+            ->exists();
+    }
 }

@@ -8,12 +8,18 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 #[Fillable([
-    'user_id', 'affiliate_link_id', 'amount', 'status', 'order_id',
+    'user_id', 'affiliate_link_id', 'type', 'amount', 'status', 'order_id',
     'confirmed_at', 'paid_at',
 ])]
 class Commission extends Model
 {
     use HasFactory;
+
+    /** Hoa hồng thật từ đơn hàng — loại mặc định. */
+    public const TYPE_CASHBACK = 'cashback';
+
+    /** Tiền thưởng khi đăng ký (xem WelcomeBonusService). Không phải tiền từ đơn nào. */
+    public const TYPE_WELCOME_BONUS = 'welcome_bonus';
 
     protected function casts(): array
     {

@@ -6,6 +6,7 @@ import BottomNav from '@/Components/BottomNav.vue'
 import ToastContainer from '@/Components/ToastContainer.vue'
 import ThemeToggle from '@/Components/ThemeToggle.vue'
 import FestiveDecor from '@/Components/FestiveDecor.vue'
+import NotificationBell from '@/Components/NotificationBell.vue'
 import { useCashback } from '@/composables/useCashback'
 
 const auth = useAuthStore()
@@ -74,6 +75,8 @@ const maintenanceMode = computed(() => page.props.settings?.maintenanceMode ?? f
                         </svg>
                     </Link>
                     <ThemeToggle />
+                    <!-- Tự ẩn khi không có dữ liệu (khách vãng lai, admin) — xem HandleInertiaRequests. -->
+                    <NotificationBell />
                     <template v-if="auth.isLoggedIn">
                         <Link v-if="!auth.isAdmin" href="/profile" class="hidden md:block text-sm text-[var(--color-muted)] hover:text-[var(--color-ink)] font-medium transition">{{ auth.user?.name }}</Link>
                         <span v-else class="hidden md:block text-sm text-[var(--color-muted)] font-medium">{{ auth.user?.name }}</span>

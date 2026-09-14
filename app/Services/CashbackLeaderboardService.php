@@ -221,6 +221,8 @@ class CashbackLeaderboardService
     private function eligibleCommissions(CarbonImmutable $month): Builder
     {
         return Commission::query()
+            // Thưởng người mới không phải mua sắm — lên bảng là ai cũng có 5.000đ, vô nghĩa.
+            ->where('commissions.type', Commission::TYPE_CASHBACK)
             ->whereIn('commissions.status', ['approved', 'paid'])
             ->whereBetween('commissions.confirmed_at', [$month, $month->endOfMonth()]);
     }

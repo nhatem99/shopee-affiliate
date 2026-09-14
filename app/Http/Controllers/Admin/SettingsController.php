@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\Setting;
 use App\Services\CashbackLeaderboardService;
 use App\Services\CashbackService;
+use App\Services\WelcomeBonusService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
@@ -22,6 +23,8 @@ class SettingsController extends Controller
             'leaderboardDemo' => Setting::getBool(CashbackLeaderboardService::DEMO_KEY, CashbackLeaderboardService::DEMO_DEFAULT),
             'communityUrl' => Setting::get('community_url') ?: '',
             'cashbackRate' => (float) Setting::get(CashbackService::RATE_KEY, 0),
+            'welcomeBonusEnabled' => Setting::getBool(WelcomeBonusService::ENABLED_KEY, true),
+            'welcomeBonusAmount' => (float) Setting::get(WelcomeBonusService::AMOUNT_KEY, WelcomeBonusService::DEFAULT_AMOUNT),
             // Trả về null (không phải 0) khi chưa đặt, để ô nhập hiện trống = "theo tỉ lệ thực".
             'cashbackDisplayRate' => Setting::get(CashbackService::DISPLAY_RATE_KEY) !== null
                 && Setting::get(CashbackService::DISPLAY_RATE_KEY) !== ''
@@ -42,7 +45,18 @@ class SettingsController extends Controller
             'community_url' => ['sometimes', 'nullable', 'url', 'max:255'],
             'cashback_rate' => ['sometimes', 'numeric', 'min:0', 'max:100'],
             'cashback_display_rate' => ['sometimes', 'nullable', 'numeric', 'min:0', 'max:100'],
+            'welcome_bonus_enabled' => ['sometimes', 'boolean'],
+            'welcome_bonus_amount' => ['sometimes', 'integer', 'min:0', 'max:1000000'],
         ]);
+
+        if (array_key_exists('welcome_bonus_enabled', $validated)) {
+            Setting::set(WelcomeBonusService::ENABLED_KEY, $validated['welcome_bonus_enabled'] ? '1' : '0');
+        }
+
+        // Chỉ áp cho tài khoản đăng ký TỪ ĐÂY về sau — không cộng/trừ lại ai đã nhận rồi.
+        if (array_key_exists('welcome_bonus_amount', $validated)) {
+            Setting::set(WelcomeBonusService::AMOUNT_KEY, (string) $validated['welcome_bonus_amount']);
+        }
 
         if (array_key_exists('customer_auth_enabled', $validated)) {
             Setting::set('customer_auth_enabled', $validated['customer_auth_enabled'] ? '1' : '0');

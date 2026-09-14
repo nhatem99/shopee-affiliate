@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Auth;
 
 use App\Http\Controllers\Controller;
 use App\Models\User;
+use App\Services\WelcomeBonusService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -13,9 +14,14 @@ use Inertia\Response;
 
 class RegisterController extends Controller
 {
+    public function __construct(private readonly WelcomeBonusService $welcome) {}
+
     public function show(): Response
     {
-        return Inertia::render('Auth/Register');
+        return Inertia::render('Auth/Register', [
+            // 0 khi đang tắt — trang chỉ nhắc tới thưởng khi thật sự có.
+            'welcomeBonus' => $this->welcome->promisedAmount(),
+        ]);
     }
 
     public function store(Request $request): RedirectResponse
@@ -37,6 +43,7 @@ class RegisterController extends Controller
         ]);
 
         $user->assignRole('user');
+        $this->welcome->welcome($user, 'email');
 
         Auth::login($user);
         $request->session()->regenerate();

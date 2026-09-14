@@ -13,6 +13,8 @@ const props = defineProps({
     cashbackRate: { type: Number, default: 0 },
     // null = chưa đặt riêng, khách đang thấy đúng tỉ lệ thực.
     cashbackDisplayRate: { type: Number, default: null },
+    welcomeBonusEnabled: { type: Boolean, default: true },
+    welcomeBonusAmount: { type: Number, default: 5000 },
 })
 
 const toast = useToast()
@@ -30,6 +32,10 @@ const cashbackRate = ref(props.cashbackRate)
 const savingCashbackRate = ref(false)
 const cashbackDisplayRate = ref(props.cashbackDisplayRate ?? '')
 const savingCashbackDisplayRate = ref(false)
+const welcomeBonusEnabled = ref(props.welcomeBonusEnabled)
+const savingWelcomeBonus = ref(false)
+const welcomeBonusAmount = ref(props.welcomeBonusAmount)
+const savingWelcomeBonusAmount = ref(false)
 
 // Đồng bộ lại nếu server trả về giá trị khác (ví dụ sau khi lưu xong)
 watch(() => props.customerAuthEnabled, (v) => { customerAuthEnabled.value = v })
@@ -39,6 +45,8 @@ watch(() => props.leaderboardDemo, (v) => { leaderboardDemo.value = v })
 watch(() => props.communityUrl, (v) => { communityUrl.value = v })
 watch(() => props.cashbackRate, (v) => { cashbackRate.value = v })
 watch(() => props.cashbackDisplayRate, (v) => { cashbackDisplayRate.value = v ?? '' })
+watch(() => props.welcomeBonusEnabled, (v) => { welcomeBonusEnabled.value = v })
+watch(() => props.welcomeBonusAmount, (v) => { welcomeBonusAmount.value = v })
 
 function toggleCustomerAuth() {
     const next = !customerAuthEnabled.value
@@ -126,6 +134,33 @@ function saveCashbackRate() {
             : 'Đã tắt hoàn tiền — đơn mới sẽ không sinh hoa hồng cho khách.'),
         onError: (errors) => toast.error(errors.cashback_rate || 'Không lưu được tỉ lệ, vui lòng thử lại.'),
         onFinish: () => { savingCashbackRate.value = false },
+    })
+}
+
+function toggleWelcomeBonus() {
+    const next = !welcomeBonusEnabled.value
+    savingWelcomeBonus.value = true
+
+    router.post('/admin/settings', { welcome_bonus_enabled: next }, {
+        preserveScroll: true,
+        onSuccess: () => {
+            welcomeBonusEnabled.value = next
+            toast.success(next ? 'Đã bật thưởng người mới.' : 'Đã tắt — tài khoản mới không được cộng thưởng nữa.')
+        },
+        onError: () => toast.error('Không lưu được, vui lòng thử lại.'),
+        onFinish: () => { savingWelcomeBonus.value = false },
+    })
+}
+
+function saveWelcomeBonusAmount() {
+    savingWelcomeBonusAmount.value = true
+    const value = Math.max(0, Math.round(Number(welcomeBonusAmount.value) || 0))
+
+    router.post('/admin/settings', { welcome_bonus_amount: value }, {
+        preserveScroll: true,
+        onSuccess: () => toast.success(`Tài khoản đăng ký từ giờ được thưởng ${value.toLocaleString('vi-VN')} đ.`),
+        onError: (errors) => toast.error(errors.welcome_bonus_amount || 'Không lưu được, vui lòng thử lại.'),
+        onFinish: () => { savingWelcomeBonusAmount.value = false },
     })
 }
 
@@ -356,6 +391,59 @@ function saveCashbackDisplayRate() {
                 >
                     ⚠️ Khách đang thấy <strong>{{ Number(cashbackDisplayRate) }}%</strong> nhưng ví thực trả <strong>{{ Number(cashbackRate) }}%</strong>.
                     Trang Đơn hàng của khách vẫn ghi tỉ lệ thực vì nó giải thích cách tính từng khoản tiền.
+                </div>
+            </div>
+
+            <div class="bg-[var(--color-surface)] rounded-2xl border border-[var(--color-line)] p-6">
+                <div class="flex items-start justify-between gap-6">
+                    <div class="min-w-0">
+                        <h2 class="font-bold text-[var(--color-ink)] mb-1">Thưởng người mới</h2>
+                        <p class="text-sm text-[var(--color-muted)] leading-relaxed">
+                            Cộng thẳng vào ví ngay khi khách tạo tài khoản (email hoặc Google), kèm thông báo.
+                            Khách <strong class="text-[var(--color-ink)]">không rút được</strong> nếu chưa có đơn nào được hoàn tiền thật,
+                            nên không sợ cày tài khoản ảo. Đổi số tiền chỉ áp cho tài khoản đăng ký từ đó về sau.
+                        </p>
+                    </div>
+                    <button
+                        type="button"
+                        role="switch"
+                        :aria-checked="welcomeBonusEnabled"
+                        :disabled="savingWelcomeBonus"
+                        @click="toggleWelcomeBonus"
+                        class="relative inline-flex h-7 w-12 flex-none items-center rounded-full transition-colors disabled:opacity-60"
+                        :class="welcomeBonusEnabled ? 'bg-[var(--color-brand-green)]' : 'bg-[var(--color-line)]'"
+                    >
+                        <span class="inline-block h-5 w-5 rounded-full bg-white shadow transition-transform" :class="welcomeBonusEnabled ? 'translate-x-6' : 'translate-x-1'"></span>
+                    </button>
+                </div>
+
+                <div class="mt-4 flex flex-col sm:flex-row gap-2">
+                    <div class="relative flex-1 min-w-0">
+                        <input
+                            v-model="welcomeBonusAmount"
+                            type="number"
+                            min="0"
+                            step="1000"
+                            @keydown.enter="saveWelcomeBonusAmount"
+                            class="w-full px-4 py-2.5 pr-10 rounded-xl border border-[var(--color-line)] bg-[var(--color-bg)] text-sm text-[var(--color-ink)] tabular-nums focus:outline-none focus:border-[var(--color-accent)]"
+                        />
+                        <span class="absolute right-4 top-1/2 -translate-y-1/2 text-sm text-[var(--color-muted)] pointer-events-none">đ</span>
+                    </div>
+                    <button
+                        type="button"
+                        @click="saveWelcomeBonusAmount"
+                        :disabled="savingWelcomeBonusAmount"
+                        class="btn-fire px-6 py-2.5 rounded-xl text-sm whitespace-nowrap disabled:opacity-60"
+                    >{{ savingWelcomeBonusAmount ? 'Đang lưu...' : 'Lưu số tiền' }}</button>
+                </div>
+
+                <div class="mt-4 pt-4 border-t border-[var(--color-line)] flex items-center gap-2 text-sm">
+                    <span class="w-2 h-2 rounded-full flex-none" :class="welcomeBonusEnabled && Number(welcomeBonusAmount) > 0 ? 'bg-[var(--color-brand-green)]' : 'bg-[var(--color-muted)]'"></span>
+                    <span class="text-[var(--color-ink)] font-medium">
+                        {{ welcomeBonusEnabled && Number(welcomeBonusAmount) > 0
+                            ? `Đang tặng ${Number(welcomeBonusAmount).toLocaleString('vi-VN')} đ cho mỗi tài khoản mới.`
+                            : 'Đang tắt — tài khoản mới không được thưởng.' }}
+                    </span>
                 </div>
             </div>
 

@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Auth;
 use App\Http\Controllers\Controller;
 use App\Models\User;
 use App\Services\TrackingService;
+use App\Services\WelcomeBonusService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -14,7 +15,10 @@ use Laravel\Socialite\Two\InvalidStateException;
 
 class GoogleController extends Controller
 {
-    public function __construct(private TrackingService $tracking) {}
+    public function __construct(
+        private TrackingService $tracking,
+        private WelcomeBonusService $welcome,
+    ) {}
 
     public function redirect(): RedirectResponse
     {
@@ -59,6 +63,7 @@ class GoogleController extends Controller
             ]);
 
             $user->assignRole('user');
+            $this->welcome->welcome($user, 'google');
         }
 
         Auth::login($user, true);

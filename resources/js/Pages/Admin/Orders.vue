@@ -72,7 +72,10 @@ function approve(orderId) {
                     <tr v-for="order in orders?.data" :key="order.id">
                         <td class="px-6 py-4 text-[var(--color-muted)]">#{{ order.id }}</td>
                         <td class="px-6 py-4 font-medium text-[var(--color-ink)]">{{ order.user }}</td>
-                        <td class="px-6 py-4 text-[var(--color-ink)]/70 max-w-[180px] truncate">{{ order.product }}</td>
+                        <td class="px-6 py-4 text-[var(--color-ink)]/70 max-w-[180px] truncate">
+                            <span v-if="order.type === 'welcome_bonus'" class="px-2 py-0.5 rounded-full text-xs font-semibold bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300">🎁 Thưởng người mới</span>
+                            <template v-else>{{ order.product }}</template>
+                        </td>
                         <td class="px-6 py-4 font-semibold text-[var(--color-brand-green)]">{{ vnd(order.amount) }}</td>
                         <td class="px-6 py-4">
                             <span :class="statusColors[order.status]" class="px-2 py-1 rounded-full text-xs font-semibold">

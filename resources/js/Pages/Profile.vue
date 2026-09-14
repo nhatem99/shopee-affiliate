@@ -63,7 +63,11 @@ const hasAnyAccount = computed(() =>
 
 // --- Rút tiền ---
 const showWithdraw = ref(false)
-const canWithdraw = computed(() => props.balance.available >= props.minWithdrawal && hasAnyAccount.value)
+// Ba điều kiện: đủ mức tối thiểu, có ví nhận tiền, và đã có ít nhất một đơn hoàn tiền thật —
+// thưởng người mới không rút được một mình (server cũng chặn, xem WithdrawalController).
+const canWithdraw = computed(() =>
+    props.balance.available >= props.minWithdrawal && hasAnyAccount.value && props.balance.hasRealCashback
+)
 
 const availableProviders = computed(() =>
     providers.filter(p => props.payoutAccounts?.[p.key])
@@ -124,9 +128,14 @@ const providerLabels = { momo: 'MoMo', zalopay: 'ZaloPay' }
                         </p>
                         <!-- Con số ở trên là tổng; đây là đường tới phần giải thích nó được cộng
                              từ những đơn nào. -->
-                        <Link href="/don-hang" class="text-xs font-semibold text-[var(--color-accent)] hover:underline mt-1 inline-block">
-                            Xem từng đơn và tiền hoàn →
-                        </Link>
+                        <div class="flex flex-wrap gap-x-4 gap-y-1 mt-1">
+                            <Link href="/don-hang" class="text-xs font-semibold text-[var(--color-accent)] hover:underline">
+                                Xem từng đơn và tiền hoàn →
+                            </Link>
+                            <Link href="/vi/lich-su" class="text-xs font-semibold text-[var(--color-accent)] hover:underline">
+                                Lịch sử số dư ví →
+                            </Link>
+                        </div>
                     </div>
                     <button
                         @click="openWithdraw"
@@ -154,7 +163,7 @@ const providerLabels = { momo: 'MoMo', zalopay: 'ZaloPay' }
                 </div>
 
                 <p v-if="!canWithdraw" class="text-xs text-[var(--color-muted)] mt-3">
-                    Cần số dư tối thiểu {{ vnd(minWithdrawal) }} và ít nhất một ví nhận tiền để rút.
+                    Cần số dư tối thiểu {{ vnd(minWithdrawal) }}, ít nhất một ví nhận tiền{{ balance.hasRealCashback ? '' : ' và một đơn hàng đã được hoàn tiền' }} để rút.
                 </p>
                 <!-- Nói trước việc duyệt tay. Đây là câu đứng giữa khách và cơn giận "gửi lệnh rút
                      cả tiếng rồi mà chưa thấy tiền đâu" — WithdrawalController tạo lệnh ở trạng
@@ -167,8 +176,12 @@ const providerLabels = { momo: 'MoMo', zalopay: 'ZaloPay' }
             <!-- Ví rỗng và chưa từng rút: chỉ đường thay vì để khách nhìn số 0 rồi thoát. Đây là
                  điểm rơi lớn nhất của nhóm khách đã chịu đăng ký — họ vào xem ví ngay sau khi đăng
                  ký, thấy ₫0 và nút Rút tiền xám ngắt. -->
-            <div v-if="balance.earned <= 0 && !withdrawals?.length" class="card-glass rounded-2xl p-6">
-                <h2 class="font-bold text-[var(--color-ink)] mb-1">Ví chưa có gì — bắt đầu thế nào?</h2>
+            <!-- Dựa vào hasRealCashback chứ không phải earned: có thưởng người mới thì earned > 0
+                 nhưng khách vẫn chưa làm gì cả — vẫn cần được chỉ đường. -->
+            <div v-if="!balance.hasRealCashback && !withdrawals?.length" class="card-glass rounded-2xl p-6">
+                <h2 class="font-bold text-[var(--color-ink)] mb-1">
+                    {{ balance.earned > 0 ? 'Có quà chào mừng rồi — mua đơn đầu tiên để rút được' : 'Ví chưa có gì — bắt đầu thế nào?' }}
+                </h2>
                 <p class="text-xs text-[var(--color-muted)] mb-4">Ba bước, làm một lần rồi thôi.</p>
                 <ol class="space-y-3 text-sm text-[var(--color-ink)]">
                     <li class="flex gap-3">

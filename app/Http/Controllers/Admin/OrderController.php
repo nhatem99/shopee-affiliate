@@ -23,6 +23,7 @@ class OrderController extends Controller
             'id' => $c->id,
             'user' => $c->user?->name,
             'product' => $c->affiliateLink?->product_name,
+            'type' => $c->type,
             'platform' => $c->affiliateLink?->platform,
             'amount' => $c->amount,
             'status' => $c->status,

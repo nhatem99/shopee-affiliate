@@ -20,6 +20,7 @@ use App\Http\Controllers\Auth\GoogleController;
 use App\Http\Controllers\Auth\LoginController;
 use App\Http\Controllers\Auth\RegisterController;
 use App\Http\Controllers\BlogController;
+use App\Http\Controllers\NotificationController;
 use App\Http\Controllers\OrderHistoryController;
 use App\Http\Controllers\ProfileController;
 use App\Http\Controllers\ShopeeVoucherController;
@@ -121,6 +122,10 @@ Route::middleware('auth')->group(function () {
     Route::patch('/profile', [ProfileController::class, 'updateProfile'])->name('profile.update');
     Route::post('/profile/payout', [ProfileController::class, 'storePayoutAccount'])->name('profile.payout');
     Route::post('/withdrawals', [WithdrawalController::class, 'store'])->middleware('throttle:withdrawals')->name('withdrawals.store');
+    Route::get('/vi/lich-su', [ProfileController::class, 'walletHistory'])->name('wallet.history');
+    Route::get('/thong-bao', [NotificationController::class, 'index'])->name('notifications');
+    Route::post('/thong-bao/doc-het', [NotificationController::class, 'readAll'])->name('notifications.readAll');
+    Route::post('/thong-bao/{id}/doc', [NotificationController::class, 'read'])->name('notifications.read');
 });
 
 // Admin routes

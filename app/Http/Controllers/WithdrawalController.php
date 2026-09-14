@@ -31,6 +31,14 @@ class WithdrawalController extends Controller
                 ]);
             }
 
+            // Thưởng người mới là tiền cho không — phải có ít nhất một đơn thật được hoàn tiền
+            // mới rút được, kể cả khi tổng ví đã vượt mức tối thiểu (xem User::hasRealCashback).
+            if (! $user->hasRealCashback()) {
+                throw ValidationException::withMessages([
+                    'amount' => 'Cần có ít nhất một đơn hàng được hoàn tiền trước khi rút.',
+                ]);
+            }
+
             if ($data['amount'] > $user->availableBalance()) {
                 throw ValidationException::withMessages([
                     'amount' => 'Số tiền rút vượt quá số dư khả dụng.',

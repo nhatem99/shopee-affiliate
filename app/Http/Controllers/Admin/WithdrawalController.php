@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
 use App\Models\Withdrawal;
+use App\Notifications\WithdrawalStatusNotification;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Validation\ValidationException;
@@ -66,6 +67,8 @@ class WithdrawalController extends Controller
             'completed_at' => $data['status'] === 'completed' ? now() : $withdrawal->completed_at,
             'rejected_at' => $data['status'] === 'rejected' ? now() : $withdrawal->rejected_at,
         ]);
+
+        $withdrawal->user?->notify(new WithdrawalStatusNotification($withdrawal->fresh()));
 
         return back()->with('success', 'Cập nhật yêu cầu rút tiền thành công.');
     }

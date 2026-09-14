@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\PayoutAccount;
+use App\Services\WalletHistoryService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
@@ -39,6 +40,9 @@ class ProfileController extends Controller
                 'earned' => $user->approvedCommissionTotal(),
                 'reserved' => $user->reservedWithdrawalTotal(),
                 'available' => $user->availableBalance(),
+                // Điều kiện rút thứ ba (ngoài mức tối thiểu và ví nhận tiền): thưởng người mới
+                // không rút được một mình — xem WithdrawalController.
+                'hasRealCashback' => $user->hasRealCashback(),
             ],
             'withdrawals' => $user->withdrawals()->latest()->get()->map(fn ($w) => [
                 'id' => $w->id,
@@ -52,6 +56,18 @@ class ProfileController extends Controller
                 'created_at' => $w->created_at->toDateTimeString(),
             ]),
             'minWithdrawal' => self::MIN_WITHDRAWAL,
+        ]);
+    }
+
+    public function walletHistory(Request $request, WalletHistoryService $history): Response
+    {
+        $this->ensureNotAdmin($request);
+
+        $user = $request->user();
+
+        return Inertia::render('WalletHistory', [
+            'available' => $user->availableBalance(),
+            'events' => $history->timeline($user),
         ]);
     }
 

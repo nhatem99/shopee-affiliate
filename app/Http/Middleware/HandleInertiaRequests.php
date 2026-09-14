@@ -2,6 +2,7 @@
 
 namespace App\Http\Middleware;
 
+use App\Http\Controllers\NotificationController;
 use App\Http\Controllers\ProfileController;
 use App\Models\Setting;
 use App\Services\CashbackService;
@@ -28,6 +29,9 @@ class HandleInertiaRequests extends Middleware
                     'role' => $request->user()->role,
                 ] : null,
             ],
+            // Chuông thông báo ở header. Chỉ khách (không phải admin) mới có; đóng trong closure
+            // để không tốn hai truy vấn cho khách vãng lai và các request partial reload.
+            'notifications' => fn () => $this->notifications($request),
             'flash' => [
                 'success' => fn () => $request->session()->get('success'),
                 'error' => fn () => $request->session()->get('error'),
@@ -62,5 +66,25 @@ class HandleInertiaRequests extends Middleware
                 'festiveDecor' => Setting::getBool('festive_decor', false),
             ],
         ]);
+    }
+
+    /**
+     * @return array{unread: int, latest: array<int, array<string, mixed>>}|null
+     */
+    private function notifications(Request $request): ?array
+    {
+        $user = $request->user();
+
+        if (! $user || $user->isAdmin()) {
+            return null;
+        }
+
+        return [
+            'unread' => $user->unreadNotifications()->count(),
+            'latest' => $user->notifications()->limit(5)->get()
+                ->map(fn ($n) => NotificationController::present($n))
+                ->values()
+                ->all(),
+        ];
     }
 }

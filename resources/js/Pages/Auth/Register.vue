@@ -2,6 +2,15 @@
 import { Head, useForm, Link } from '@inertiajs/vue3'
 import ThemeToggle from '@/Components/ThemeToggle.vue'
 
+// 0 khi admin đang tắt thưởng — không hứa suông.
+const props = defineProps({
+    welcomeBonus: { type: Number, default: 0 },
+})
+
+function vnd(n) {
+    return Number(n || 0).toLocaleString('vi-VN') + ' đ'
+}
+
 const form = useForm({
     name: '',
     email: '',
@@ -23,6 +32,9 @@ function submit() {
             <div class="text-center mb-8">
                 <h1 class="text-2xl font-extrabold text-[var(--color-ink)]">Tạo tài khoản</h1>
                 <p class="text-[var(--color-muted)] text-sm mt-1">Miễn phí, không quảng cáo</p>
+                <p v-if="props.welcomeBonus > 0" class="inline-flex items-center gap-1.5 mt-3 px-3 py-1.5 rounded-full bg-[var(--color-peach-soft)] text-xs font-semibold text-[var(--color-ink)]">
+                    🎁 Tặng ngay {{ vnd(props.welcomeBonus) }} vào ví khi tạo tài khoản
+                </p>
             </div>
 
             <p v-if="$page.props.flash?.error" class="mb-4 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
