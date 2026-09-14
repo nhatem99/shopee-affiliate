@@ -251,11 +251,12 @@ const ctaLabel = computed(() => {
 // giữa hai nhịp có request đăng comment, xong request là mất "user gesture".
 const readyLinks = ref({})
 
-// --- Chế độ mã YTB: bước 1 kích hoạt trên máy khách ---
-// Server trả `ytb_activate_url` (/ytb/{ref}) khi mã cần kích hoạt YouTube trước. Khách phải TỰ
-// bấm mở link đó (Shopee ghi nhận mã trên chính máy khách — server mở hộ hay xâu vào trước link
-// đích đều đã thử và không ra mã), quay lại rồi mới bấm Facebook/Mua ngay. Nhớ ref đã kích hoạt
-// trong sessionStorage: bấm bước 1 là rời trang sang Shopee, quay lại có thể là tải lại trang.
+// --- Chế độ mã YTB: bước kích hoạt trên máy khách ---
+// Server trả `ytb_activate_url` (/ytb/{ref}) khi mã cần kích hoạt YouTube trước — openVoucherLink()
+// giờ tự mở link đó trong một tab nền ngay khi khách bấm "Mua ngay"/"Lấy mã qua Facebook" (Shopee
+// ghi nhận mã trên chính máy khách; server tự mở hộ hay xâu vào trước link đích đều đã thử và
+// không ra mã, xem VoucherFetchService). isYtbActivated/sessionStorage chỉ để khỏi mở lại tab nền
+// một cách vô ích khi ref đã kích hoạt trong phiên này (ví dụ khách bấm mua lại đúng sản phẩm đó).
 const YTB_STORAGE_KEY = 'sv_ytb_activated'
 const ytbActivatedRefs = ref(readYtbActivated())
 
@@ -277,17 +278,9 @@ function markYtbActivated(voucherRef) {
     try {
         sessionStorage.setItem(YTB_STORAGE_KEY, JSON.stringify(ytbActivatedRefs.value))
     } catch (e) {
-        // Không lưu được thì chỉ mất trạng thái khi tải lại trang — khách bấm lại bước 1 là xong.
+        // Không lưu được thì mỗi lượt bấm lại tự mở tab nền kích hoạt lại — tốn 1.5s thừa,
+        // không hỏng gì.
     }
-}
-
-// Bước 2 (nút kết quả) bị khoá cho tới khi khách bấm bước 1 — nếu không khách bấm thẳng bước 2
-// như thói quen, sang Shopee không thấy mã YTB rồi tưởng trang hỏng.
-const ytbBlocked = computed(() => !!props.voucherResult?.ytb_activate_url
-    && !isYtbActivated(props.voucherResult?.voucher_ref))
-
-function historyYtbBlocked(h) {
-    return !!h.ytb_activate_url && !isYtbActivated(h.ref)
 }
 
 const ua = typeof navigator !== 'undefined' ? navigator.userAgent : ''
@@ -354,6 +347,10 @@ function facebookAppLink(url) {
     return `intent://${url.slice('https://'.length)}#Intent;scheme=https;package=com.facebook.katana;S.browser_fallback_url=${encodeURIComponent(url)};end`
 }
 
+function sleep(ms) {
+    return new Promise((resolve) => setTimeout(resolve, ms))
+}
+
 // Đổi voucher_ref (token mờ) lấy short-link thật. Dùng chung cho mọi đường: bấm mở, tự chuyển
 // hướng, và copy link.
 async function fetchVoucherUrl(entry, productName = null, productImage = null) {
@@ -404,13 +401,33 @@ async function openVoucherLink(entry, productName = null, productImage = null) {
     shorteningKey.value = entry.key
 
     // Chế độ Facebook: chỉ lấy link rồi hiện anchor, tuyệt đối không window.open/location.href
-    // — điều hướng bằng JS là lý do app Facebook không bao giờ được bật lên (xem readyLinks).
+    // CHO LINK FACEBOOK — điều hướng bằng JS là lý do app Facebook không bao giờ được bật lên
+    // (xem readyLinks/facebookAppLink). Nút "Mở Facebook ngay" bên dưới vẫn phải là cú CHẠM TAY
+    // THẬT riêng, không gộp được vào đây.
     if (props.viaFacebookComment) {
+        // THỬ NGHIỆM — gộp bước kích hoạt YTB vào chung cú bấm này bằng một tab NỀN riêng (không
+        // phải tab sẽ mở Facebook): mở tab trắng NGAY lúc click để giữ "user gesture", đưa nó
+        // sang link YTB, đợi đủ 1.5s cho Shopee kịp ghi cookie trên máy khách rồi đóng tab đó lại
+        // — khách không cần tự bấm/quay lại bước 1 nữa. Không đụng gì tới readyLinks/anchor
+        // Facebook, giữ nguyên yêu cầu chạm tay thật ở bước mở Facebook (xem comment phía trên).
+        const needsYtb = !!entry.ytb_activate_url && !isYtbActivated(entry.ref)
+        const ytbTab = needsYtb ? window.open('', '_blank') : null
+
+        if (needsYtb && ytbTab) {
+            ytbTab.location.href = entry.ytb_activate_url
+            markYtbActivated(entry.ref)
+        }
+
         try {
-            readyLinks.value[entry.key] = await fetchVoucherUrl(entry, productName, productImage)
+            const [url] = await Promise.all([
+                fetchVoucherUrl(entry, productName, productImage),
+                needsYtb ? sleep(1500) : Promise.resolve(),
+            ])
+            readyLinks.value[entry.key] = url
         } catch (e) {
             toast.error('Không thể tạo link, vui lòng thử lại.')
         } finally {
+            ytbTab?.close()
             shorteningKey.value = null
         }
 
@@ -420,13 +437,37 @@ async function openVoucherLink(entry, productName = null, productImage = null) {
     // Mở tab trắng NGAY trong lúc click (đồng bộ) để trình duyệt không chặn popup —
     // nếu đợi axios xong mới gọi window.open() thì đã mất "user gesture", dễ bị chặn.
     const newTab = window.open('', '_blank')
-    // Ghi tạm 1 trang loading vào tab đó — bước tạo link có thể mất vài giây (theo dõi
-    // redirect chuỗi + có thể đăng comment Facebook), tab trắng trơn trong lúc chờ dễ khiến
-    // khách tưởng bị treo rồi đóng tab/bấm lại.
-    newTab?.document.write('<!DOCTYPE html><html lang="vi"><head><meta charset="utf-8"><title>Đang tạo liên kết...</title><style>body{display:flex;align-items:center;justify-content:center;height:100vh;margin:0;font-family:system-ui,sans-serif;color:#666;background:#fafafa}</style></head><body>Đang tạo liên kết, vui lòng đợi giây lát...</body></html>')
+
+    // THỬ NGHIỆM — gộp bước 1 (kích hoạt YouTube) vào chung cú bấm "Mua ngay", thay vì bắt khách
+    // tự bấm 2 lần. Cùng MỘT tab vừa mở: đưa nó sang link YTB trước (Nav A, để Shopee ghi cookie
+    // mã YTB trên máy khách), đợi ít nhất 1.5s cho trang đó kịp chạy xong JS của họ, rồi mới đổi
+    // tab sang link mua thật (Nav B) — không mở thêm popup thứ hai vì nhiều trình duyệt di động
+    // chỉ cho đúng 1 popup mỗi cử chỉ bấm. Đổi location của MỘT tab đang mở (kể cả sau khi nó đã
+    // rời sang domain khác) vẫn được phép — khác NHỚ đọc thuộc tính của tab cross-origin (bị
+    // chặn), đây chỉ GHI nên không sao. Nhánh Facebook ở trên làm tương tự nhưng bằng TAB NỀN
+    // riêng, vì tab chính ở đó phải dành cho thẻ <a> Mở Facebook thật.
+    //
+    // CHƯA kiểm chứng trên máy thật: đây là hướng khác 2 cách đã thử và thất bại trước đó (server
+    // tự mở hộ, và xâu link vào origin_link — xem VoucherFetchService/ShortLinkController), nhưng
+    // vẫn là điều hướng bằng JS như comment ở nhánh Facebook phía trên từng cảnh báo có thể bị
+    // Safari/webview chặn khác với chạm tay thật vào thẻ <a>. Nếu test thật thấy KHÔNG ra mã YTB
+    // (Shopee không ghi nhận), quay lại giao diện 2 nút tường minh cũ — xem lịch sử git.
+    const needsYtb = !!entry.ytb_activate_url && !isYtbActivated(entry.ref)
+    if (needsYtb && newTab) {
+        newTab.location.href = entry.ytb_activate_url
+        markYtbActivated(entry.ref)
+    } else {
+        // Ghi tạm 1 trang loading vào tab đó — bước tạo link có thể mất vài giây (theo dõi
+        // redirect chuỗi + có thể đăng comment Facebook), tab trắng trơn trong lúc chờ dễ khiến
+        // khách tưởng bị treo rồi đóng tab/bấm lại.
+        newTab?.document.write('<!DOCTYPE html><html lang="vi"><head><meta charset="utf-8"><title>Đang tạo liên kết...</title><style>body{display:flex;align-items:center;justify-content:center;height:100vh;margin:0;font-family:system-ui,sans-serif;color:#666;background:#fafafa}</style></head><body>Đang tạo liên kết, vui lòng đợi giây lát...</body></html>')
+    }
 
     try {
-        const url = await fetchVoucherUrl(entry, productName, productImage)
+        const [url] = await Promise.all([
+            fetchVoucherUrl(entry, productName, productImage),
+            needsYtb ? sleep(1500) : Promise.resolve(),
+        ])
         if (newTab) {
             newTab.location.href = url
         } else {
@@ -697,43 +738,17 @@ onUnmounted(() => {
                         <span v-else>Đang chuyển tới mã giảm giá, vui lòng đợi giây lát...</span>
                     </div>
 
-                    <!-- Chế độ mã YTB, bước 1: khách tự mở link YouTube để Shopee ghi nhận mã trên
-                         máy mình, rồi quay lại làm bước 2. Thẻ <a> thật, cùng tab, KHÔNG target=_blank
-                         — cùng lý do với nút Facebook: tab mới làm hỏng universal link mở app.
-                         Nút bước 2 bên dưới khoá cho tới khi bấm ở đây (ytbBlocked). -->
-                    <div
-                        v-if="!autoRedirecting && voucherResult.voucher_ref && voucherResult.ytb_activate_url"
-                        class="mb-3 mt-3 rounded-xl border border-[#FF0000]/30 bg-[#FF0000]/5 px-4 py-3"
-                    >
-                        <p class="text-sm font-bold text-[var(--color-ink)] mb-2">Mã này cần kích hoạt YouTube trước — làm theo thứ tự:</p>
-                        <ol class="text-xs text-[var(--color-ink)] leading-relaxed space-y-1 list-decimal list-inside mb-3">
-                            <li>Bấm <b>Kích hoạt mã YouTube</b> → Shopee mở ra. Không cần làm gì ở đó, <b>quay lại đây</b>.</li>
-                            <li>Bấm tiếp nút <b>{{ viaFacebookComment ? 'Lấy mã qua Facebook' : 'Mua ngay' }}</b> bên dưới như bình thường.</li>
-                        </ol>
-                        <a
-                            v-if="ytbBlocked"
-                            :href="voucherResult.ytb_activate_url"
-                            @click="markYtbActivated(voucherResult.voucher_ref)"
-                            class="w-full px-4 py-3 rounded-xl flex items-center justify-center gap-2 text-sm font-bold text-white bg-[#FF0000] hover:bg-[#d90000] transition no-underline animate-pulse-ring"
-                        >
-                            <span>▶️</span>
-                            <span>Bước 1: Kích hoạt mã YouTube</span>
-                        </a>
-                        <div v-else class="flex items-center gap-2 text-sm font-semibold text-[var(--color-brand-green)]">
-                            <span>✓</span>
-                            <span>Đã kích hoạt — làm tiếp bước 2 bên dưới.</span>
-                        </div>
-                        <button
-                            v-if="ytbBlocked"
-                            type="button"
-                            @click="markYtbActivated(voucherResult.voucher_ref)"
-                            class="mt-2 text-[11px] text-[var(--color-muted)] underline underline-offset-2"
-                        >Vừa kích hoạt rồi (Shopee đã mở)? Bỏ qua bước này</button>
-                    </div>
+                    <!-- Chế độ mã YTB: TRƯỚC ĐÂY hiện ở đây một panel đỏ bắt khách tự bấm "Kích
+                         hoạt mã YouTube" rồi quay lại mới được bấm tiếp — giờ cả hai nhánh (Mua
+                         ngay lẫn Lấy mã qua Facebook) đã tự gộp bước đó vào ngay cú bấm đầu tiên
+                         bằng một tab nền (xem openVoucherLink()), nên không cần panel/khoá riêng
+                         nữa. markYtbActivated/isYtbActivated vẫn giữ lại trong openVoucherLink()
+                         chỉ để khỏi kích hoạt lặp lại vô ích, không còn khoá UI theo trạng thái đó.
+                    -->
 
                     <!-- Nói trước khi khách bấm: nút này mở Facebook, không phải mở thẳng Shopee. -->
                     <div v-if="!autoRedirecting && viaFacebookComment && voucherResult.voucher_ref" class="mb-3 mt-3 rounded-xl border border-[#1877F2]/30 bg-[#1877F2]/5 px-4 py-3">
-                        <p class="text-sm font-bold text-[var(--color-ink)] mb-2">{{ voucherResult.ytb_activate_url ? 'Bước 2 — nhận mã qua Facebook:' : 'Mã này nhận qua Facebook — làm 2 bước:' }}</p>
+                        <p class="text-sm font-bold text-[var(--color-ink)] mb-2">Mã này nhận qua Facebook — làm 2 bước:</p>
                         <ol class="text-xs text-[var(--color-ink)] leading-relaxed space-y-1 list-decimal list-inside">
                             <li v-if="!isFacebookLink(readyLinks.result)">Bấm nút bên dưới → hệ thống lấy mã và hiện nút <b>Mở Facebook ngay</b>.</li>
                             <li v-else-if="facebookMode === 'reel'">Bấm <b>Mở Facebook ngay</b> → <b>ứng dụng Facebook mở ra</b> tại một reel.</li>
@@ -771,19 +786,8 @@ onUnmounted(() => {
                         <!-- Đã lấy được link comment: chuyển hẳn sang thẻ <a>. Cú chạm vào anchor
                              thật là điều kiện bắt buộc để iOS bật app Facebook; không dùng
                              target="_blank" vì tab mới cũng làm hỏng universal link. -->
-                        <!-- Chưa qua bước 1 (kích hoạt YouTube) thì khoá — kể cả khi link reel đã
-                             lấy sẵn (autoRedirect): bấm được là khách bỏ bước 1 rồi mất mã YTB. -->
-                        <button
-                            v-if="ytbBlocked"
-                            type="button"
-                            disabled
-                            class="btn-fire flex-1 min-w-0 px-6 py-4 rounded-xl flex items-center justify-center gap-2 text-base opacity-50 cursor-not-allowed"
-                        >
-                            <span>🔒</span>
-                            <span class="truncate">Bước 2: {{ viaFacebookComment ? 'Lấy mã qua Facebook' : 'Mua ngay' }}</span>
-                        </button>
                         <a
-                            v-else-if="readyLinks.result"
+                            v-if="readyLinks.result"
                             :href="facebookAppLink(readyLinks.result)"
                             @click="trackFacebookOpen(readyLinks.result, voucherResult.product?.product_name)"
                             class="btn-fire flex-1 min-w-0 px-6 py-4 rounded-xl flex items-center justify-center gap-2 text-base animate-pulse-ring no-underline"
@@ -793,7 +797,7 @@ onUnmounted(() => {
                         </a>
                         <button
                             v-else
-                            @click="openVoucherLink({ key: 'result', ref: voucherResult.voucher_ref })"
+                            @click="openVoucherLink({ key: 'result', ref: voucherResult.voucher_ref, ytb_activate_url: voucherResult.ytb_activate_url })"
                             :disabled="shorteningKey === 'result'"
                             class="btn-fire flex-1 min-w-0 px-6 py-4 rounded-xl flex items-center justify-center gap-2 text-base animate-pulse-ring disabled:opacity-60"
                         >
@@ -863,28 +867,10 @@ onUnmounted(() => {
                                 <span class="truncate flex-1 text-sm text-[var(--color-ink)] font-medium">{{ h.product_name || 'Sản phẩm' }}</span>
                                 <span class="text-[var(--color-muted)] text-xs whitespace-nowrap">{{ new Date(h.created_at).toLocaleDateString('vi-VN') }}</span>
                             </div>
-                            <!-- Chế độ mã YTB: mua lại từ lịch sử cũng phải kích hoạt YouTube trước
-                                 (bước 1) y như lần đầu — trạng thái nhớ theo ref trong sessionStorage. -->
+                            <!-- Chế độ mã YTB: bước kích hoạt YouTube giờ tự gộp vào cú bấm "Mua
+                                 lại" bên dưới (xem openVoucherLink()), không còn nút/khoá riêng. -->
                             <a
-                                v-if="h.ref && historyYtbBlocked(h)"
-                                :href="h.ytb_activate_url"
-                                @click="markYtbActivated(h.ref)"
-                                class="mb-2 px-4 py-2 rounded-lg text-xs inline-flex items-center gap-1.5 font-bold text-white bg-[#FF0000] no-underline"
-                            >
-                                <span>▶️</span> Bước 1: Kích hoạt mã YouTube
-                            </a>
-                            <!-- Mục cũ (trước khi chuyển sang một mã duy nhất) không có h.ref nên
-                                 không hiện nút — chúng tự trôi khỏi danh sách sau 5 lần quét mới. -->
-                            <button
-                                v-if="h.ref && historyYtbBlocked(h)"
-                                type="button"
-                                disabled
-                                class="btn-fire px-4 py-2 rounded-lg text-xs flex items-center gap-1.5 opacity-50 cursor-not-allowed"
-                            >
-                                <span>🔒</span> Bước 2: {{ viaFacebookComment ? 'Lấy mã qua Facebook' : 'Mua ngay' }}
-                            </button>
-                            <a
-                                v-else-if="h.ref && readyLinks[`hist-${hi}`]"
+                                v-if="h.ref && readyLinks[`hist-${hi}`]"
                                 :href="facebookAppLink(readyLinks[`hist-${hi}`])"
                                 @click="trackFacebookOpen(readyLinks[`hist-${hi}`], h.product_name)"
                                 class="btn-fire px-4 py-2 rounded-lg text-xs inline-flex items-center gap-1.5 no-underline"
@@ -894,7 +880,7 @@ onUnmounted(() => {
                             </a>
                             <button
                                 v-else-if="h.ref"
-                                @click="openVoucherLink({ key: `hist-${hi}`, ref: h.ref }, h.product_name, h.product_image)"
+                                @click="openVoucherLink({ key: `hist-${hi}`, ref: h.ref, ytb_activate_url: h.ytb_activate_url }, h.product_name, h.product_image)"
                                 :disabled="shorteningKey === `hist-${hi}`"
                                 class="btn-fire px-4 py-2 rounded-lg text-xs flex items-center gap-1.5 disabled:opacity-60"
                             >
