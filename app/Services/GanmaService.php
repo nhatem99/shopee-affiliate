@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use App\Exceptions\AffiliateScanException;
 use App\Models\ApiConfig;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
@@ -36,6 +37,13 @@ class GanmaService
 
     /** Domain link ngắn của Shopee mà ganma chấp nhận — đo thật, cả ba đều tạo được job. */
     private const ACCEPTED_HOSTS = ['vn.shp.ee', 'shp.ee', 'shope.ee', 's.shopee.vn'];
+
+    // Giả lập trình duyệt mobile: UA mặc định của Guzzle là thứ dễ bị lọc nhất ở tầng CDN/WAF.
+    private const MOBILE_USER_AGENT = 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_5 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.5 Mobile/15E148 Safari/604.1';
+
+    // Chuỗi redirect thật đo được: s.shopee.vn/an_redir → shopee.vn (1-3 hop). 10 là trần
+    // phòng hờ, không phải con số đo — vượt là link đang lặp vô tận, dừng là đúng.
+    private const ACTIVATION_MAX_REDIRECTS = 10;
 
     /** Ghi nhớ trong một request — xem endpoint(). */
     private ?string $endpoint = null;
@@ -77,6 +85,52 @@ class GanmaService
         }
 
         return $this->fetch($shopeeUrl);
+    }
+
+    /**
+     * "Kích hoạt" mã YTB: server tự mở link YouTube của ganma và đi hết chuỗi redirect tới
+     * Shopee, để Shopee ghi nhận mã trước khi khách đi mua bằng link kieushopee (xem
+     * VoucherFetchService). Không cần nội dung trang, chỉ cần cú chạm.
+     *
+     * Best-effort: lỗi chỉ ghi log rồi trả false, không được ném ra — link đưa cho khách không
+     * phụ thuộc bước này, và một lượt kích hoạt hỏng không đáng để khách mất luôn mã.
+     *
+     * Kiểm tra domain trước khi gọi vì link do một bên thứ ba trả về — không để server tự đi
+     * GET một URL bất kỳ chỉ vì nguồn nói vậy.
+     */
+    public function activateVoucherLink(string $youtubeLink): bool
+    {
+        try {
+            $this->urlValidator->validateAffiliateRedirectUrl($youtubeLink);
+        } catch (AffiliateScanException $e) {
+            Log::warning('GanmaService: link YTB nằm ngoài domain cho phép, không kích hoạt', [
+                'link' => $youtubeLink,
+                'error' => $e->getMessage(),
+            ]);
+
+            return false;
+        }
+
+        try {
+            $response = Http::withHeaders(['User-Agent' => self::MOBILE_USER_AGENT])
+                ->withOptions(['allow_redirects' => ['max' => self::ACTIVATION_MAX_REDIRECTS]])
+                ->timeout(10)
+                ->get($youtubeLink);
+        } catch (\Exception $e) {
+            Log::warning('GanmaService: không mở được link YTB để kích hoạt mã: '.$e->getMessage(), [
+                'link' => $youtubeLink,
+            ]);
+
+            return false;
+        }
+
+        Log::info('GanmaService: đã mở link YTB để kích hoạt mã', [
+            'link' => $youtubeLink,
+            'status' => $response->status(),
+            'dich' => (string) $response->effectiveUri(),
+        ]);
+
+        return $response->successful();
     }
 
     /**
@@ -374,9 +428,7 @@ class GanmaService
             'Accept' => 'application/json',
             'Origin' => $endpoint,
             'Referer' => $endpoint.'/yt',
-            // Giả lập trình duyệt mobile: UA mặc định của Guzzle là thứ dễ bị lọc nhất ở tầng
-            // CDN/WAF, mà đổi UA thì không ảnh hưởng gì tới cách họ xử lý job.
-            'User-Agent' => 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_5 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.5 Mobile/15E148 Safari/604.1',
+            'User-Agent' => self::MOBILE_USER_AGENT,
         ];
     }
 

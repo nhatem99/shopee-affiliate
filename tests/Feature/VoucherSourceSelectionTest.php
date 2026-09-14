@@ -3,8 +3,10 @@
 namespace Tests\Feature;
 
 use App\Models\ApiConfig;
+use App\Models\VoucherRef;
 use App\Services\GanmaService;
 use App\Services\KieuShopeeService;
+use App\Services\UrlValidationService;
 use App\Services\VoucherSourceResolver;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Cache;
@@ -141,7 +143,9 @@ class VoucherSourceSelectionTest extends TestCase
     private function mockSources(): array
     {
         $kieu = Mockery::mock(KieuShopeeService::class);
-        $ganma = Mockery::mock(GanmaService::class)->makePartial();
+        // Partial để canHandle()/activateVoucherLink() chạy thật — phải truyền constructor
+        // args, không thì thuộc tính $urlValidator chưa khởi tạo và activate nổ ngay.
+        $ganma = Mockery::mock(GanmaService::class, [app(UrlValidationService::class)])->makePartial();
 
         $this->app->instance(KieuShopeeService::class, $kieu);
         $this->app->instance(GanmaService::class, $ganma);
@@ -149,23 +153,90 @@ class VoucherSourceSelectionTest extends TestCase
         return [$kieu, $ganma];
     }
 
-    public function test_ganma_receives_the_original_short_link_not_the_canonical_one(): void
+    private const YTB_LINK = 'https://s.shopee.vn/an_redir?affiliate_id=1&sub_id=YT3-a';
+
+    private const KIEU_LINK = 'https://s.afp.ad/kieu-link';
+
+    /** Ref vừa phát cho khách — để biết link nào, nguồn nào thật sự được đưa ra. */
+    private function issuedRef(): VoucherRef
+    {
+        return VoucherRef::latest('id')->firstOrFail();
+    }
+
+    /**
+     * Chế độ mã YTB gọi CẢ HAI nguồn: ganma bằng link ngắn GỐC (resolveCanonicalUrl() bung nó
+     * thành link shopee.vn đầy đủ, đúng dạng ganma từ chối), kieushopee bằng link đã bung. Link
+     * YTB được server mở lên để kích hoạt; link đưa cho khách là của kieushopee.
+     */
+    public function test_ytb_mode_calls_both_sources_activates_ytb_and_serves_the_kieushopee_link(): void
     {
         $this->useSource(GanmaService::SOURCE);
         [$kieu, $ganma] = $this->mockSources();
 
-        $kieu->shouldNotReceive('fetchProductAndVoucherLink');
-
-        // Mấu chốt: resolveCanonicalUrl() biến link ngắn thành link shopee.vn đầy đủ, mà đó
-        // đúng là dạng ganma TỪ CHỐI. Nên controller phải truyền link ngắn GỐC xuống.
         $ganma->shouldReceive('fetchProductAndVoucherLink')
             ->once()
             ->with(self::SHORT_URL)
-            ->andReturn(['voucher_link' => 'https://s.shopee.vn/an_redir?affiliate_id=1&sub_id=YT3-a', 'shop_id' => '1', 'item_id' => '2', 'product' => null]);
+            ->andReturn(['voucher_link' => self::YTB_LINK, 'shop_id' => '1', 'item_id' => '2', 'product' => null]);
+        // Http::fake() không có Location nên link ngắn "bung" ra vẫn là chính nó.
+        $kieu->shouldReceive('fetchProductAndVoucherLink')
+            ->once()
+            ->with(self::SHORT_URL)
+            ->andReturn(['voucher_link' => self::KIEU_LINK, 'shop_id' => '1', 'item_id' => '2', 'product' => null]);
+
+        $this->actingAs($this->createAdmin())
+            ->post('/voucher/resolve', ['url' => self::SHORT_URL])
+            ->assertOk()
+            ->assertInertia(fn ($page) => $page->has('voucherResult.voucher_ref'));
+
+        Http::assertSent(fn ($request) => $request->url() === self::YTB_LINK);
+
+        $ref = $this->issuedRef();
+        $this->assertSame(self::KIEU_LINK, $ref->url);
+        $this->assertSame(KieuShopeeService::SOURCE, $ref->source);
+    }
+
+    /** Ganma không ra mã thì bỏ bước kích hoạt, khách vẫn nhận link kieushopee như thường. */
+    public function test_ytb_mode_still_serves_kieushopee_when_ganma_has_no_code(): void
+    {
+        $this->useSource(GanmaService::SOURCE);
+        [$kieu, $ganma] = $this->mockSources();
+
+        $ganma->shouldReceive('fetchProductAndVoucherLink')->once()->andReturnNull();
+        $kieu->shouldReceive('fetchProductAndVoucherLink')
+            ->once()
+            ->andReturn(['voucher_link' => self::KIEU_LINK, 'shop_id' => '1', 'item_id' => '2', 'product' => null]);
 
         $this->actingAs($this->createAdmin())
             ->post('/voucher/resolve', ['url' => self::SHORT_URL])
             ->assertOk();
+
+        Http::assertNotSent(fn ($request) => $request->url() === self::YTB_LINK);
+        $this->assertSame(self::KIEU_LINK, $this->issuedRef()->url);
+    }
+
+    /**
+     * Kieushopee không ra mã thì rơi về link ganma (hành vi cũ của chế độ này) — thà có mã còn
+     * hơn không. Ref phải ghi nguồn ganma kèm link ngắn gốc, để lúc khách bấm mua
+     * ShortLinkController gọi lại đúng nguồn bằng đúng dạng link nó nhận.
+     */
+    public function test_ytb_mode_falls_back_to_the_ganma_link_when_kieushopee_has_no_code(): void
+    {
+        $this->useSource(GanmaService::SOURCE);
+        [$kieu, $ganma] = $this->mockSources();
+
+        $ganma->shouldReceive('fetchProductAndVoucherLink')
+            ->once()
+            ->andReturn(['voucher_link' => self::YTB_LINK, 'shop_id' => '1', 'item_id' => '2', 'product' => null]);
+        $kieu->shouldReceive('fetchProductAndVoucherLink')->once()->andReturnNull();
+
+        $this->actingAs($this->createAdmin())
+            ->post('/voucher/resolve', ['url' => self::SHORT_URL])
+            ->assertOk();
+
+        $ref = $this->issuedRef();
+        $this->assertSame(self::YTB_LINK, $ref->url);
+        $this->assertSame(GanmaService::SOURCE, $ref->source);
+        $this->assertSame(self::SHORT_URL, $ref->source_url);
     }
 
     /**

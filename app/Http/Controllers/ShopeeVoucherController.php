@@ -5,13 +5,11 @@ namespace App\Http\Controllers;
 use App\Exceptions\AffiliateScanException;
 use App\Models\PlatformVoucher;
 use App\Services\FacebookRedirectFlagService;
-use App\Services\GanmaService;
-use App\Services\KieuShopeeService;
 use App\Services\ShopeeLinkResolverService;
 use App\Services\TrackingService;
 use App\Services\UrlValidationService;
+use App\Services\VoucherFetchService;
 use App\Services\VoucherRefService;
-use App\Services\VoucherSourceResolver;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
@@ -22,9 +20,7 @@ class ShopeeVoucherController extends Controller
     public function __construct(
         private UrlValidationService $urlValidator,
         private ShopeeLinkResolverService $resolver,
-        private KieuShopeeService $kieuShopee,
-        private GanmaService $ganma,
-        private VoucherSourceResolver $sources,
+        private VoucherFetchService $fetcher,
         private VoucherRefService $refs,
         private TrackingService $tracking,
     ) {}
@@ -46,41 +42,22 @@ class ShopeeVoucherController extends Controller
 
         $url = $request->input('url');
 
+        // Nguồn mã trả về ĐÚNG MỘT link đã áp mã (kèm thông tin sản phẩm nếu đọc được). Link đó
+        // thuộc affiliate account của nguồn; affiliate được đổi về của mình khi người dùng bấm
+        // "Mua ngay" — xem AffiliateLinkRewriterService. Nguồn nào được gọi, gọi với link nào
+        // (và chế độ mã YTB gọi cả hai ra sao) nằm trong VoucherFetchService.
         try {
             $this->urlValidator->validateShopeeOnly($url);
+            $result = $this->fetcher->fetch($url);
         } catch (AffiliateScanException $e) {
             return back()->withErrors(['voucher_url' => $e->getMessage()]);
         }
 
-        // Nguồn mã trả về ĐÚNG MỘT link đã áp mã (kèm thông tin sản phẩm nếu đọc được). Link đó
-        // thuộc affiliate account của nguồn; affiliate được đổi về của mình khi người dùng bấm
-        // "Mua ngay" — xem AffiliateLinkRewriterService.
-        $source = $this->sources->activeSource();
-
-        // resolveCanonicalUrl() đi một vòng HTTP thật (timeout 10s) để bung link ngắn. Nhánh
-        // ganma cố tình KHÔNG dùng kết quả đó, nên gọi nó ở đây là cộng thẳng tới 10 giây chờ
-        // vào một request vốn đã ngốn 20-45 giây và bị nginx chặn ở 60. Chỉ gọi khi cần.
-        $canonicalUrl = $source === GanmaService::SOURCE
-            ? $url
-            : $this->resolver->resolveCanonicalUrl($url);
-
-        if ($source === GanmaService::SOURCE) {
-            // Ganma CHỈ nhận link ngắn từ app Shopee, nên cố tình truyền $url GỐC chứ không
-            // phải $canonicalUrl: resolveCanonicalUrl() vừa biến link ngắn thành link shopee.vn
-            // đầy đủ, mà đó đúng là dạng ganma từ chối thẳng.
-            if (! $this->ganma->canHandle($url)) {
-                return back()->withErrors([
-                    'voucher_url' => 'Nguồn mã đang dùng chỉ nhận link chia sẻ từ ứng dụng Shopee. Vui lòng mở sản phẩm trong app Shopee, bấm Chia sẻ → Sao chép liên kết rồi dán lại.',
-                ]);
-            }
-
-            $data = $this->ganma->fetchProductAndVoucherLink($url);
-        } else {
-            $data = $this->kieuShopee->fetchProductAndVoucherLink($canonicalUrl);
-        }
+        $data = $result->data;
+        $canonicalUrl = $result->canonicalUrl;
 
         // ID lấy từ URL là nguồn chính; nếu URL không có dạng -i.SHOP.ITEM thì mượn ID mà
-        // kieushopee đã phân giải hộ, để vẫn hỏi được Shopee khi thiếu thông tin sản phẩm.
+        // nguồn đã phân giải hộ, để vẫn hỏi được Shopee khi thiếu thông tin sản phẩm.
         $ids = $this->resolver->extractIds($canonicalUrl);
         if (! $ids && ! empty($data['shop_id']) && ! empty($data['item_id'])) {
             $ids = ['shop_id' => $data['shop_id'], 'item_id' => $data['item_id']];
@@ -102,7 +79,7 @@ class ShopeeVoucherController extends Controller
                 'canonical_url' => $canonicalUrl,
                 'product' => $product,
                 // Token mờ của link CTA duy nhất; null nghĩa là chưa lấy được mã cho sản phẩm này.
-                'voucher_ref' => isset($data['voucher_link']) ? $this->maskVoucherLink($data['voucher_link'], $source, $canonicalUrl) : null,
+                'voucher_ref' => isset($data['voucher_link']) ? $this->maskVoucherLink($data['voucher_link'], $result->source, $result->sourceUrl) : null,
             ],
             ...$this->facebookRedirectFlags(),
         ]);

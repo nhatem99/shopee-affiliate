@@ -41,14 +41,6 @@ return [
         'redirect' => env('GOOGLE_REDIRECT_URI'),
     ],
 
-    'zalo' => [
-        'oa_token' => env('ZALO_OA_TOKEN'),
-        // app_id/secret_key dùng để xác thực chữ ký webhook (X-ZEvent-Signature) —
-        // bắt buộc phải cấu hình trước khi bật group reply, nếu không webhook sẽ bị từ chối.
-        'app_id' => env('ZALO_APP_ID'),
-        'secret_key' => env('ZALO_OA_SECRET_KEY'),
-    ],
-
     'shopee_affiliate' => [
         // mmp_pid dùng để gắn hoa hồng đơn hàng về tài khoản affiliate Shopee của mình.
         'mmp_pid' => env('SHOPEE_MMP_PID', 'an_17332410386'),
