@@ -7,6 +7,7 @@ use App\Http\Controllers\Admin\DashboardController;
 use App\Http\Controllers\Admin\LogController;
 use App\Http\Controllers\Admin\OrderController;
 use App\Http\Controllers\Admin\PromoContentController;
+use App\Http\Controllers\Admin\SchedulerController;
 use App\Http\Controllers\Admin\SettingsController;
 use App\Http\Controllers\Admin\ShopeeOrderController;
 use App\Http\Controllers\Admin\UserController as AdminUserController;
@@ -159,6 +160,9 @@ Route::middleware(['auth', 'auth.admin'])->prefix('admin')->name('admin.')->grou
     Route::delete('/blocked-ips/{blockedIp}', [BlockedIpController::class, 'destroy'])->name('blocked-ips.destroy');
     // Xem log lỗi production ngay trên web thay vì phải SSH lên server đọc storage/logs.
     Route::get('/logs', [LogController::class, 'index'])->name('logs');
+    // Scheduler: cron có chạy không, job nào chạy lúc nào, bấm chạy ngay — cũng để khỏi SSH.
+    Route::get('/scheduler', [SchedulerController::class, 'index'])->name('scheduler');
+    Route::post('/scheduler/run', [SchedulerController::class, 'run'])->name('scheduler.run');
     Route::get('/voucher-buttons', [VoucherButtonConfigController::class, 'index'])->name('voucher-buttons');
     Route::patch('/voucher-buttons/{voucherButtonConfig}', [VoucherButtonConfigController::class, 'update'])->name('voucher-buttons.update');
 });

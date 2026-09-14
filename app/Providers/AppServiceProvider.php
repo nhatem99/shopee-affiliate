@@ -2,8 +2,13 @@
 
 namespace App\Providers;
 
+use App\Listeners\ScheduledTaskRecorder;
 use Illuminate\Cache\RateLimiting\Limit;
+use Illuminate\Console\Events\ScheduledTaskFailed;
+use Illuminate\Console\Events\ScheduledTaskFinished;
+use Illuminate\Console\Events\ScheduledTaskStarting;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Support\Facades\URL;
 use Illuminate\Support\ServiceProvider;
@@ -41,5 +46,12 @@ class AppServiceProvider extends ServiceProvider
         if ($this->app->environment('production')) {
             URL::forceScheme('https');
         }
+
+        // Ghi lịch sử chạy của mọi job theo lịch vào scheduled_task_runs (xem /admin/scheduler).
+        // Một instance dùng chung cho cả ba event để nối được starting → finished của cùng job.
+        $recorder = new ScheduledTaskRecorder;
+        Event::listen(ScheduledTaskStarting::class, [$recorder, 'starting']);
+        Event::listen(ScheduledTaskFinished::class, [$recorder, 'finished']);
+        Event::listen(ScheduledTaskFailed::class, [$recorder, 'failed']);
     }
 }
