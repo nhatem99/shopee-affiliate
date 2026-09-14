@@ -105,6 +105,13 @@ class ShortLinkController extends Controller
         // Khách vãng lai (null) thì link chỉ mang nhãn kênh mặc định như trước.
         $targetUrl = $this->rewriter->rewriteToOwnAffiliate($url, $request->user()?->sub_id);
 
+        // Chế độ mã YTB: khách phải đi qua link YouTube của ganma TRƯỚC rồi mới tới link đích ở
+        // trên — thứ tự  /go/{code} → link YTB → link kieushopee (affiliate của mình). Link YTB
+        // lưu sẵn trong ref từ lúc lấy mã, không gọi lại ganma ở đây (20-45 giây cho một cú bấm).
+        if ($voucherRef->ytb_url) {
+            $targetUrl = $this->rewriter->chainThroughYoutubeLink($voucherRef->ytb_url, $targetUrl);
+        }
+
         // Source vẫn do PHÍA SERVER quyết định, không nhận từ client (trước đây client gửi lên
         // facebook/zalo/... vì salesoc trả nhiều kênh). Khác trước ở chỗ giờ có hai nguồn nên
         // giá trị lấy từ ref đã lưu lúc lấy mã, chứ không còn là hằng số.

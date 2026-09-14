@@ -55,6 +55,44 @@ class AffiliateLinkRewriterService
         }
     }
 
+    /**
+     * Chế độ mã YTB: xâu link YouTube của ganma vào TRƯỚC link đích, để trình duyệt của khách
+     * đi qua đúng thứ tự  link YTB → (link kieushopee đã đổi affiliate về của mình).
+     *
+     * Link YTB có dạng s.shopee.vn/an_redir?affiliate_id=…&sub_id=YT3-…&origin_link=…: Shopee
+     * ghi nhận affiliate/sub_id rồi 302 tới `origin_link`. Đây là chỗ móc nối duy nhất mình có
+     * — thay `origin_link` bằng $finalUrl thì Shopee tự đưa khách tới link đích, không cần thêm
+     * hop nào qua server mình. Mọi tham số khác của link YTB giữ nguyên.
+     *
+     * Không đúng dạng đó (không phải s.shopee.vn, không có origin_link) thì trả $finalUrl như
+     * không có gì — thà mất mã YTB còn hơn đưa khách vào một link không biết dẫn đi đâu.
+     */
+    public function chainThroughYoutubeLink(string $youtubeLink, string $finalUrl): string
+    {
+        $parts = parse_url($youtubeLink);
+        parse_str($parts['query'] ?? '', $query);
+
+        if ($this->hostOf($youtubeLink) !== 's.shopee.vn' || ! isset($query['origin_link'])) {
+            Log::warning('AffiliateLinkRewriterService: link YTB không đúng dạng an_redir, bỏ qua không xâu', [
+                'youtube_link' => $youtubeLink,
+            ]);
+
+            return $finalUrl;
+        }
+
+        $query['origin_link'] = $finalUrl;
+
+        $chained = ($parts['scheme'] ?? 'https').'://'.$parts['host'].($parts['path'] ?? '').'?'.http_build_query($query);
+
+        Log::info('AffiliateLinkRewriterService: đã xâu link YTB trước link đích', [
+            'youtube_link' => $youtubeLink,
+            'final_url' => $finalUrl,
+            'chained' => $chained,
+        ]);
+
+        return $chained;
+    }
+
     private function followToShopee(string $url): string
     {
         $current = $url;

@@ -14,6 +14,7 @@ class VoucherRef extends Model
         'ref',
         'url',
         'source_url',
+        'ytb_url',
         'source',
         'expires_at',
     ];

@@ -26,8 +26,11 @@ class VoucherRefService
      * $sourceUrl là URL Shopee đã dùng để lấy $url (canonical với kieushopee, link ngắn gốc với
      * ganma) — ShortLinkController::store() cần nó để gọi lại đúng nguồn khi ref đã cũ. Để trống
      * thì ref chỉ dùng lại được $url đã lưu, không refetch được.
+     *
+     * $ytbUrl là link YouTube của ganma ở chế độ mã YTB — lúc khách bấm mua nó được xâu vào
+     * trước link đích để trình duyệt khách đi qua (xem ShortLinkController::store()).
      */
-    public function issue(string $url, string $source, ?string $sourceUrl = null): string
+    public function issue(string $url, string $source, ?string $sourceUrl = null, ?string $ytbUrl = null): string
     {
         do {
             $ref = Str::random(32);
@@ -37,6 +40,7 @@ class VoucherRefService
             'ref' => $ref,
             'url' => $url,
             'source_url' => $sourceUrl,
+            'ytb_url' => $ytbUrl,
             'source' => $source,
             'expires_at' => now()->addDays(self::TTL_DAYS),
         ]);

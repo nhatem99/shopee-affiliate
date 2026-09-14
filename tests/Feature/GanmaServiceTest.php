@@ -4,7 +4,6 @@ namespace Tests\Feature;
 
 use App\Services\GanmaService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
-use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Sleep;
 use Tests\TestCase;
@@ -195,38 +194,5 @@ class GanmaServiceTest extends TestCase
         $this->assertSame(0, $product['discount_percent']);
         $this->assertSame(547500.0, $product['original_price']);
         $this->assertSame(547500.0, $product['discounted_price']);
-    }
-
-    // --- Kích hoạt mã YTB: server tự mở link YouTube, đi hết chuỗi redirect tới Shopee ---
-
-    public function test_activation_follows_the_redirect_chain_to_shopee(): void
-    {
-        Http::fake([
-            's.shopee.vn/*' => Http::response('', 302, ['Location' => 'https://shopee.vn/product/1541796848/27236640960']),
-            'shopee.vn/*' => Http::response('<html></html>', 200),
-        ]);
-
-        $this->assertTrue($this->service()->activateVoucherLink(self::YOUTUBE_LINK));
-
-        Http::assertSent(fn ($request) => $request->url() === self::YOUTUBE_LINK);
-        Http::assertSent(fn ($request) => str_starts_with($request->url(), 'https://shopee.vn/product/'));
-    }
-
-    /** Kích hoạt là best-effort: mạng hỏng thì trả false, tuyệt đối không ném ra làm hỏng lượt lấy mã. */
-    public function test_activation_swallows_network_errors(): void
-    {
-        Http::fake(fn () => throw new ConnectionException('timeout'));
-
-        $this->assertFalse($this->service()->activateVoucherLink(self::YOUTUBE_LINK));
-    }
-
-    /** Link do bên thứ ba trả về — ngoài domain cho phép thì không được để server tự đi GET. */
-    public function test_activation_refuses_links_outside_the_allowed_domains(): void
-    {
-        Http::fake();
-
-        $this->assertFalse($this->service()->activateVoucherLink('https://evil.example/track'));
-
-        Http::assertNothingSent();
     }
 }

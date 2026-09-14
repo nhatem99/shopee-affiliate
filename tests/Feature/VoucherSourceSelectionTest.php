@@ -143,8 +143,8 @@ class VoucherSourceSelectionTest extends TestCase
     private function mockSources(): array
     {
         $kieu = Mockery::mock(KieuShopeeService::class);
-        // Partial để canHandle()/activateVoucherLink() chạy thật — phải truyền constructor
-        // args, không thì thuộc tính $urlValidator chưa khởi tạo và activate nổ ngay.
+        // Partial để canHandle() chạy thật — truyền constructor args để các thuộc tính của
+        // service được khởi tạo, không thì method thật nào đụng tới chúng cũng nổ.
         $ganma = Mockery::mock(GanmaService::class, [app(UrlValidationService::class)])->makePartial();
 
         $this->app->instance(KieuShopeeService::class, $kieu);
@@ -166,9 +166,10 @@ class VoucherSourceSelectionTest extends TestCase
     /**
      * Chế độ mã YTB gọi CẢ HAI nguồn: ganma bằng link ngắn GỐC (resolveCanonicalUrl() bung nó
      * thành link shopee.vn đầy đủ, đúng dạng ganma từ chối), kieushopee bằng link đã bung. Link
-     * YTB được server mở lên để kích hoạt; link đưa cho khách là của kieushopee.
+     * đưa cho khách là của kieushopee; link YTB đi kèm trong ref để lúc bấm mua xâu vào trước.
+     * Server KHÔNG tự mở link YTB — đã thử, Shopee không ghi nhận (mã phải kích hoạt trên máy khách).
      */
-    public function test_ytb_mode_calls_both_sources_activates_ytb_and_serves_the_kieushopee_link(): void
+    public function test_ytb_mode_calls_both_sources_and_keeps_the_ytb_link_in_the_ref(): void
     {
         $this->useSource(GanmaService::SOURCE);
         [$kieu, $ganma] = $this->mockSources();
@@ -188,14 +189,15 @@ class VoucherSourceSelectionTest extends TestCase
             ->assertOk()
             ->assertInertia(fn ($page) => $page->has('voucherResult.voucher_ref'));
 
-        Http::assertSent(fn ($request) => $request->url() === self::YTB_LINK);
+        Http::assertNotSent(fn ($request) => $request->url() === self::YTB_LINK);
 
         $ref = $this->issuedRef();
         $this->assertSame(self::KIEU_LINK, $ref->url);
         $this->assertSame(KieuShopeeService::SOURCE, $ref->source);
+        $this->assertSame(self::YTB_LINK, $ref->ytb_url);
     }
 
-    /** Ganma không ra mã thì bỏ bước kích hoạt, khách vẫn nhận link kieushopee như thường. */
+    /** Ganma không ra mã thì khách vẫn nhận link kieushopee như thường, ref không có link YTB. */
     public function test_ytb_mode_still_serves_kieushopee_when_ganma_has_no_code(): void
     {
         $this->useSource(GanmaService::SOURCE);
@@ -210,8 +212,9 @@ class VoucherSourceSelectionTest extends TestCase
             ->post('/voucher/resolve', ['url' => self::SHORT_URL])
             ->assertOk();
 
-        Http::assertNotSent(fn ($request) => $request->url() === self::YTB_LINK);
-        $this->assertSame(self::KIEU_LINK, $this->issuedRef()->url);
+        $ref = $this->issuedRef();
+        $this->assertSame(self::KIEU_LINK, $ref->url);
+        $this->assertNull($ref->ytb_url);
     }
 
     /**
@@ -237,6 +240,8 @@ class VoucherSourceSelectionTest extends TestCase
         $this->assertSame(self::YTB_LINK, $ref->url);
         $this->assertSame(GanmaService::SOURCE, $ref->source);
         $this->assertSame(self::SHORT_URL, $ref->source_url);
+        // Chính url đã là link YTB — không xâu thêm lần nữa lúc bấm mua.
+        $this->assertNull($ref->ytb_url);
     }
 
     /**

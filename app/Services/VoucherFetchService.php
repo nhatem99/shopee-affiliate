@@ -14,12 +14,13 @@ use Illuminate\Support\Facades\Log;
  *
  *  • kieushopee (mặc định): bung link ngắn rồi hỏi kieushopee, xong.
  *
- *  • ganma — "chế độ mã YTB": gọi CẢ HAI nguồn. Link YouTube của ganma KHÔNG đưa cho khách mà
- *    được server mở lên (đi hết chuỗi redirect) để Shopee ghi nhận mã YTB trước; link đưa cho
- *    khách — và sau đó đặt vào caption reel / comment Facebook — vẫn là link của kieushopee,
- *    đổi affiliate về của mình y như chế độ mặc định. Ganma là bước bất đồng bộ ~20-45 giây nên
- *    lượt quét ở chế độ này chậm hơn hẳn — đã chấp nhận để đổi lấy việc mã YTB được kích hoạt.
- *    Ganma không ra mã thì bỏ qua bước kích hoạt, khách vẫn nhận link kieushopee bình thường.
+ *  • ganma — "chế độ mã YTB": gọi CẢ HAI nguồn. Link đưa cho khách — và sau đó đặt vào caption
+ *    reel / comment Facebook — là link của kieushopee, đổi affiliate về của mình y như chế độ
+ *    mặc định; link YouTube của ganma đi kèm trong ref, và lúc khách bấm mua nó được xâu vào
+ *    TRƯỚC link đích để trình duyệt của khách tự đi qua (Shopee ghi nhận mã YTB trên đúng máy
+ *    khách — server tự mở hộ đã thử, không có tác dụng). Xem ShortLinkController::store().
+ *    Ganma là bước bất đồng bộ ~20-45 giây nên lượt quét ở chế độ này chậm hơn hẳn — đã chấp
+ *    nhận. Ganma không ra mã thì khách vẫn nhận link kieushopee bình thường, chỉ thiếu mã YTB.
  *    Chiều ngược lại — kieushopee không ra mã — thì rơi về link ganma, đúng hành vi cũ của chế
  *    độ này, thà có mã còn hơn không.
  */
@@ -58,10 +59,8 @@ class VoucherFetchService
 
         $ytb = $this->ganma->fetchProductAndVoucherLink($url);
 
-        if ($ytb) {
-            $this->ganma->activateVoucherLink($ytb['voucher_link']);
-        } else {
-            Log::warning('VoucherFetchService: ganma không ra mã, bỏ qua bước kích hoạt YTB', ['url' => $url]);
+        if (! $ytb) {
+            Log::warning('VoucherFetchService: ganma không ra mã, khách chỉ nhận link kieushopee', ['url' => $url]);
         }
 
         $canonicalUrl = $this->resolver->resolveCanonicalUrl($url);
@@ -71,7 +70,13 @@ class VoucherFetchService
             // Thông tin sản phẩm bên nào có thì dùng, khỏi phải hỏi lại Shopee.
             $data['product'] ??= $ytb['product'] ?? null;
 
-            return new VoucherFetchResult(KieuShopeeService::SOURCE, $canonicalUrl, $canonicalUrl, $data);
+            return new VoucherFetchResult(
+                KieuShopeeService::SOURCE,
+                $canonicalUrl,
+                $canonicalUrl,
+                $data,
+                ytbUrl: $ytb['voucher_link'] ?? null,
+            );
         }
 
         return new VoucherFetchResult(GanmaService::SOURCE, $canonicalUrl, $url, $ytb);

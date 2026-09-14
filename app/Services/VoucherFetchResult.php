@@ -27,5 +27,11 @@ final readonly class VoucherFetchResult
          * @var array{voucher_link: string, shop_id: ?string, item_id: ?string, product: ?array}|null
          */
         public ?array $data,
+        /**
+         * Link YouTube của ganma (chế độ mã YTB) đi kèm link kieushopee ở $data — trình duyệt
+         * của khách phải đi qua nó trước khi tới link đích, xem ShortLinkController::store().
+         * null khi không ở chế độ đó, hoặc khi chính $data đã là link ganma.
+         */
+        public ?string $ytbUrl = null,
     ) {}
 }
