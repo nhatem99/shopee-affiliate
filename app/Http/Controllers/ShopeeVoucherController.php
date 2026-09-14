@@ -102,7 +102,7 @@ class ShopeeVoucherController extends Controller
                 'canonical_url' => $canonicalUrl,
                 'product' => $product,
                 // Token mờ của link CTA duy nhất; null nghĩa là chưa lấy được mã cho sản phẩm này.
-                'voucher_ref' => isset($data['voucher_link']) ? $this->maskVoucherLink($data['voucher_link'], $source) : null,
+                'voucher_ref' => isset($data['voucher_link']) ? $this->maskVoucherLink($data['voucher_link'], $source, $canonicalUrl) : null,
             ],
             ...$this->facebookRedirectFlags(),
         ]);
@@ -146,11 +146,15 @@ class ShopeeVoucherController extends Controller
      * "Mua ngay", để không lộ URL affiliate gốc ngay trong response /voucher/resolve (xem
      * được qua tab Network/Inertia devtools dù chưa bấm link nào).
      */
-    private function maskVoucherLink(string $voucherLink, string $source): string
+    private function maskVoucherLink(string $voucherLink, string $source, string $sourceUrl): string
     {
         // Lưu kèm NGUỒN đã sinh ra link này, không chỉ mỗi URL: lúc khách bấm "Mua ngay",
         // ShortLinkController mới biết ghi `source` nào vào short-link và tracking. Suy ngược
         // từ URL thì không đáng tin — cả hai nguồn đều có thể trả về link trên domain Shopee.
-        return $this->refs->issue($voucherLink, $source);
+        //
+        // $sourceUrl (URL Shopee đã đưa vào fetchProductAndVoucherLink) đi kèm để
+        // ShortLinkController gọi lại đúng nguồn lấy mã mới nếu khách bấm "Mua ngay" khi ref
+        // đã cũ — mã có thể đã hết lượt, link đã lưu không còn dùng được.
+        return $this->refs->issue($voucherLink, $source, $sourceUrl);
     }
 }

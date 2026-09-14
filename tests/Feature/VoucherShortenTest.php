@@ -3,6 +3,7 @@
 namespace Tests\Feature;
 
 use App\Models\ApiConfig;
+use App\Models\ShortLink;
 use App\Models\VoucherRef;
 use App\Services\KieuShopeeService;
 use App\Services\VoucherRefService;
@@ -350,6 +351,75 @@ class VoucherShortenTest extends TestCase
         $response = $this->shorten()->assertOk();
 
         $this->assertStringContainsString('/go/'.$response->json('code'), $response->json('short_url'));
+    }
+
+    /**
+     * Ref phát kèm source_url (từ 2026-09-14 trở đi) phải gọi lại kieushopee bằng đúng URL
+     * Shopee gốc để lấy link mã MỚI, không dùng thẳng link đã lưu trong ref — mã cũ có thể đã
+     * hết lượt vì nguồn không báo trạng thái còn/hết.
+     */
+    public function test_refetches_a_fresh_code_when_ref_has_a_source_url(): void
+    {
+        config([
+            'services.kieushopee.endpoint' => 'https://sansale.kieushopee.com/22',
+            'services.kieushopee.next_action' => 'test-next-action',
+            'services.kieushopee.tool_id' => 'test-tool-id',
+            'services.kieushopee.action_payload' => '["$K1"]',
+        ]);
+
+        $shopeeUrl = 'https://shopee.vn/product-i.1.2';
+        $freshLink = 'https://shopee.vn/product-i.1.2?mmp_pid=kieushopee&promo=fresh';
+
+        Http::fake([
+            'sansale.kieushopee.com/*' => Http::response(
+                '0:{"a":"$@1","f":"","q":"","i":false,"b":"x"}'."\n"
+                .'1:'.json_encode(['success' => true, 'results' => [['link' => $freshLink]]])."\n"
+            ),
+        ]);
+
+        $ref = app(VoucherRefService::class)->issue(self::VOUCHER_URL, KieuShopeeService::SOURCE, $shopeeUrl);
+
+        $code = $this->shorten($ref)->assertOk()->json('code');
+
+        $link = ShortLink::where('code', $code)->firstOrFail();
+
+        $this->assertStringContainsString('promo=fresh', $link->target_url);
+        $this->assertStringNotContainsString(self::VOUCHER_URL, $link->target_url);
+    }
+
+    /** Không có source_url (ref cũ, phát trước khi có refetch) thì vẫn dùng thẳng link đã lưu, không gọi API nào. */
+    public function test_uses_the_stored_link_when_ref_has_no_source_url(): void
+    {
+        Http::fake();
+
+        $code = $this->shorten($this->ref())->assertOk()->json('code');
+
+        $link = ShortLink::where('code', $code)->firstOrFail();
+
+        $this->assertStringContainsString('product-i.1.2', $link->target_url);
+        Http::assertNothingSent();
+    }
+
+    /** Refetch lỗi (nguồn sập/không có mã) thì rơi về link cũ đã lưu, không chặn đường mua hàng. */
+    public function test_falls_back_to_the_stored_link_when_refetch_fails(): void
+    {
+        config([
+            'services.kieushopee.endpoint' => 'https://sansale.kieushopee.com/22',
+            'services.kieushopee.next_action' => 'test-next-action',
+            'services.kieushopee.tool_id' => 'test-tool-id',
+            'services.kieushopee.action_payload' => '["$K1"]',
+        ]);
+
+        Http::fake(['sansale.kieushopee.com/*' => Http::response('nope', 500)]);
+
+        $shopeeUrl = 'https://shopee.vn/product-i.1.2';
+        $ref = app(VoucherRefService::class)->issue(self::VOUCHER_URL, KieuShopeeService::SOURCE, $shopeeUrl);
+
+        $code = $this->shorten($ref)->assertOk()->json('code');
+
+        $link = ShortLink::where('code', $code)->firstOrFail();
+
+        $this->assertStringContainsString('product-i.1.2', $link->target_url);
     }
 
     public function test_rejects_voucher_link_on_unknown_domain(): void

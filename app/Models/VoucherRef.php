@@ -13,6 +13,7 @@ class VoucherRef extends Model
     protected $fillable = [
         'ref',
         'url',
+        'source_url',
         'source',
         'expires_at',
     ];

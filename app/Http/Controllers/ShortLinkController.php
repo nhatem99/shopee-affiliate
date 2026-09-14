@@ -8,6 +8,7 @@ use App\Services\AffiliateLinkRewriterService;
 use App\Services\FacebookPageService;
 use App\Services\FacebookPostTarget;
 use App\Services\FacebookReelSlotService;
+use App\Services\GanmaService;
 use App\Services\KieuShopeeService;
 use App\Services\ProductKeyService;
 use App\Services\ShortLinkService;
@@ -34,6 +35,8 @@ class ShortLinkController extends Controller
         private TrackingService $tracking,
         private VoucherRefService $refs,
         private ProductKeyService $productKeys,
+        private KieuShopeeService $kieuShopee,
+        private GanmaService $ganma,
     ) {}
 
     public function store(Request $request): JsonResponse
@@ -55,6 +58,28 @@ class ShortLinkController extends Controller
 
         $url = $voucherRef->url;
         $source = $voucherRef->source ?? KieuShopeeService::SOURCE;
+
+        // Ref có thể đã phát ra từ lâu (tối đa 7 ngày — TTL_DAYS) — mã kèm trong $url lúc đó có
+        // thể đã hết lượt, nguồn không báo trạng thái còn/hết nên không biết trước được. Gọi lại
+        // đúng nguồn bằng URL Shopee gốc để lấy link mã MỚI; refetch dùng chung cache 15-30 phút
+        // với ShopeeVoucherController::resolve() (khoá theo cùng $sourceUrl) nên bấm ngay sau khi
+        // vừa lấy mã (đường thường gặp nhất) trúng cache, không cộng thêm round-trip nào. Chỉ khi
+        // cache đã hết (ref thật sự cũ) mới phải chờ round-trip sống — và null (fetch lỗi/hết mã)
+        // thì rơi về đúng $url đã lưu, không chặn đường mua hàng của khách.
+        if ($voucherRef->source_url) {
+            $fresh = $source === GanmaService::SOURCE
+                ? $this->ganma->fetchProductAndVoucherLink($voucherRef->source_url)
+                : $this->kieuShopee->fetchProductAndVoucherLink($voucherRef->source_url);
+
+            if (! empty($fresh['voucher_link'])) {
+                $url = $fresh['voucher_link'];
+            } else {
+                Log::info('ShortLinkController: refetch mã mới thất bại, dùng lại link đã lưu trong ref', [
+                    'source' => $source,
+                    'source_url' => $voucherRef->source_url,
+                ]);
+            }
+        }
 
         try {
             $this->urlValidator->validateAffiliateRedirectUrl($url);

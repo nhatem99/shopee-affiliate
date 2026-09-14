@@ -22,7 +22,12 @@ class VoucherRefService
      */
     public const TTL_DAYS = 7;
 
-    public function issue(string $url, string $source): string
+    /**
+     * $sourceUrl là URL Shopee đã dùng để lấy $url (canonical với kieushopee, link ngắn gốc với
+     * ganma) — ShortLinkController::store() cần nó để gọi lại đúng nguồn khi ref đã cũ. Để trống
+     * thì ref chỉ dùng lại được $url đã lưu, không refetch được.
+     */
+    public function issue(string $url, string $source, ?string $sourceUrl = null): string
     {
         do {
             $ref = Str::random(32);
@@ -31,6 +36,7 @@ class VoucherRefService
         VoucherRef::create([
             'ref' => $ref,
             'url' => $url,
+            'source_url' => $sourceUrl,
             'source' => $source,
             'expires_at' => now()->addDays(self::TTL_DAYS),
         ]);
