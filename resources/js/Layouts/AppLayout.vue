@@ -34,7 +34,10 @@ const maintenanceMode = computed(() => page.props.settings?.maintenanceMode ?? f
             <div class="max-w-6xl mx-auto px-4 h-16 flex items-center justify-between">
                 <Link href="/" class="flex items-center gap-2 font-extrabold text-xl text-[var(--color-ink)]">
                     <span class="w-8 h-8 rounded-lg bg-gradient-to-br from-[var(--color-accent)] to-[var(--color-accent-deep)] flex items-center justify-center text-white text-base font-extrabold dark:shadow-[0_4px_14px_rgba(var(--color-accent-rgb),0.4)]">%</span>
-                    <span class="text-fire font-mono tracking-wide">Mã Giảm Giá</span>
+                    <!-- Ẩn dưới sm: ở 375px, chữ cứng này cộng với theme toggle + chuông thông báo
+                         + Đăng xuất/Đăng nhập tràn hàng, chữ đè lên các icon bên phải. Icon logo
+                         vẫn dẫn về trang chủ nên không mất lối vào nào. -->
+                    <span class="hidden sm:inline text-fire font-mono tracking-wide">Mã Giảm Giá</span>
                 </Link>
 
                 <nav class="hidden md:flex items-center gap-1 text-sm font-medium">

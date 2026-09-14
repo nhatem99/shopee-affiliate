@@ -34,6 +34,10 @@ class ProfileController extends Controller
                 'name' => $user->name,
                 'email' => $user->email,
                 'phone' => $user->phone,
+                // "Thành viên từ Tháng X" ở đầu /profile. Ghép chuỗi tay thay vì
+                // translatedFormat('F Y') — locale mặc định của app là 'en' (config/app.php),
+                // đổi locale ảnh hưởng toàn app nên không đáng chỉ để có mỗi dòng này.
+                'member_since' => 'Tháng '.$user->created_at->format('m/Y'),
             ],
             'payoutAccounts' => $payoutAccounts,
             'balance' => [

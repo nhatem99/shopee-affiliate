@@ -114,6 +114,24 @@ const providerLabels = { momo: 'MoMo', zalopay: 'ZaloPay' }
         <div class="max-w-3xl mx-auto px-4 py-8 space-y-6">
             <h1 class="text-2xl font-extrabold text-[var(--color-ink)]">Tài khoản của tôi</h1>
 
+            <!-- Chào mừng: avatar + huy hiệu "Lính mới" + ngày tham gia. Huy hiệu dựa vào
+                 hasRealCashback (đã có sẵn cho điều kiện rút tiền) chứ không phải cờ riêng —
+                 "mới" ở đây nghĩa là chưa có đơn hoàn tiền thật nào, đúng cái khách cần biết
+                 (còn phải mua 1 đơn thì thưởng chào mừng mới rút được, xem khối bên dưới). -->
+            <div class="card-glass rounded-2xl p-5 flex items-center gap-4">
+                <div class="flex-none w-14 h-14 rounded-full bg-gradient-to-br from-[var(--color-accent)] to-[var(--color-accent-deep)] flex items-center justify-center text-white text-xl font-extrabold">
+                    {{ (profile.name || profile.email || '?').charAt(0).toUpperCase() }}
+                </div>
+                <div class="min-w-0">
+                    <div class="flex items-center flex-wrap gap-x-2 gap-y-1">
+                        <p class="font-bold text-[var(--color-ink)] truncate">{{ profile.name || profile.email }}</p>
+                        <span v-if="!balance.hasRealCashback" class="flex-none text-[10px] font-bold px-2 py-0.5 rounded-full bg-[var(--color-peach-soft)] text-[var(--color-accent)]">🔥 LÍNH MỚI</span>
+                    </div>
+                    <p class="text-xs text-[var(--color-muted)] truncate">{{ profile.email }}</p>
+                    <p class="text-xs text-[var(--color-muted)]">Thành viên từ: {{ profile.member_since }}</p>
+                </div>
+            </div>
+
             <!-- Số dư -->
             <div class="card-glass rounded-2xl p-6">
                 <div class="flex items-end justify-between flex-wrap gap-4">
