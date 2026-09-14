@@ -187,7 +187,11 @@ class VoucherSourceSelectionTest extends TestCase
         $this->actingAs($this->createAdmin())
             ->post('/voucher/resolve', ['url' => self::SHORT_URL])
             ->assertOk()
-            ->assertInertia(fn ($page) => $page->has('voucherResult.voucher_ref'));
+            ->assertInertia(fn ($page) => $page
+                ->has('voucherResult.voucher_ref')
+                // Frontend hiện bước 1 "Kích hoạt mã YouTube" dựa vào đúng prop này.
+                ->where('voucherResult.ytb_activate_url', fn ($url) => str_contains($url, '/ytb/'))
+            );
 
         Http::assertNotSent(fn ($request) => $request->url() === self::YTB_LINK);
 
@@ -215,6 +219,23 @@ class VoucherSourceSelectionTest extends TestCase
         $ref = $this->issuedRef();
         $this->assertSame(self::KIEU_LINK, $ref->url);
         $this->assertNull($ref->ytb_url);
+    }
+
+    /** Chế độ kieushopee thường: không có bước 1, prop phải là null để frontend không hiện gì. */
+    public function test_kieushopee_mode_has_no_activation_step(): void
+    {
+        $this->useSource(KieuShopeeService::SOURCE);
+        [$kieu, $ganma] = $this->mockSources();
+
+        $ganma->shouldNotReceive('fetchProductAndVoucherLink');
+        $kieu->shouldReceive('fetchProductAndVoucherLink')
+            ->once()
+            ->andReturn(['voucher_link' => self::KIEU_LINK, 'shop_id' => '1', 'item_id' => '2', 'product' => null]);
+
+        $this->actingAs($this->createAdmin())
+            ->post('/voucher/resolve', ['url' => self::FULL_URL])
+            ->assertOk()
+            ->assertInertia(fn ($page) => $page->where('voucherResult.ytb_activate_url', null));
     }
 
     /**

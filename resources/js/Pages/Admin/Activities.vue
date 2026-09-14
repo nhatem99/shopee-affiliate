@@ -32,6 +32,7 @@ const eventLabels = {
     voucher_select: 'Chọn/lấy mã',
     voucher_copy: 'Copy mã',
     short_link_click: 'Click link rút gọn',
+    ytb_activate: '▶️ Kích hoạt mã YouTube (bước 1)',
     facebook_open: '👉 Mở Facebook (chuyển đổi)',
     login_failed: '🔒 Đăng nhập sai',
     login_success: '✅ Đăng nhập thành công',

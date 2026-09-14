@@ -92,6 +92,9 @@ Route::post('/voucher/shorten', [ShortLinkController::class, 'store'])
     ->middleware('throttle:affiliate-scan')
     ->name('voucher.shorten');
 Route::get('/go/{code}', [ShortLinkController::class, 'redirect'])->name('go');
+// Chế độ mã YTB, bước 1: khách tự mở link YouTube của ganma (302 nguyên bản) để Shopee ghi
+// nhận mã trên máy khách, rồi mới bấm Facebook/Mua ngay — xem ShortLinkController::activateYoutube.
+Route::get('/ytb/{ref}', [ShortLinkController::class, 'activateYoutube'])->name('voucher.ytb');
 
 // Theo dõi hành vi frontend (copy mã...), mở cho khách, chung throttle chống spam
 Route::post('/track/event', [TrackingController::class, 'store'])

@@ -392,40 +392,34 @@ class VoucherShortenTest extends TestCase
     private const YTB_LINK = 'https://s.shopee.vn/an_redir?affiliate_id=17104820001&origin_link=https%3A%2F%2Fshopee.vn%2Fproduct%2F1%2F2&sub_id=YT3-token';
 
     /**
-     * Thứ tự bắt buộc: /go/{code} → link YTB → link kieushopee đã đổi affiliate. Móc nối là
-     * `origin_link` của an_redir — thay bằng link đích thì Shopee tự đưa khách tới đó sau khi
-     * đã ghi nhận mã YTB. affiliate_id/sub_id của link YTB giữ nguyên.
+     * Bước 1 là một lượt điều hướng RIÊNG của khách tới link YTB nguyên bản (affiliate_id/sub_id
+     * của ganma giữ nguyên) — không sửa gì, không xâu vào link đích. Bước 2 (/voucher/shorten)
+     * vẫn ra link kieushopee như thường, không dính gì tới link YTB.
      */
-    public function test_chains_the_ytb_link_in_front_of_the_target_when_ref_has_one(): void
+    public function test_step_one_redirects_the_customer_to_the_untouched_ytb_link(): void
     {
         Http::fake();
 
         $ref = app(VoucherRefService::class)->issue(self::VOUCHER_URL, KieuShopeeService::SOURCE, ytbUrl: self::YTB_LINK);
 
+        $this->get('/ytb/'.$ref)->assertRedirect(self::YTB_LINK);
+
         $code = $this->shorten($ref)->assertOk()->json('code');
-
-        $target = ShortLink::where('code', $code)->firstOrFail()->target_url;
-        parse_str((string) parse_url($target, PHP_URL_QUERY), $query);
-
-        $this->assertStringStartsWith('https://s.shopee.vn/an_redir?', $target);
-        $this->assertSame('17104820001', $query['affiliate_id']);
-        $this->assertSame('YT3-token', $query['sub_id']);
-        // origin_link là link kieushopee ĐÃ đổi mmp_pid về của mình, không phải link thô của nguồn.
-        $this->assertStringStartsWith('https://shopee.vn/product-i.1.2?', $query['origin_link']);
-        $this->assertStringContainsString('mmp_pid='.config('services.shopee_affiliate.mmp_pid'), $query['origin_link']);
-        $this->assertStringNotContainsString('mmp_pid=kieushopee', $query['origin_link']);
+        $this->assertStringStartsWith('https://shopee.vn/product-i.1.2?', ShortLink::where('code', $code)->firstOrFail()->target_url);
     }
 
-    /** Link YTB không đúng dạng an_redir thì bỏ qua, khách vẫn đi thẳng link đích — không được đưa khách vào link lạ. */
-    public function test_ignores_a_malformed_ytb_link(): void
+    public function test_step_one_is_not_found_when_ref_has_no_ytb_link(): void
     {
-        Http::fake();
+        $this->get('/ytb/'.$this->ref())->assertNotFound();
+        $this->get('/ytb/'.str_repeat('x', 32))->assertNotFound();
+    }
 
-        $ref = app(VoucherRefService::class)->issue(self::VOUCHER_URL, KieuShopeeService::SOURCE, ytbUrl: 'https://s.shopee.vn/abc123');
+    /** Link YTB do bên thứ ba trả về — ngoài domain cho phép thì không được chuyển hướng khách tới. */
+    public function test_step_one_refuses_a_ytb_link_outside_the_allowed_domains(): void
+    {
+        $ref = app(VoucherRefService::class)->issue(self::VOUCHER_URL, KieuShopeeService::SOURCE, ytbUrl: 'https://evil.example/track');
 
-        $code = $this->shorten($ref)->assertOk()->json('code');
-
-        $this->assertStringStartsWith('https://shopee.vn/product-i.1.2?', ShortLink::where('code', $code)->firstOrFail()->target_url);
+        $this->get('/ytb/'.$ref)->assertNotFound();
     }
 
     /** Không có source_url (ref cũ, phát trước khi có refetch) thì vẫn dùng thẳng link đã lưu, không gọi API nào. */

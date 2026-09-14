@@ -74,13 +74,18 @@ class ShopeeVoucherController extends Controller
             'product_name' => $product['product_name'] ?? null,
         ]);
 
+        // Token mờ của link CTA duy nhất; null nghĩa là chưa lấy được mã cho sản phẩm này.
+        $ref = isset($data['voucher_link']) ? $this->maskVoucherLink($result) : null;
+
         return Inertia::render('Home', [
             'vouchers' => PlatformVoucher::suggestedList(),
             'voucherResult' => [
                 'canonical_url' => $canonicalUrl,
                 'product' => $product,
-                // Token mờ của link CTA duy nhất; null nghĩa là chưa lấy được mã cho sản phẩm này.
-                'voucher_ref' => isset($data['voucher_link']) ? $this->maskVoucherLink($result) : null,
+                'voucher_ref' => $ref,
+                // Chế độ mã YTB: khách phải mở link này (bước 1) trước khi bấm Facebook/Mua ngay
+                // (bước 2) — xem ShortLinkController::activateYoutube. null = không có bước 1.
+                'ytb_activate_url' => $ref && $result->ytbUrl ? route('voucher.ytb', $ref) : null,
             ],
             ...$this->facebookRedirectFlags(),
         ]);
