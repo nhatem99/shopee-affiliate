@@ -11,7 +11,7 @@ use Inertia\Response;
 
 class ProfileController extends Controller
 {
-    public const MIN_WITHDRAWAL = 50000;
+    public const MIN_WITHDRAWAL = 10000;
 
     public function show(Request $request): Response
     {

@@ -138,7 +138,7 @@ const providerLabels = { momo: 'MoMo', zalopay: 'ZaloPay' }
                 </div>
 
                 <!-- Thanh tiến độ tới mốc rút. Chỉ hiện khi đã có tiền thật trong ví: hiện với ví
-                     rỗng thì thành lời trách "bạn còn thiếu 50.000đ" ngay khi khách vừa đăng ký.
+                     rỗng thì thành lời trách "bạn còn thiếu 10.000đ" ngay khi khách vừa đăng ký.
                      Điều kiện > 0 còn chặn luôn trường hợp số âm — availableBalance() là hiệu của
                      hoa hồng đã duyệt trừ phần đang giữ nên hoàn toàn có thể âm (xem User.php). -->
                 <div v-if="balance.available > 0 && balance.available < minWithdrawal" class="mt-4">
