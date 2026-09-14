@@ -32,6 +32,10 @@ class HandleInertiaRequests extends Middleware
             // Chuông thông báo ở header. Chỉ khách (không phải admin) mới có; đóng trong closure
             // để không tốn hai truy vấn cho khách vãng lai và các request partial reload.
             'notifications' => fn () => $this->notifications($request),
+            // Banner "Số dư khả dụng" trong AccountDrawer.vue (menu trượt từ icon hamburger).
+            // Cùng lý do đóng closure như notifications(): availableBalance() chạy 2 query tổng
+            // hợp, chỉ đáng tính trên full visit của khách đã đăng nhập, không phải mọi request.
+            'wallet' => fn () => $this->wallet($request),
             'flash' => [
                 'success' => fn () => $request->session()->get('success'),
                 'error' => fn () => $request->session()->get('error'),
@@ -86,5 +90,19 @@ class HandleInertiaRequests extends Middleware
                 ->values()
                 ->all(),
         ];
+    }
+
+    /**
+     * @return array{available: float}|null
+     */
+    private function wallet(Request $request): ?array
+    {
+        $user = $request->user();
+
+        if (! $user || $user->isAdmin()) {
+            return null;
+        }
+
+        return ['available' => $user->availableBalance()];
     }
 }

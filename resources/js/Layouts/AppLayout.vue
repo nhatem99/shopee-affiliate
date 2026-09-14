@@ -1,12 +1,13 @@
 <script setup>
 import { Link, usePage } from '@inertiajs/vue3'
-import { computed } from 'vue'
+import { computed, ref } from 'vue'
 import { useAuthStore } from '@/Stores/useAuthStore'
 import BottomNav from '@/Components/BottomNav.vue'
 import ToastContainer from '@/Components/ToastContainer.vue'
 import ThemeToggle from '@/Components/ThemeToggle.vue'
 import FestiveDecor from '@/Components/FestiveDecor.vue'
 import NotificationBell from '@/Components/NotificationBell.vue'
+import AccountDrawer from '@/Components/AccountDrawer.vue'
 import { useCashback } from '@/composables/useCashback'
 
 const auth = useAuthStore()
@@ -16,6 +17,10 @@ const current = computed(() => page.url)
 const customerAuthEnabled = computed(() => page.props.settings?.customerAuthEnabled ?? true)
 // Server chỉ bật cờ này cho admin — khách đang bảo trì thì không tới được layout này.
 const maintenanceMode = computed(() => page.props.settings?.maintenanceMode ?? false)
+
+// Icon hamburger mở AccountDrawer — menu tài khoản trượt từ trái, không rời trang đang xem.
+// Chỉ khách đã đăng nhập mới có gì để xem trong đó (admin dùng AdminLayout riêng, không qua đây).
+const accountDrawerOpen = ref(false)
 </script>
 
 <template>
@@ -32,13 +37,26 @@ const maintenanceMode = computed(() => page.props.settings?.maintenanceMode ?? f
         <!-- Header -->
         <header class="sticky top-0 z-50 bg-[var(--color-surface)]/80 backdrop-blur-md border-b border-[var(--color-line)] dark:shadow-[0_4px_24px_rgba(0,0,0,0.45)]">
             <div class="max-w-6xl mx-auto px-4 h-16 flex items-center justify-between">
-                <Link href="/" class="flex items-center gap-2 font-extrabold text-xl text-[var(--color-ink)]">
+                <div class="flex items-center gap-2 min-w-0">
+                    <!-- Chỉ hiện dưới md: thanh nav desktop ngay bên phải đã có sẵn mục "Tài
+                         khoản" luôn nằm trong tầm mắt, không cần thêm lối tắt nổi trên đó nữa. -->
+                    <button
+                        v-if="auth.isLoggedIn && !auth.isAdmin"
+                        type="button"
+                        @click="accountDrawerOpen = true"
+                        aria-label="Mở menu tài khoản"
+                        class="md:hidden flex-none w-9 h-9 rounded-xl bg-[var(--color-peach-soft)] text-[var(--color-accent)] flex items-center justify-center"
+                    >
+                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" class="w-5 h-5"><path d="M4 7h16M4 12h16M4 17h16" /></svg>
+                    </button>
+                    <Link href="/" class="flex items-center gap-2 font-extrabold text-xl text-[var(--color-ink)]">
                     <span class="w-8 h-8 rounded-lg bg-gradient-to-br from-[var(--color-accent)] to-[var(--color-accent-deep)] flex items-center justify-center text-white text-base font-extrabold dark:shadow-[0_4px_14px_rgba(var(--color-accent-rgb),0.4)]">%</span>
                     <!-- Ẩn dưới sm: ở 375px, chữ cứng này cộng với theme toggle + chuông thông báo
                          + Đăng nhập/Đăng ký (khách chưa đăng nhập) tràn hàng, chữ đè lên các icon
                          bên phải. Icon logo vẫn dẫn về trang chủ nên không mất lối vào nào. -->
                     <span class="hidden sm:inline text-fire font-mono tracking-wide">Mã Giảm Giá</span>
-                </Link>
+                    </Link>
+                </div>
 
                 <nav class="hidden md:flex items-center gap-1 text-sm font-medium">
                     <Link v-if="!auth.isAdmin" href="/" class="nav-pill rounded-xl px-3.5 py-2" :class="{ 'nav-pill--active': current === '/' }">Trang chủ</Link>
@@ -117,5 +135,6 @@ const maintenanceMode = computed(() => page.props.settings?.maintenanceMode ?? f
 
         <BottomNav />
         <ToastContainer />
+        <AccountDrawer v-if="auth.isLoggedIn && !auth.isAdmin" :open="accountDrawerOpen" @close="accountDrawerOpen = false" />
     </div>
 </template>
