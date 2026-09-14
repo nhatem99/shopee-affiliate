@@ -35,8 +35,8 @@ const maintenanceMode = computed(() => page.props.settings?.maintenanceMode ?? f
                 <Link href="/" class="flex items-center gap-2 font-extrabold text-xl text-[var(--color-ink)]">
                     <span class="w-8 h-8 rounded-lg bg-gradient-to-br from-[var(--color-accent)] to-[var(--color-accent-deep)] flex items-center justify-center text-white text-base font-extrabold dark:shadow-[0_4px_14px_rgba(var(--color-accent-rgb),0.4)]">%</span>
                     <!-- Ẩn dưới sm: ở 375px, chữ cứng này cộng với theme toggle + chuông thông báo
-                         + Đăng xuất/Đăng nhập tràn hàng, chữ đè lên các icon bên phải. Icon logo
-                         vẫn dẫn về trang chủ nên không mất lối vào nào. -->
+                         + Đăng nhập/Đăng ký (khách chưa đăng nhập) tràn hàng, chữ đè lên các icon
+                         bên phải. Icon logo vẫn dẫn về trang chủ nên không mất lối vào nào. -->
                     <span class="hidden sm:inline text-fire font-mono tracking-wide">Mã Giảm Giá</span>
                 </Link>
 
@@ -81,12 +81,15 @@ const maintenanceMode = computed(() => page.props.settings?.maintenanceMode ?? f
                     <!-- Tự ẩn khi không có dữ liệu (khách vãng lai, admin) — xem HandleInertiaRequests. -->
                     <NotificationBell />
                     <template v-if="auth.isLoggedIn">
+                        <!-- Không đặt "Đăng xuất" ở đây nữa: nút này luôn hiện bất kể màn hình
+                             rộng hẹp, nên trên điện thoại nó đẩy chuông thông báo lệch khỏi mép
+                             phải — dropdown chuông (rộng tới 22rem) neo theo đúng vị trí nút,
+                             lệch vào giữa màn hình là tràn ra ngoài mép trái, chữ bị cắt.
+                             Đăng xuất giờ nằm trong trang Tài khoản (xem Profile.vue), giống
+                             cách AdminLayout đặt nó cuối sidebar chứ không phải trên thanh trên
+                             cùng. -->
                         <Link v-if="!auth.isAdmin" href="/profile" class="hidden md:block text-sm text-[var(--color-muted)] hover:text-[var(--color-ink)] font-medium transition">{{ auth.user?.name }}</Link>
                         <span v-else class="hidden md:block text-sm text-[var(--color-muted)] font-medium">{{ auth.user?.name }}</span>
-                        <button @click="auth.logout()"
-                            class="text-sm text-[var(--color-muted)] hover:text-[var(--color-ink)] font-medium transition">
-                            Đăng xuất
-                        </button>
                     </template>
                     <template v-else-if="customerAuthEnabled">
                         <Link href="/login" class="text-sm text-[var(--color-muted)] hover:text-[var(--color-ink)] font-medium transition">Đăng nhập</Link>

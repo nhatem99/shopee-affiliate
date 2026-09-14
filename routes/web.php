@@ -120,7 +120,9 @@ Route::middleware('auth')->group(function () {
     Route::get('/don-hang', [OrderHistoryController::class, 'index'])->name('orders');
     Route::get('/profile', [ProfileController::class, 'show'])->name('profile');
     Route::patch('/profile', [ProfileController::class, 'updateProfile'])->name('profile.update');
+    Route::get('/profile/thong-tin', [ProfileController::class, 'info'])->name('profile.info');
     Route::post('/profile/payout', [ProfileController::class, 'storePayoutAccount'])->name('profile.payout');
+    Route::get('/profile/mat-khau', [ProfileController::class, 'password'])->name('profile.password.edit');
     Route::post('/profile/password', [ProfileController::class, 'updatePassword'])->middleware('throttle:login')->name('profile.password');
     Route::post('/withdrawals', [WithdrawalController::class, 'store'])->middleware('throttle:withdrawals')->name('withdrawals.store');
     Route::get('/vi/lich-su', [ProfileController::class, 'walletHistory'])->name('wallet.history');

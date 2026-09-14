@@ -1,6 +1,6 @@
 <script setup>
-import { Head, Link } from '@inertiajs/vue3'
-import AppLayout from '@/Layouts/AppLayout.vue'
+import { Head } from '@inertiajs/vue3'
+import AccountLayout from '@/Layouts/AccountLayout.vue'
 
 defineProps({
     available: Number,
@@ -32,11 +32,10 @@ const kindStyles = {
 
 <template>
     <Head title="Lịch sử số dư ví" />
-    <AppLayout>
-        <div class="max-w-3xl mx-auto px-4 py-8 space-y-6">
+    <AccountLayout>
+        <div class="space-y-6">
             <div>
-                <Link href="/profile" class="text-xs font-semibold text-[var(--color-muted)] hover:text-[var(--color-ink)]">← Tài khoản</Link>
-                <h1 class="text-2xl font-extrabold text-[var(--color-ink)] mt-1">Lịch sử số dư ví</h1>
+                <h1 class="text-2xl font-extrabold text-[var(--color-ink)]">Lịch sử số dư ví</h1>
                 <p class="text-sm text-[var(--color-muted)] mt-1">Từng lần tiền vào, tiền ra và số dư trước/sau mỗi lần.</p>
             </div>
 
@@ -89,5 +88,5 @@ const kindStyles = {
                 </p>
             </div>
         </div>
-    </AppLayout>
+    </AccountLayout>
 </template>

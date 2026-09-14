@@ -1,7 +1,7 @@
 <script setup>
 import { computed } from 'vue'
 import { Head, Link, router } from '@inertiajs/vue3'
-import AppLayout from '@/Layouts/AppLayout.vue'
+import AccountLayout from '@/Layouts/AccountLayout.vue'
 
 const props = defineProps({
     notifications: Object, // paginator
@@ -21,8 +21,8 @@ function openItem(n) {
 
 <template>
     <Head title="Thông báo" />
-    <AppLayout>
-        <div class="max-w-3xl mx-auto px-4 py-8 space-y-6">
+    <AccountLayout>
+        <div class="space-y-6">
             <div class="flex items-end justify-between gap-4 flex-wrap">
                 <div>
                     <h1 class="text-2xl font-extrabold text-[var(--color-ink)]">Thông báo</h1>
@@ -76,5 +76,5 @@ function openItem(n) {
                 >Cũ hơn →</Link>
             </div>
         </div>
-    </AppLayout>
+    </AccountLayout>
 </template>

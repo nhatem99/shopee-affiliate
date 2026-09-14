@@ -3,9 +3,11 @@
 namespace App\Http\Controllers;
 
 use App\Models\PayoutAccount;
+use App\Models\User;
 use App\Services\WalletHistoryService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Collection;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\Rules\Password;
 use Inertia\Inertia;
@@ -21,29 +23,18 @@ class ProfileController extends Controller
 
         $user = $request->user();
 
-        $payoutAccounts = $user->payoutAccounts()
-            ->get()
-            ->keyBy('provider')
-            ->map(fn ($a) => [
-                'provider' => $a->provider,
-                'account_number' => $a->account_number,
-                'account_name' => $a->account_name,
-            ]);
-
         return Inertia::render('Profile', [
             'profile' => [
                 'name' => $user->name,
                 'email' => $user->email,
-                'phone' => $user->phone,
                 // "Thành viên từ Tháng X" ở đầu /profile. Ghép chuỗi tay thay vì
                 // translatedFormat('F Y') — locale mặc định của app là 'en' (config/app.php),
                 // đổi locale ảnh hưởng toàn app nên không đáng chỉ để có mỗi dòng này.
                 'member_since' => 'Tháng '.$user->created_at->format('m/Y'),
-                // Tài khoản Google chưa từng đặt mật khẩu — form đổi mật khẩu ẩn ô "mật khẩu cũ"
-                // cho nhóm này, xem User::hasUsablePassword().
-                'has_password' => $user->hasUsablePassword(),
             ],
-            'payoutAccounts' => $payoutAccounts,
+            // Tổng quan không có form sửa ví, chỉ cần đọc để hiện trong modal rút tiền — cùng
+            // dữ liệu với trang Thông tin cá nhân (info()) nên gộp lại một hàm.
+            'payoutAccounts' => $this->payoutAccountsFor($user),
             'balance' => [
                 'earned' => $user->approvedCommissionTotal(),
                 'reserved' => $user->reservedWithdrawalTotal(),
@@ -64,6 +55,40 @@ class ProfileController extends Controller
                 'created_at' => $w->created_at->toDateTimeString(),
             ]),
             'minWithdrawal' => self::MIN_WITHDRAWAL,
+        ]);
+    }
+
+    /**
+     * Trang "Thông tin cá nhân" trong sidebar Tài khoản: hồ sơ + ví MoMo/ZaloPay nhận tiền.
+     * Tách khỏi show() vì Tổng quan không cần form sửa hai thứ này, chỉ cần đọc payoutAccounts
+     * để hiện trong modal rút tiền.
+     */
+    public function info(Request $request): Response
+    {
+        $this->ensureNotAdmin($request);
+
+        $user = $request->user();
+
+        return Inertia::render('Profile/PersonalInfo', [
+            'profile' => [
+                'name' => $user->name,
+                'email' => $user->email,
+                'phone' => $user->phone,
+            ],
+            'payoutAccounts' => $this->payoutAccountsFor($user),
+        ]);
+    }
+
+    /**
+     * Trang "Mật khẩu & Bảo mật" trong sidebar Tài khoản. Chỉ cần biết tài khoản đã có mật khẩu
+     * thật hay chưa để form ẩn/hiện ô "mật khẩu hiện tại" — xem updatePassword() bên dưới.
+     */
+    public function password(Request $request): Response
+    {
+        $this->ensureNotAdmin($request);
+
+        return Inertia::render('Profile/Password', [
+            'hasPassword' => $request->user()->hasUsablePassword(),
         ]);
     }
 
@@ -114,9 +139,6 @@ class ProfileController extends Controller
     }
 
     /**
-     * Trang tài khoản người dùng dành cho khách hàng — admin không có quyền truy cập.
-     */
-    /**
      * Đổi mật khẩu, hoặc đặt mật khẩu lần đầu cho tài khoản chỉ đăng nhập qua Google.
      *
      * Chỉ bắt nhập mật khẩu cũ khi tài khoản đã có mật khẩu thật — khách Google không có gì
@@ -138,6 +160,21 @@ class ProfileController extends Controller
         $user->update(['password' => $data['password']]);
 
         return back()->with('success', $isFirstTime ? 'Đã đặt mật khẩu.' : 'Đã đổi mật khẩu.');
+    }
+
+    /**
+     * @return Collection<string, array<string, mixed>>
+     */
+    private function payoutAccountsFor(User $user): Collection
+    {
+        return $user->payoutAccounts()
+            ->get()
+            ->keyBy('provider')
+            ->map(fn ($a) => [
+                'provider' => $a->provider,
+                'account_number' => $a->account_number,
+                'account_name' => $a->account_name,
+            ]);
     }
 
     private function ensureNotAdmin(Request $request): void

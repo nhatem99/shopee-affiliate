@@ -130,17 +130,21 @@ class ProfilePasswordTest extends TestCase
             ->assertSessionHasErrors('password');
     }
 
-    public function test_profile_page_exposes_has_password_flag(): void
+    /**
+     * Trang này sống ở /profile/mat-khau (mục "Mật khẩu & Bảo mật" trong sidebar Tài khoản —
+     * xem AccountLayout.vue), tách khỏi /profile (Tổng quan) chứ không gộp chung một trang nữa.
+     */
+    public function test_password_page_exposes_has_password_flag(): void
     {
         $this->actingAs($this->googleOnlyCustomer())
-            ->get('/profile')
+            ->get('/profile/mat-khau')
             ->assertInertia(fn ($page) => $page
-                ->component('Profile')
-                ->where('profile.has_password', false)
+                ->component('Profile/Password')
+                ->where('hasPassword', false)
             );
 
         $this->actingAs($this->customerWithPassword())
-            ->get('/profile')
-            ->assertInertia(fn ($page) => $page->where('profile.has_password', true));
+            ->get('/profile/mat-khau')
+            ->assertInertia(fn ($page) => $page->where('hasPassword', true));
     }
 }

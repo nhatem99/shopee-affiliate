@@ -1,7 +1,7 @@
 <script setup>
 import { ref, computed } from 'vue'
 import { Head, Link, useForm } from '@inertiajs/vue3'
-import AppLayout from '@/Layouts/AppLayout.vue'
+import AccountLayout from '@/Layouts/AccountLayout.vue'
 import { useToast } from '@/composables/useToast'
 
 const toast = useToast()
@@ -18,62 +18,11 @@ function vnd(n) {
     return '₫' + Number(n || 0).toLocaleString('vi-VN')
 }
 
-// --- Thông tin cá nhân ---
-const profileForm = useForm({
-    name: props.profile.name,
-    phone: props.profile.phone || '',
-})
-
-function saveProfile() {
-    profileForm.patch('/profile', {
-        preserveScroll: true,
-        onSuccess: () => toast.success('Đã cập nhật thông tin'),
-    })
-}
-
-// --- Mật khẩu ---
-// has_password=false với khách đăng nhập Google chưa từng đặt mật khẩu — form ẩn ô "mật khẩu
-// cũ" cho nhóm này (xem User::hasUsablePassword() / ProfileController::updatePassword).
-const passwordForm = useForm({
-    current_password: '',
-    password: '',
-    password_confirmation: '',
-})
-
-function savePassword() {
-    passwordForm.post('/profile/password', {
-        preserveScroll: true,
-        // Message khác nhau giữa "đặt lần đầu" và "đổi" tuỳ has_password — lấy từ flash server
-        // trả về (ProfileController::updatePassword) thay vì đoán ở đây.
-        onSuccess: (page) => { passwordForm.reset(); toast.success(page.props.flash?.success || 'Đã lưu mật khẩu.') },
-    })
-}
-
-// --- Ví nhận tiền ---
+// --- Ví nhận tiền (chỉ đọc ở đây — sửa nằm ở trang Thông tin cá nhân) ---
 const providers = [
-    { key: 'momo', label: 'Ví MoMo', color: 'text-pink-600' },
-    { key: 'zalopay', label: 'Ví ZaloPay', color: 'text-blue-600' },
+    { key: 'momo', label: 'Ví MoMo' },
+    { key: 'zalopay', label: 'Ví ZaloPay' },
 ]
-
-const payoutForms = {
-    momo: useForm({
-        provider: 'momo',
-        account_number: props.payoutAccounts?.momo?.account_number || '',
-        account_name: props.payoutAccounts?.momo?.account_name || '',
-    }),
-    zalopay: useForm({
-        provider: 'zalopay',
-        account_number: props.payoutAccounts?.zalopay?.account_number || '',
-        account_name: props.payoutAccounts?.zalopay?.account_name || '',
-    }),
-}
-
-function savePayout(key) {
-    payoutForms[key].post('/profile/payout', {
-        preserveScroll: true,
-        onSuccess: () => toast.success('Đã lưu thông tin ví'),
-    })
-}
 
 const hasAnyAccount = computed(() =>
     !!(props.payoutAccounts?.momo || props.payoutAccounts?.zalopay)
@@ -128,9 +77,9 @@ const providerLabels = { momo: 'MoMo', zalopay: 'ZaloPay' }
 
 <template>
     <Head title="Tài khoản" />
-    <AppLayout>
-        <div class="max-w-3xl mx-auto px-4 py-8 space-y-6">
-            <h1 class="text-2xl font-extrabold text-[var(--color-ink)]">Tài khoản của tôi</h1>
+    <AccountLayout>
+        <div class="space-y-6">
+            <h1 class="text-2xl font-extrabold text-[var(--color-ink)]">Tổng quan</h1>
 
             <!-- Chào mừng: avatar + huy hiệu "Lính mới" + ngày tham gia. Huy hiệu dựa vào
                  hasRealCashback (đã có sẵn cho điều kiện rút tiền) chứ không phải cờ riêng —
@@ -194,7 +143,7 @@ const providerLabels = { momo: 'MoMo', zalopay: 'ZaloPay' }
                         ></div>
                     </div>
                     <p class="text-xs text-[var(--color-muted)] mt-2">
-                        Còn <b class="text-[var(--color-ink)]">{{ vnd(minWithdrawal - balance.available) }}</b> nữa là đủ mức rút tối thiểu{{ hasAnyAccount ? '' : ' — nhớ khai sẵn ví nhận tiền bên dưới' }}.
+                        Còn <b class="text-[var(--color-ink)]">{{ vnd(minWithdrawal - balance.available) }}</b> nữa là đủ mức rút tối thiểu{{ hasAnyAccount ? '' : ' — nhớ khai sẵn ví nhận tiền ở mục Thông tin cá nhân' }}.
                     </p>
                 </div>
 
@@ -222,7 +171,7 @@ const providerLabels = { momo: 'MoMo', zalopay: 'ZaloPay' }
                 <ol class="space-y-3 text-sm text-[var(--color-ink)]">
                     <li class="flex gap-3">
                         <span class="flex-none w-6 h-6 rounded-full bg-[var(--color-peach-soft)] text-[var(--color-accent)] text-xs font-extrabold flex items-center justify-center">1</span>
-                        <span>Khai sẵn ví MoMo hoặc ZaloPay ở ngay bên dưới — làm sớm cho xong, đừng đợi đủ tiền mới khai.</span>
+                        <span>Khai sẵn ví MoMo hoặc ZaloPay ở mục <Link href="/profile/thong-tin" class="underline font-semibold">Thông tin cá nhân</Link> — làm sớm cho xong, đừng đợi đủ tiền mới khai.</span>
                     </li>
                     <li class="flex gap-3">
                         <span class="flex-none w-6 h-6 rounded-full bg-[var(--color-peach-soft)] text-[var(--color-accent)] text-xs font-extrabold flex items-center justify-center">2</span>
@@ -236,94 +185,6 @@ const providerLabels = { momo: 'MoMo', zalopay: 'ZaloPay' }
                 <Link href="/" class="btn-fire inline-block mt-5 px-5 py-2.5 rounded-xl text-sm no-underline">
                     Về trang chủ lấy mã →
                 </Link>
-            </div>
-
-            <!-- Thông tin cá nhân -->
-            <div class="card-glass rounded-2xl p-6">
-                <h2 class="font-bold text-[var(--color-ink)] mb-4">Thông tin cá nhân</h2>
-                <form @submit.prevent="saveProfile" class="space-y-4">
-                    <div>
-                        <label class="block text-xs font-semibold text-[var(--color-ink)] mb-1">Họ tên</label>
-                        <input v-model="profileForm.name" type="text" required
-                            class="w-full border border-[var(--color-line)] rounded-xl px-3 py-2.5 text-sm bg-[var(--color-bg)] text-[var(--color-ink)] focus:outline-none focus:border-[var(--color-accent)]" />
-                        <p v-if="profileForm.errors.name" class="text-xs text-red-500 mt-1">{{ profileForm.errors.name }}</p>
-                    </div>
-                    <div>
-                        <label class="block text-xs font-semibold text-[var(--color-ink)] mb-1">Email</label>
-                        <input :value="profile.email" type="email" disabled
-                            class="w-full border border-[var(--color-line)] rounded-xl px-3 py-2.5 text-sm bg-[var(--color-peach-soft)] text-[var(--color-muted)] cursor-not-allowed" />
-                    </div>
-                    <div>
-                        <label class="block text-xs font-semibold text-[var(--color-ink)] mb-1">Số điện thoại</label>
-                        <input v-model="profileForm.phone" type="tel"
-                            class="w-full border border-[var(--color-line)] rounded-xl px-3 py-2.5 text-sm bg-[var(--color-bg)] text-[var(--color-ink)] focus:outline-none focus:border-[var(--color-accent)]" />
-                        <p v-if="profileForm.errors.phone" class="text-xs text-red-500 mt-1">{{ profileForm.errors.phone }}</p>
-                    </div>
-                    <button type="submit" :disabled="profileForm.processing"
-                        class="btn-fire text-sm px-5 py-2.5 rounded-xl">
-                        Lưu thông tin
-                    </button>
-                </form>
-            </div>
-
-            <!-- Mật khẩu & Bảo mật -->
-            <div class="card-glass rounded-2xl p-6">
-                <h2 class="font-bold text-[var(--color-ink)] mb-1">Mật khẩu & Bảo mật</h2>
-                <p class="text-xs text-[var(--color-muted)] mb-4">
-                    {{ profile.has_password ? 'Cập nhật mật khẩu để bảo vệ tài khoản.' : 'Tài khoản đang đăng nhập bằng Google — đặt thêm mật khẩu để đăng nhập được cả bằng email.' }}
-                </p>
-                <form @submit.prevent="savePassword" class="space-y-4">
-                    <div v-if="profile.has_password">
-                        <label class="block text-xs font-semibold text-[var(--color-ink)] mb-1">Mật khẩu hiện tại</label>
-                        <input v-model="passwordForm.current_password" type="password" required autocomplete="current-password"
-                            class="w-full border border-[var(--color-line)] rounded-xl px-3 py-2.5 text-sm bg-[var(--color-bg)] text-[var(--color-ink)] focus:outline-none focus:border-[var(--color-accent)]" />
-                        <p v-if="passwordForm.errors.current_password" class="text-xs text-red-500 mt-1">{{ passwordForm.errors.current_password }}</p>
-                    </div>
-                    <div>
-                        <label class="block text-xs font-semibold text-[var(--color-ink)] mb-1">Mật khẩu mới</label>
-                        <input v-model="passwordForm.password" type="password" required autocomplete="new-password"
-                            class="w-full border border-[var(--color-line)] rounded-xl px-3 py-2.5 text-sm bg-[var(--color-bg)] text-[var(--color-ink)] focus:outline-none focus:border-[var(--color-accent)]" />
-                        <p class="text-xs text-[var(--color-muted)] mt-1">Từ 8 ký tự, gồm chữ thường, chữ hoa và số.</p>
-                        <p v-if="passwordForm.errors.password" class="text-xs text-red-500 mt-1">{{ passwordForm.errors.password }}</p>
-                    </div>
-                    <div>
-                        <label class="block text-xs font-semibold text-[var(--color-ink)] mb-1">Xác nhận mật khẩu mới</label>
-                        <input v-model="passwordForm.password_confirmation" type="password" required autocomplete="new-password"
-                            class="w-full border border-[var(--color-line)] rounded-xl px-3 py-2.5 text-sm bg-[var(--color-bg)] text-[var(--color-ink)] focus:outline-none focus:border-[var(--color-accent)]" />
-                    </div>
-                    <button type="submit" :disabled="passwordForm.processing"
-                        class="btn-fire text-sm px-5 py-2.5 rounded-xl">
-                        {{ profile.has_password ? 'Đổi mật khẩu' : 'Đặt mật khẩu' }}
-                    </button>
-                </form>
-            </div>
-
-            <!-- Ví nhận tiền -->
-            <div class="card-glass rounded-2xl p-6">
-                <h2 class="font-bold text-[var(--color-ink)] mb-1">Ví nhận tiền</h2>
-                <p class="text-xs text-[var(--color-muted)] mb-4">Thiết lập ví MoMo / ZaloPay để nhận hoa hồng khi rút.</p>
-                <div class="grid md:grid-cols-2 gap-4">
-                    <form v-for="p in providers" :key="p.key" @submit.prevent="savePayout(p.key)"
-                        class="border border-[var(--color-line)] rounded-xl p-4 space-y-3">
-                        <p class="font-bold text-sm" :class="p.color">{{ p.label }}</p>
-                        <div>
-                            <label class="block text-xs font-semibold text-[var(--color-ink)] mb-1">Số điện thoại ví</label>
-                            <input v-model="payoutForms[p.key].account_number" type="tel" placeholder="VD: 0901234567"
-                                class="w-full border border-[var(--color-line)] rounded-xl px-3 py-2 text-sm bg-[var(--color-bg)] text-[var(--color-ink)] focus:outline-none focus:border-[var(--color-accent)]" />
-                            <p v-if="payoutForms[p.key].errors.account_number" class="text-xs text-red-500 mt-1">{{ payoutForms[p.key].errors.account_number }}</p>
-                        </div>
-                        <div>
-                            <label class="block text-xs font-semibold text-[var(--color-ink)] mb-1">Tên chủ ví</label>
-                            <input v-model="payoutForms[p.key].account_name" type="text" placeholder="VD: NGUYEN VAN A"
-                                class="w-full border border-[var(--color-line)] rounded-xl px-3 py-2 text-sm bg-[var(--color-bg)] text-[var(--color-ink)] focus:outline-none focus:border-[var(--color-accent)]" />
-                            <p v-if="payoutForms[p.key].errors.account_name" class="text-xs text-red-500 mt-1">{{ payoutForms[p.key].errors.account_name }}</p>
-                        </div>
-                        <button type="submit" :disabled="payoutForms[p.key].processing"
-                            class="w-full bg-[var(--color-peach-soft)] hover:bg-[var(--color-peach)] text-[var(--color-ink)] text-sm font-semibold py-2 rounded-xl transition disabled:opacity-60">
-                            Lưu {{ p.label }}
-                        </button>
-                    </form>
-                </div>
             </div>
 
             <!-- Lịch sử rút -->
@@ -400,5 +261,5 @@ const providerLabels = { momo: 'MoMo', zalopay: 'ZaloPay' }
                 </form>
             </div>
         </div>
-    </AppLayout>
+    </AccountLayout>
 </template>
