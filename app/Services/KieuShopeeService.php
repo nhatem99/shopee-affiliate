@@ -3,7 +3,6 @@
 namespace App\Services;
 
 use App\Models\ApiConfig;
-use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
@@ -54,7 +53,7 @@ class KieuShopeeService
         $row = ApiConfig::where('platform', self::SOURCE)->first();
         $testUrl = $row->meta['test_url'] ?? null;
 
-        $result = $this->fetchProductAndVoucherLink($testUrl ?: self::FALLBACK_TEST_URL, useCache: false);
+        $result = $this->fetchProductAndVoucherLink($testUrl ?: self::FALLBACK_TEST_URL);
 
         if ($result === null) {
             return [
@@ -69,22 +68,15 @@ class KieuShopeeService
     }
 
     /**
+     * Không cache: mỗi lượt dán link phải đi lấy mã MỚI từ nguồn. Cache theo URL từng khiến
+     * khách dán lại đúng sản phẩm nhận về mã đã hết lượt (do người khách trước đó dùng), tưởng
+     * là lỗi hệ thống.
+     *
      * @return array{voucher_link: string, shop_id: ?string, item_id: ?string, product: ?array}|null
      */
-    public function fetchProductAndVoucherLink(string $shopeeUrl, bool $useCache = true): ?array
+    public function fetchProductAndVoucherLink(string $shopeeUrl): ?array
     {
-        if (! $useCache) {
-            return $this->fetch($shopeeUrl);
-        }
-
-        // Cache ngắn hạn — cùng 1 link được dán lại (test, hoặc nhiều người cùng xem 1 sản
-        // phẩm hot) thì trả ngay khỏi phải đợi round-trip. 15 phút là đủ ngắn để không giữ
-        // mã đã hết lượt quá lâu (bên nguồn cũng không báo trạng thái còn/hết lượt của mã).
-        return Cache::remember(
-            'kieushopee:'.md5($shopeeUrl),
-            now()->addMinutes(15),
-            fn () => $this->fetch($shopeeUrl),
-        );
+        return $this->fetch($shopeeUrl);
     }
 
     /**

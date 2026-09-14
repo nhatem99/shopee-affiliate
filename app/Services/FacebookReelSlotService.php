@@ -4,6 +4,8 @@ namespace App\Services;
 
 use App\Models\ApiConfig;
 use App\Models\FacebookReelSlot;
+use Illuminate\Contracts\Cache\LockTimeoutException;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Log;
 
 /**
@@ -43,12 +45,36 @@ class FacebookReelSlotService
      */
     public function reelUrlFor(string $productKey, string $displayName, string $targetUrl): ?string
     {
-        $pool = $this->pool();
-
-        if (! $pool) {
+        if (! $this->pool()) {
             return null;
         }
 
+        // Khoá theo SẢN PHẨM. claim() bên dưới ghi product_key/leased_until vào DB TRƯỚC khi
+        // Graph API xác nhận đổi caption xong (phải claim trước để giữ đúng 1 reel vật lý cho
+        // sản phẩm này, không bị request khác giành mất giữa chừng). Không khoá thì hai khách
+        // cùng xem một sản phẩm hot bấm gần nhau: request sau lọt qua nhánh $held ngay sau khi
+        // request trước vừa claim (DB đã có product_key) nhưng TRƯỚC KHI Graph API trả lời —
+        // nhận được URL và tưởng cap đã đổi xong, trong khi Facebook có khi vẫn chưa cập nhật.
+        $lock = Cache::lock("fb_reel_slot:{$productKey}", 30);
+
+        try {
+            $lock->block(15);
+        } catch (LockTimeoutException $e) {
+            Log::warning('FacebookReelSlotService: chờ quá lâu khoá theo sản phẩm', ['product' => $productKey]);
+
+            return null;
+        }
+
+        try {
+            return $this->reelUrlForLocked($productKey, $displayName, $targetUrl);
+        } finally {
+            $lock->release();
+        }
+    }
+
+    private function reelUrlForLocked(string $productKey, string $displayName, string $targetUrl): ?string
+    {
+        $pool = $this->pool();
         $leaseMinutes = $this->config->facebookReelLeaseMinutes();
         $leasedUntil = now()->addMinutes($leaseMinutes);
 

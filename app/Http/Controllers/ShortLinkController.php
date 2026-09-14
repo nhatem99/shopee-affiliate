@@ -61,11 +61,11 @@ class ShortLinkController extends Controller
 
         // Ref có thể đã phát ra từ lâu (tối đa 7 ngày — TTL_DAYS) — mã kèm trong $url lúc đó có
         // thể đã hết lượt, nguồn không báo trạng thái còn/hết nên không biết trước được. Gọi lại
-        // đúng nguồn bằng URL Shopee gốc để lấy link mã MỚI; refetch dùng chung cache 15-30 phút
-        // với ShopeeVoucherController::resolve() (khoá theo cùng $sourceUrl) nên bấm ngay sau khi
-        // vừa lấy mã (đường thường gặp nhất) trúng cache, không cộng thêm round-trip nào. Chỉ khi
-        // cache đã hết (ref thật sự cũ) mới phải chờ round-trip sống — và null (fetch lỗi/hết mã)
-        // thì rơi về đúng $url đã lưu, không chặn đường mua hàng của khách.
+        // đúng nguồn bằng URL Shopee gốc để lấy link mã MỚI — nguồn không còn cache (xem
+        // KieuShopeeService/GanmaService) nên đây LUÔN là một round-trip sống, kể cả khi khách
+        // bấm mua ngay sau khi vừa quét xong; chấp nhận đánh đổi độ trễ (ganma ~20s) để chắc chắn
+        // lấy mã mới nhất tại đúng lúc khách bấm mua. Fetch lỗi/không có mã (null) thì rơi về
+        // đúng $url đã lưu, không chặn đường mua hàng của khách.
         if ($voucherRef->source_url) {
             $fresh = $source === GanmaService::SOURCE
                 ? $this->ganma->fetchProductAndVoucherLink($voucherRef->source_url)

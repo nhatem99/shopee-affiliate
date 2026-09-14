@@ -72,7 +72,7 @@ class GanmaServiceTest extends TestCase
                 ])),
         ]);
 
-        $result = $this->service()->fetchProductAndVoucherLink(self::SHORT_URL, useCache: false);
+        $result = $this->service()->fetchProductAndVoucherLink(self::SHORT_URL);
 
         $this->assertSame(self::YOUTUBE_LINK, $result['voucher_link']);
         $this->assertSame('Loa Bluetooth JBL Flip 6', $result['product']['product_name']);
@@ -99,7 +99,7 @@ class GanmaServiceTest extends TestCase
                 ->pushStatus(500),
         ]);
 
-        $this->assertNull($this->service()->fetchProductAndVoucherLink(self::SHORT_URL, useCache: false));
+        $this->assertNull($this->service()->fetchProductAndVoucherLink(self::SHORT_URL));
     }
 
     /** Lỗi đồng bộ ngay ở bước tạo job: HTTP 200 nhưng job_id = null. */
@@ -113,7 +113,7 @@ class GanmaServiceTest extends TestCase
             ]),
         ]);
 
-        $this->assertNull($this->service()->fetchProductAndVoucherLink(self::SHORT_URL, useCache: false));
+        $this->assertNull($this->service()->fetchProductAndVoucherLink(self::SHORT_URL));
     }
 
     /** Job treo mãi không xong thì phải bỏ cuộc, không giữ request của khách vô hạn. */
@@ -126,7 +126,7 @@ class GanmaServiceTest extends TestCase
             '*/yt/check-status*' => Http::response($this->statusBody('processing')),
         ]);
 
-        $this->assertNull($this->service()->fetchProductAndVoucherLink(self::SHORT_URL, useCache: false));
+        $this->assertNull($this->service()->fetchProductAndVoucherLink(self::SHORT_URL));
 
         // 1 request tạo job + 2 lần hỏi. Vòng thứ 3 dừng trước khi gửi vì ngân sách còn 0 —
         // gửi thêm một request 20 giây ở đúng lúc hết giờ là cách chắc chắn nhất để vượt
@@ -148,7 +148,7 @@ class GanmaServiceTest extends TestCase
                 ->push($this->statusBody('complete', ['youtube_link' => self::YOUTUBE_LINK])),
         ]);
 
-        $result = $this->service()->fetchProductAndVoucherLink(self::SHORT_URL, useCache: false);
+        $result = $this->service()->fetchProductAndVoucherLink(self::SHORT_URL);
 
         $this->assertSame(self::YOUTUBE_LINK, $result['voucher_link']);
     }
@@ -162,7 +162,7 @@ class GanmaServiceTest extends TestCase
         Http::fake();
 
         $this->assertFalse($this->service()->canHandle('https://shopee.vn/product-i.1.2'));
-        $this->assertNull($this->service()->fetchProductAndVoucherLink('https://shopee.vn/product-i.1.2', useCache: false));
+        $this->assertNull($this->service()->fetchProductAndVoucherLink('https://shopee.vn/product-i.1.2'));
 
         Http::assertNothingSent();
     }
@@ -189,7 +189,7 @@ class GanmaServiceTest extends TestCase
             ])),
         ]);
 
-        $product = $this->service()->fetchProductAndVoucherLink(self::SHORT_URL, useCache: false)['product'];
+        $product = $this->service()->fetchProductAndVoucherLink(self::SHORT_URL)['product'];
 
         $this->assertSame(0, $product['discount_percent']);
         $this->assertSame(547500.0, $product['original_price']);

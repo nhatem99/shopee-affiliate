@@ -3,7 +3,6 @@
 namespace App\Services;
 
 use App\Models\ApiConfig;
-use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Sleep;
@@ -63,9 +62,13 @@ class GanmaService
     }
 
     /**
+     * Không cache: mỗi lượt dán link phải đi lấy mã MỚI từ nguồn. Cache theo URL từng khiến
+     * khách dán lại đúng sản phẩm nhận về mã đã hết lượt (do người khách trước đó dùng), tưởng
+     * là lỗi hệ thống.
+     *
      * @return array{voucher_link: string, shop_id: ?string, item_id: ?string, product: ?array}|null
      */
-    public function fetchProductAndVoucherLink(string $shopeeUrl, bool $useCache = true): ?array
+    public function fetchProductAndVoucherLink(string $shopeeUrl): ?array
     {
         if (! $this->canHandle($shopeeUrl)) {
             Log::info('GanmaService: bỏ qua vì không phải link ngắn từ app Shopee', ['url' => $shopeeUrl]);
@@ -73,17 +76,7 @@ class GanmaService
             return null;
         }
 
-        if (! $useCache) {
-            return $this->fetch($shopeeUrl);
-        }
-
-        // Cache dài tay hơn kieushopee (15 phút): mỗi lần miss là khách phải đợi ~20 giây chứ
-        // không phải vài giây, nên tránh gọi lại được lần nào là đáng lần đó.
-        return Cache::remember(
-            'ganma:'.md5($shopeeUrl),
-            now()->addMinutes(30),
-            fn () => $this->fetch($shopeeUrl),
-        );
+        return $this->fetch($shopeeUrl);
     }
 
     /**

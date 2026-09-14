@@ -24,9 +24,7 @@ class KieuShopeeCheck extends Command
         $this->newLine();
 
         $startedAt = microtime(true);
-        // Bỏ qua cache — nếu không, lần chạy thứ hai chỉ đọc lại kết quả cũ và
-        // không nói được gì về tình trạng hiện tại của nguồn.
-        $result = $kieuShopee->fetchProductAndVoucherLink($this->argument('url'), useCache: false);
+        $result = $kieuShopee->fetchProductAndVoucherLink($this->argument('url'));
         $durationMs = (int) ((microtime(true) - $startedAt) * 1000);
 
         if ($result === null) {

@@ -234,14 +234,14 @@ class KieuShopeeServiceTest extends TestCase
         $this->assertNull($this->fetch());
     }
 
-    public function test_caches_result_so_same_url_is_fetched_once(): void
+    public function test_does_not_cache_each_call_fetches_fresh(): void
     {
         Http::fake([self::ENDPOINT => Http::response($this->flightBody())]);
 
         $this->fetch();
         $this->fetch();
 
-        Http::assertSentCount(1);
+        Http::assertSentCount(2);
     }
 
     /**
@@ -289,16 +289,5 @@ class KieuShopeeServiceTest extends TestCase
         $this->fetch();
 
         Http::assertSent(fn (Request $request) => $request->hasHeader('Next-Action', 'test-next-action'));
-    }
-
-    public function test_bypasses_cache_when_asked(): void
-    {
-        Http::fake([self::ENDPOINT => Http::response($this->flightBody())]);
-
-        $service = app(KieuShopeeService::class);
-        $service->fetchProductAndVoucherLink(self::SHOPEE_URL, useCache: false);
-        $service->fetchProductAndVoucherLink(self::SHOPEE_URL, useCache: false);
-
-        Http::assertSentCount(2);
     }
 }
