@@ -13,22 +13,14 @@
  * Bố cục: món to (trăng, mây) dồn về mép và để mờ, món nhỏ (đèn, bánh, sao) rải thưa; tránh
  * đặt gì ở dải giữa 25-75% chiều ngang trong 1/3 màn hình trên — đó là chỗ ô dán link.
  * Keyframes ở app.css (festive-*). Thời lượng/độ trễ lệch nhau để không nhún đồng loạt.
+ *
+ * Không vẽ người (trẻ con rước đèn) theo yêu cầu — chỉ còn cảnh vật (trăng, đèn lồng, bánh,
+ * sao, mây). FestiveKid.vue và hiệu ứng đoàn rước/nhảy cẫng (festive-parade/-walk/-hop) không
+ * còn chỗ dùng nên đã bỏ khỏi component này.
  */
-import { useFestive } from '@/composables/useFestive'
-import FestiveKid from '@/Components/FestiveKid.vue'
-
-// Bật khi Home.vue báo tìm mã xong: đoàn trẻ con rước đèn diễu hành ngang chân màn hình,
-// hai em đứng sẵn ở góc nhảy cẫng lên, sao loé dọc đường rước.
-const { celebrating } = useFestive()
-
 const items = [
     // Trăng: to, mờ, góc trên phải — lúc chưa cuộn thấy nửa trăng ló dưới header.
     { kind: 'moon', left: '70%', top: '3%', w: 'w-40 md:w-56', anim: 'festive-glow', duration: '7s', delay: '0s', opacity: 0.85 },
-
-    // Hai em bé cầm đèn đứng hai góc dưới (ngay trên BottomNav), nhấp nhô nhẹ. Lúc ăn mừng
-    // đổi sang nhảy (festive-hop).
-    { kind: 'kid', left: '1%', top: '70%', w: 'w-20 md:w-28', anim: 'festive-float', duration: '6s', delay: '0s', opacity: 1, shirt: '#ff6b4a', shorts: '#2f5fd0', hair: 'boy', lantern: 'star' },
-    { kind: 'kid', left: '80%', top: '72%', w: 'w-16 md:w-24', anim: 'festive-float', duration: '7s', delay: '1.5s', opacity: 1, shirt: '#ffd35c', shorts: '#e0457b', hair: 'girl', lantern: 'round' },
 
     // Đèn lồng treo từ mép trên (có dây), đung đưa quanh điểm treo.
     { kind: 'lantern', left: '3%', top: '2%', w: 'w-12 md:w-16', anim: 'festive-sway', duration: '4.5s', delay: '0s', opacity: 1 },
@@ -49,25 +41,6 @@ const items = [
     // Mây trôi ngang cả màn hình, rất mờ để chỉ là nền.
     { kind: 'cloud', left: '-20%', top: '34%', w: 'w-32 md:w-56', anim: 'festive-drift', duration: '55s', delay: '0s', opacity: 0.32 },
     { kind: 'cloud', left: '-20%', top: '62%', w: 'w-24 md:w-40', anim: 'festive-drift', duration: '70s', delay: '-30s', opacity: 0.28 },
-]
-
-// Đoàn rước đèn: chỉ dựng lúc ăn mừng, đi từ ngoài mép trái sang hết mép phải (festive-parade,
-// 9s = FESTIVE_CELEBRATE_MS). Mỗi em xuất phát lệch nhau một chút để thành hàng chứ không
-// chồng lên nhau; bên trong mỗi em có nhịp bước (festive-walk) riêng.
-const parade = [
-    { left: '-14%', top: '66%', w: 'w-20 md:w-28', walk: '0.55s', shirt: '#2fbf71', shorts: '#2f5fd0', hair: 'boy', lantern: 'star' },
-    { left: '-30%', top: '69%', w: 'w-16 md:w-24', walk: '0.62s', shirt: '#ff6b4a', shorts: '#ffd35c', hair: 'girl', lantern: 'fish' },
-    { left: '-46%', top: '67%', w: 'w-[4.5rem] md:w-[6.5rem]', walk: '0.5s', shirt: '#7c5cff', shorts: '#e0457b', hair: 'boy', lantern: 'round' },
-    { left: '-62%', top: '70%', w: 'w-14 md:w-[5.5rem]', walk: '0.58s', shirt: '#ffd35c', shorts: '#2fbf71', hair: 'girl', lantern: 'star' },
-]
-
-// Sao loé dọc đường rước, hiện lệch pha theo hướng đoàn đi (trái -> phải).
-const paradeSparkles = [
-    { left: '12%', top: '62%', w: 'w-4 md:w-5', duration: '1.1s', delay: '1.5s' },
-    { left: '30%', top: '80%', w: 'w-3 md:w-4', duration: '1.3s', delay: '2.6s' },
-    { left: '48%', top: '60%', w: 'w-4', duration: '1s', delay: '3.7s' },
-    { left: '66%', top: '82%', w: 'w-3', duration: '1.2s', delay: '4.8s' },
-    { left: '84%', top: '64%', w: 'w-4 md:w-5', duration: '1.1s', delay: '5.9s' },
 ]
 
 const petals = [0, 45, 90, 135, 180, 225, 270, 315]
@@ -118,38 +91,11 @@ const petals = [0, 45, 90, 135, 180, 225, 270, 315]
             </defs>
         </svg>
 
-        <!-- Đoàn rước đèn + sao dọc đường: chỉ dựng lúc ăn mừng. -->
-        <template v-if="celebrating">
-            <div
-                v-for="(kid, i) in parade"
-                :key="'parade-' + i"
-                class="absolute festive-parade"
-                :class="kid.w"
-                :style="{ left: kid.left, top: kid.top }"
-            >
-                <div class="festive-walk" :style="{ animationDuration: kid.walk }">
-                    <FestiveKid :shirt="kid.shirt" :shorts="kid.shorts" :hair="kid.hair" :lantern="kid.lantern" />
-                </div>
-            </div>
-
-            <div
-                v-for="(spot, i) in paradeSparkles"
-                :key="'pspark-' + i"
-                class="absolute festive-twinkle"
-                :class="spot.w"
-                :style="{ left: spot.left, top: spot.top, animationDuration: spot.duration, animationDelay: spot.delay }"
-            >
-                <svg viewBox="0 0 40 40" class="w-full h-auto drop-shadow-[0_0_8px_rgba(255,214,90,1)]">
-                    <path d="M20 2 Q22 18 38 20 Q22 22 20 38 Q18 22 2 20 Q18 18 20 2 Z" fill="url(#fd-spark)" />
-                </svg>
-            </div>
-        </template>
-
         <div
             v-for="(item, i) in items"
             :key="i"
             class="absolute will-change-transform"
-            :class="[item.w, item.anim, celebrating && item.kind === 'kid' ? 'festive-hop' : '']"
+            :class="[item.w, item.anim]"
             :style="{ left: item.left, top: item.top, opacity: item.opacity, animationDuration: item.duration, animationDelay: item.delay }"
         >
             <!-- Trăng: quầng sáng rộng + đĩa trăng gradient + vài vết mờ. -->
@@ -160,9 +106,6 @@ const petals = [0, 45, 90, 135, 180, 225, 270, 315]
                 <circle cx="116" cy="112" r="6" fill="#e9b24a" opacity="0.24" />
                 <circle cx="96" cy="126" r="4" fill="#e9b24a" opacity="0.2" />
             </svg>
-
-            <!-- Em bé cầm đèn đứng ở góc. -->
-            <FestiveKid v-else-if="item.kind === 'kid'" :shirt="item.shirt" :shorts="item.shorts" :hair="item.hair" :lantern="item.lantern" />
 
             <!-- Đèn lồng: dây treo, nắp, thân gradient với gân, đáy, tua. Xoay quanh điểm treo
                  (transform-origin đặt ở CSS .festive-sway). -->

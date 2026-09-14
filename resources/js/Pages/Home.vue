@@ -531,12 +531,23 @@ onUnmounted(() => {
                     :class="stuck ? 'bg-[var(--color-bg)] shadow-[0_10px_24px_rgba(0,0,0,.12)]' : ''"
                 >
                     <div v-if="canUseVoucherTool" class="rounded-3xl bg-gradient-to-br from-[var(--color-peach)] via-[var(--color-peach-soft)] to-[var(--color-green-soft)] border border-[var(--color-line)] transition-all duration-200" :class="stuck ? 'p-4' : 'p-6 md:p-8'">
-                        <!-- Giữ h1 trong DOM (chỉ thu chiều cao) để không mất thẻ h1 của trang. -->
-                        <div class="overflow-hidden transition-all duration-200" :class="stuck ? 'max-h-0 opacity-0' : 'max-h-40 opacity-100 mb-4'">
-                            <h1 class="text-xl md:text-2xl font-extrabold text-[var(--color-ink)] mb-1">
-                                Dán link sản phẩm Shopee để lấy mã giảm giá
-                            </h1>
-                            <p class="text-sm text-[var(--color-muted)]">Nhận ngay link đã áp sẵn mã giảm giá — không cần nhập mã, miễn phí.</p>
+                        <!-- Giữ h1 trong DOM (chỉ thu chiều cao) để không mất thẻ h1 của trang.
+                             Thu gọn bằng grid-template-rows (1fr -> 0fr) chứ không dùng max-height:
+                             max-height phải đoán một giá trị lớn hơn chiều cao thật (vd max-h-40 =
+                             160px trong khi nội dung chỉ ~70px), nên phần lớn thời gian transition
+                             chiều cao hiển thị không đổi (vẫn bị nội dung ghim ở 70px), rồi mới đột
+                             ngột sụp xuống 0 ở cuối — nhìn giống bị khựng/giật thay vì thu gọn mượt.
+                             Grid-rows nội suy đúng theo tỉ lệ thật nên mượt bất kể chiều cao nội dung. -->
+                        <div
+                            class="grid transition-[grid-template-rows,opacity,margin-bottom] duration-200 ease-out"
+                            :class="stuck ? 'grid-rows-[0fr] opacity-0 mb-0' : 'grid-rows-[1fr] opacity-100 mb-4'"
+                        >
+                            <div class="overflow-hidden min-h-0">
+                                <h1 class="text-xl md:text-2xl font-extrabold text-[var(--color-ink)] mb-1">
+                                    Dán link sản phẩm Shopee để lấy mã giảm giá
+                                </h1>
+                                <p class="text-sm text-[var(--color-muted)]">Nhận ngay link đã áp sẵn mã giảm giá — không cần nhập mã, miễn phí.</p>
+                            </div>
                         </div>
 
                         <div class="flex flex-col md:flex-row gap-3">
