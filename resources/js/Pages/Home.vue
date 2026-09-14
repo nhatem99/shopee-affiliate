@@ -79,6 +79,18 @@ const resolving = ref(false)
 const voucherError = ref(null)
 const history = useLocalStorage('sv_history', [])
 
+// Dọn lịch sử ngay khi mở trang, trước khi khách kịp bấm phải mục chết:
+//  - ref chỉ sống 7 ngày (VoucherRefService::TTL_DAYS) — mục cũ hơn bấm chắc chắn lỗi.
+//  - HISTORY_VALID_FROM: mốc chuyển ref từ cache sang bảng DB. Ref phát trước mốc này nằm trong
+//    cache và đã bị deploy (optimize:clear) xoá sạch, nên mục nào cũ hơn cũng bỏ luôn.
+//  - Mục không có created_at là định dạng cũ (trước khi lưu ref) — không bấm được, bỏ.
+const HISTORY_VALID_FROM = Date.parse('2026-09-14T00:00:00+07:00')
+const HISTORY_TTL_MS = 7 * 24 * 60 * 60 * 1000
+history.value = history.value.filter((h) => {
+    const t = Date.parse(h?.created_at)
+    return !Number.isNaN(t) && t >= HISTORY_VALID_FROM && Date.now() - t < HISTORY_TTL_MS
+})
+
 // Khối tab ngay dưới ô dán link: "Lịch sử" | "Bảng xếp hạng". Bảng xếp hạng từng nằm tận cuối
 // trang, sau khối giải thích hoàn tiền — trên điện thoại là 3-4 màn hình, không ai kéo tới.
 // Đưa lên đây, cạnh lịch sử, để khách vừa dán link xong là thấy ngay có người đang nhận tiền.
@@ -184,8 +196,8 @@ function resolveVoucher() {
                         product_image: result.product?.product_image || null,
                         created_at: new Date().toISOString(),
                         // Lưu token mờ để "mua lại" sau này chỉ cần bấm nút, không cần hiện đường
-                        // dẫn thô cho khách. ref do server phát ra (xem maskVoucherLink) và sống
-                        // 7 ngày trong cache — hết hạn thì /voucher/shorten trả 422 và báo lỗi.
+                        // dẫn thô cho khách. ref do server phát ra (xem VoucherRefService) và sống
+                        // 7 ngày — hết hạn thì /voucher/shorten trả 422 và báo lỗi.
                         ref: result.voucher_ref,
                     },
                     ...history.value,

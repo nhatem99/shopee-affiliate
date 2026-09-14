@@ -10,11 +10,10 @@ use App\Services\KieuShopeeService;
 use App\Services\ShopeeLinkResolverService;
 use App\Services\TrackingService;
 use App\Services\UrlValidationService;
+use App\Services\VoucherRefService;
 use App\Services\VoucherSourceResolver;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Cache;
-use Illuminate\Support\Str;
 use Inertia\Inertia;
 use Inertia\Response;
 
@@ -26,6 +25,7 @@ class ShopeeVoucherController extends Controller
         private KieuShopeeService $kieuShopee,
         private GanmaService $ganma,
         private VoucherSourceResolver $sources,
+        private VoucherRefService $refs,
         private TrackingService $tracking,
     ) {}
 
@@ -148,17 +148,9 @@ class ShopeeVoucherController extends Controller
      */
     private function maskVoucherLink(string $voucherLink, string $source): string
     {
-        $ref = Str::random(32);
-
         // Lưu kèm NGUỒN đã sinh ra link này, không chỉ mỗi URL: lúc khách bấm "Mua ngay",
         // ShortLinkController mới biết ghi `source` nào vào short-link và tracking. Suy ngược
         // từ URL thì không đáng tin — cả hai nguồn đều có thể trả về link trên domain Shopee.
-        //
-        // TTL dài (7 ngày) để nút "mua lại" trong lịch sử chuyển đổi (lưu ở localStorage,
-        // xem Home.vue) còn dùng được sau vài ngày — mã có thể hết lượt trước đó, nhưng
-        // đó vốn là giới hạn có sẵn (nguồn không báo trạng thái còn/hết lượt).
-        Cache::put("voucher_ref:{$ref}", ['url' => $voucherLink, 'source' => $source], now()->addDays(7));
-
-        return $ref;
+        return $this->refs->issue($voucherLink, $source);
     }
 }

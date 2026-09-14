@@ -12,10 +12,10 @@ class ShortLinkService
      * theo giai đoạn còn ý nghĩa — không thì một sản phẩm bán quanh năm chỉ có đúng một hàng với
      * số click cộng dồn từ đầu, không biết lượt nào của tháng nào.
      *
-     * 7 ngày để khớp với vòng đời của voucher_ref (xem ShopeeVoucherController::maskVoucherLink),
-     * tức là khoảng thời gian một lần "lấy mã" còn bấm lại được.
+     * Khớp với vòng đời của voucher_ref (VoucherRefService::TTL_DAYS), tức là khoảng thời gian
+     * một lần "lấy mã" còn bấm lại được.
      */
-    private const REUSE_WINDOW_DAYS = 7;
+    private const REUSE_WINDOW_DAYS = VoucherRefService::TTL_DAYS;
 
     /**
      * Tạo short-link cho $targetUrl, hoặc dùng lại hàng còn hạn đang trỏ tới đúng URL đó.

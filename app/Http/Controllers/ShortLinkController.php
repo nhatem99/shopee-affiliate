@@ -12,6 +12,7 @@ use App\Services\KieuShopeeService;
 use App\Services\ShortLinkService;
 use App\Services\TrackingService;
 use App\Services\UrlValidationService;
+use App\Services\VoucherRefService;
 use Illuminate\Contracts\Cache\LockTimeoutException;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
@@ -31,6 +32,7 @@ class ShortLinkController extends Controller
         private ShortLinkService $shortLinks,
         private AffiliateLinkRewriterService $rewriter,
         private TrackingService $tracking,
+        private VoucherRefService $refs,
     ) {}
 
     public function store(Request $request): JsonResponse
@@ -44,21 +46,14 @@ class ShortLinkController extends Controller
             'product_image' => ['nullable', 'url', 'max:2000'],
         ]);
 
-        $cached = Cache::get("voucher_ref:{$validated['ref']}");
+        $voucherRef = $this->refs->resolve($validated['ref']);
 
-        if (! $cached) {
+        if ($voucherRef === null) {
             return response()->json(['message' => 'Link đã hết hạn, vui lòng tải lại trang và thử lại.'], 422);
         }
 
-        // Từ khi có nguồn thứ hai (ganma), ref lưu cả URL lẫn nguồn đã sinh ra nó. Ref phát ra
-        // TRƯỚC bản deploy này vẫn còn sống tới 7 ngày và chỉ là chuỗi URL trần — đọc được cả
-        // hai dạng để khách đang giữ tab cũ không bị gãy nút "Mua ngay".
-        $url = is_array($cached) ? ($cached['url'] ?? null) : $cached;
-        $source = is_array($cached) ? ($cached['source'] ?? KieuShopeeService::SOURCE) : KieuShopeeService::SOURCE;
-
-        if (! is_string($url) || $url === '') {
-            return response()->json(['message' => 'Link đã hết hạn, vui lòng tải lại trang và thử lại.'], 422);
-        }
+        $url = $voucherRef->url;
+        $source = $voucherRef->source ?? KieuShopeeService::SOURCE;
 
         try {
             $this->urlValidator->validateAffiliateRedirectUrl($url);

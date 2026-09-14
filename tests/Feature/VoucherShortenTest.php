@@ -3,7 +3,9 @@
 namespace Tests\Feature;
 
 use App\Models\ApiConfig;
+use App\Models\VoucherRef;
 use App\Services\KieuShopeeService;
+use App\Services\VoucherRefService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Http;
@@ -38,10 +40,7 @@ class VoucherShortenTest extends TestCase
     /** Phát một ref hợp lệ y như ShopeeVoucherController::maskVoucherLink() làm. */
     private function ref(string $url = self::VOUCHER_URL): string
     {
-        $ref = str_repeat('a', 32);
-        Cache::put("voucher_ref:{$ref}", $url, now()->addDay());
-
-        return $ref;
+        return app(VoucherRefService::class)->issue($url, KieuShopeeService::SOURCE);
     }
 
     private function enableCommentRedirect(array $meta = []): void
@@ -360,11 +359,35 @@ class VoucherShortenTest extends TestCase
         $this->shorten($this->ref('https://evil.example.com/x'))->assertStatus(422);
     }
 
-    public function test_rejects_expired_ref(): void
+    public function test_rejects_unknown_ref(): void
     {
         Http::fake();
 
         $this->postJson('/voucher/shorten', ['ref' => str_repeat('z', 32)])->assertStatus(422);
+    }
+
+    public function test_rejects_expired_ref(): void
+    {
+        Http::fake();
+
+        $ref = $this->ref();
+        VoucherRef::where('ref', $ref)->update(['expires_at' => now()->subMinute()]);
+
+        $this->postJson('/voucher/shorten', ['ref' => $ref])->assertStatus(422);
+    }
+
+    /**
+     * Lý do ref chuyển từ cache sang bảng riêng: deploy chạy optimize:clear (kèm cache:clear),
+     * mà nút "Mua ngay" trong lịch sử của khách vẫn phải bấm được sau đó.
+     */
+    public function test_ref_survives_cache_clear(): void
+    {
+        Http::fake();
+
+        $ref = $this->ref();
+        Cache::flush();
+
+        $this->shorten($ref)->assertOk()->assertJsonStructure(['code', 'short_url']);
     }
 
     /**
