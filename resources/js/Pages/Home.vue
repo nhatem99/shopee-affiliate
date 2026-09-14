@@ -518,13 +518,17 @@ onUnmounted(() => {
                      lúc nào nguồn cấp mã nạp lại lượt, trước cả ô dán link. -->
                 <RestockSchedule class="mb-4" />
 
-                <!-- top-16 = chiều cao header sticky của AppLayout (h-16). Nền đặc + blur chỉ
-                     bật khi đã dính, để lúc chưa cuộn khung vẫn phẳng với nền trang.
+                <!-- top-16 = chiều cao header sticky của AppLayout (h-16). Nền đặc chỉ bật khi
+                     đã dính, để lúc chưa cuộn khung vẫn phẳng với nền trang. Cố tình KHÔNG dùng
+                     backdrop-blur ở đây: khung này cao/rộng hơn hẳn header, nên nếu blur thì
+                     trình duyệt phải làm mờ lại toàn bộ nội dung phía sau mỗi khung hình lúc
+                     cuộn — chính là nguyên nhân bị khựng khi cuộn qua khu vực này trên máy yếu.
+                     Nền đặc (không alpha) rẻ hơn nhiều mà vẫn che kín nội dung phía dưới.
                      -mx-4 px-4 kéo nền ra sát mép để nội dung cuộn phía dưới không lòi ra hai bên. -->
                 <div
                     ref="stickyEl"
-                    class="sticky top-16 z-30 -mx-4 px-4 pt-2 pb-3 transition-shadow duration-200"
-                    :class="stuck ? 'bg-[var(--color-bg)]/95 backdrop-blur-md shadow-[0_10px_24px_rgba(0,0,0,.12)]' : ''"
+                    class="sticky top-16 z-30 -mx-4 px-4 pt-2 pb-3 transition-shadow duration-200 [contain:layout_paint]"
+                    :class="stuck ? 'bg-[var(--color-bg)] shadow-[0_10px_24px_rgba(0,0,0,.12)]' : ''"
                 >
                     <div v-if="canUseVoucherTool" class="rounded-3xl bg-gradient-to-br from-[var(--color-peach)] via-[var(--color-peach-soft)] to-[var(--color-green-soft)] border border-[var(--color-line)] transition-all duration-200" :class="stuck ? 'p-4' : 'p-6 md:p-8'">
                         <!-- Giữ h1 trong DOM (chỉ thu chiều cao) để không mất thẻ h1 của trang. -->
