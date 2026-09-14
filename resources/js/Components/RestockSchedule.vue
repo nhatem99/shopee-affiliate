@@ -5,9 +5,11 @@ import { usePage } from '@inertiajs/vue3'
 // Banner "Săn sale mỗi ngày": khung giờ nguồn cấp mã nạp lại lượt (back mã) + đếm ngược tới
 // đợt gần nhất. Khách hay dán link đúng lúc hết lượt rồi tưởng công cụ hỏng, nên phải nói trước.
 // Giờ tính theo Việt Nam (UTC+7) chứ không theo đồng hồ máy khách — khách ở múi giờ khác vẫn đúng.
+// `apps` là logo ứng dụng hiện thay cho chữ viết tắt (YTB, FB-IG) — khách nhìn logo nhận ra
+// kênh nhanh hơn đọc chữ; `appsText` dành cho screen reader và tooltip.
 const GROUPS = [
-    { key: 'youtube', label: 'Khung giờ YTB', hours: [0, 9, 12, 18] },
-    { key: 'igfb', label: 'Khung giờ FB-IG', hours: [0, 9, 15, 20] },
+    { key: 'youtube', apps: ['youtube'], appsText: 'YouTube', hours: [0, 9, 12, 18] },
+    { key: 'igfb', apps: ['facebook', 'instagram'], appsText: 'Facebook, Instagram', hours: [0, 9, 15, 20] },
 ]
 
 const VN_OFFSET_MINUTES = 7 * 60
@@ -78,11 +80,36 @@ const groups = computed(() => GROUPS.map(g => {
                 :key="g.key"
                 class="flex items-center gap-2 rounded-2xl bg-white/18 border border-white/25 pl-3 pr-1.5 py-1.5"
             >
-                <svg viewBox="0 0 24 24" class="w-4 h-4 flex-none text-white/85" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
-                    <circle cx="12" cy="13" r="8" /><path d="M12 9.5V13l2.2 1.6M9 2h6" />
-                </svg>
-                <p class="flex-1 min-w-0 text-white text-[13px] md:text-sm leading-snug">
-                    {{ g.label }}: <b class="font-extrabold whitespace-nowrap">{{ g.hoursText }}</b>
+                <p class="flex-1 min-w-0 flex items-center flex-wrap gap-x-1.5 gap-y-1 text-white text-[13px] md:text-sm leading-snug">
+                    <span>Khung giờ có mã</span>
+                    <!-- Logo ứng dụng: ô bo góc màu thương hiệu, cỡ 20px cho vừa dòng chữ -->
+                    <span class="inline-flex items-center gap-1" :title="g.appsText">
+                        <span class="sr-only">{{ g.appsText }}</span>
+                        <template v-for="app in g.apps" :key="app">
+                            <svg v-if="app === 'youtube'" viewBox="0 0 24 24" class="w-5 h-5 flex-none drop-shadow-[0_1px_1px_rgba(0,0,0,.25)]" aria-hidden="true">
+                                <rect width="24" height="24" rx="6" fill="#FF0000" />
+                                <path d="M9.5 8.2v7.6l6.5-3.8-6.5-3.8Z" fill="#fff" />
+                            </svg>
+                            <svg v-else-if="app === 'facebook'" viewBox="0 0 24 24" class="w-5 h-5 flex-none drop-shadow-[0_1px_1px_rgba(0,0,0,.25)]" aria-hidden="true">
+                                <rect width="24" height="24" rx="6" fill="#1877F2" />
+                                <path d="M13.6 21v-6.9h2.3l.4-2.8h-2.7V9.6c0-.8.3-1.4 1.4-1.4h1.4V5.7c-.3 0-1.1-.1-2.1-.1-2.1 0-3.5 1.3-3.5 3.6v2.1H8.5v2.8h2.3V21h2.8Z" fill="#fff" />
+                            </svg>
+                            <svg v-else-if="app === 'instagram'" viewBox="0 0 24 24" class="w-5 h-5 flex-none drop-shadow-[0_1px_1px_rgba(0,0,0,.25)]" aria-hidden="true">
+                                <defs>
+                                    <linearGradient :id="`ig-grad-${g.key}`" x1="0" y1="1" x2="1" y2="0">
+                                        <stop offset="0" stop-color="#F9CE34" />
+                                        <stop offset=".5" stop-color="#EE2A7B" />
+                                        <stop offset="1" stop-color="#6228D7" />
+                                    </linearGradient>
+                                </defs>
+                                <rect width="24" height="24" rx="6" :fill="`url(#ig-grad-${g.key})`" />
+                                <rect x="5.5" y="5.5" width="13" height="13" rx="3.8" fill="none" stroke="#fff" stroke-width="1.7" />
+                                <circle cx="12" cy="12" r="3" fill="none" stroke="#fff" stroke-width="1.7" />
+                                <circle cx="15.7" cy="8.3" r="1" fill="#fff" />
+                            </svg>
+                        </template>
+                    </span>
+                    <span>: <b class="font-extrabold whitespace-nowrap">{{ g.hoursText }}</b></span>
                 </p>
                 <span
                     v-if="g.justRestocked"
@@ -106,7 +133,7 @@ const groups = computed(() => GROUPS.map(g => {
                 rel="noopener"
                 class="text-white text-[13px] md:text-sm font-semibold leading-snug underline underline-offset-2 decoration-white/60 hover:decoration-white"
             >Bấm vào đây để tham gia cộng đồng săn sale</a>
-            <span v-else class="text-white/90 text-[13px] md:text-sm leading-snug">Hết lượt thì quay lại đúng khung giờ trên nhé</span>
+            <span v-else class="text-white/90 text-[13px] md:text-sm leading-snug">Hết lượt thì quay lại đúng khung giờ có mã nhé</span>
         </div>
     </div>
 </template>
