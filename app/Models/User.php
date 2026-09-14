@@ -8,6 +8,7 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
+use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Str;
 use Spatie\Permission\Traits\HasRoles;
 
@@ -161,5 +162,18 @@ class User extends Authenticatable
             ->where('type', Commission::TYPE_CASHBACK)
             ->whereIn('status', ['approved', 'paid'])
             ->exists();
+    }
+
+    /**
+     * Tài khoản có mật khẩu THẬT chưa, hay chỉ mới đăng nhập qua Google.
+     *
+     * GoogleController tạo user mới với password rỗng (''); cast 'hashed' trên cột này băm
+     * chuỗi rỗng thành một hash bcrypt hợp lệ, nên cột không hề trống — chỉ có cách kiểm tra
+     * là băm đó có KHỚP với chuỗi rỗng hay không. Dùng để quyết định form đổi mật khẩu ở
+     * /profile có bắt nhập mật khẩu cũ hay không (chưa có gì để nhập thì không thể bắt).
+     */
+    public function hasUsablePassword(): bool
+    {
+        return ! Hash::check('', $this->password);
     }
 }

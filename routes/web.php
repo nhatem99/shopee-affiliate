@@ -121,6 +121,7 @@ Route::middleware('auth')->group(function () {
     Route::get('/profile', [ProfileController::class, 'show'])->name('profile');
     Route::patch('/profile', [ProfileController::class, 'updateProfile'])->name('profile.update');
     Route::post('/profile/payout', [ProfileController::class, 'storePayoutAccount'])->name('profile.payout');
+    Route::post('/profile/password', [ProfileController::class, 'updatePassword'])->middleware('throttle:login')->name('profile.password');
     Route::post('/withdrawals', [WithdrawalController::class, 'store'])->middleware('throttle:withdrawals')->name('withdrawals.store');
     Route::get('/vi/lich-su', [ProfileController::class, 'walletHistory'])->name('wallet.history');
     Route::get('/thong-bao', [NotificationController::class, 'index'])->name('notifications');

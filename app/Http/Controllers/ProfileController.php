@@ -7,6 +7,7 @@ use App\Services\WalletHistoryService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
+use Illuminate\Validation\Rules\Password;
 use Inertia\Inertia;
 use Inertia\Response;
 
@@ -38,6 +39,9 @@ class ProfileController extends Controller
                 // translatedFormat('F Y') — locale mặc định của app là 'en' (config/app.php),
                 // đổi locale ảnh hưởng toàn app nên không đáng chỉ để có mỗi dòng này.
                 'member_since' => 'Tháng '.$user->created_at->format('m/Y'),
+                // Tài khoản Google chưa từng đặt mật khẩu — form đổi mật khẩu ẩn ô "mật khẩu cũ"
+                // cho nhóm này, xem User::hasUsablePassword().
+                'has_password' => $user->hasUsablePassword(),
             ],
             'payoutAccounts' => $payoutAccounts,
             'balance' => [
@@ -112,6 +116,30 @@ class ProfileController extends Controller
     /**
      * Trang tài khoản người dùng dành cho khách hàng — admin không có quyền truy cập.
      */
+    /**
+     * Đổi mật khẩu, hoặc đặt mật khẩu lần đầu cho tài khoản chỉ đăng nhập qua Google.
+     *
+     * Chỉ bắt nhập mật khẩu cũ khi tài khoản đã có mật khẩu thật — khách Google không có gì
+     * để nhập vào đó (xem User::hasUsablePassword()). 'current_password' là rule có sẵn của
+     * Laravel, tự so với mật khẩu đang đăng nhập nên không cần tự viết so sánh.
+     */
+    public function updatePassword(Request $request): RedirectResponse
+    {
+        $this->ensureNotAdmin($request);
+
+        $user = $request->user();
+        $isFirstTime = ! $user->hasUsablePassword();
+
+        $data = $request->validate([
+            'current_password' => $isFirstTime ? [] : ['required', 'current_password'],
+            'password' => ['required', 'confirmed', Password::min(8)->mixedCase()->numbers()],
+        ]);
+
+        $user->update(['password' => $data['password']]);
+
+        return back()->with('success', $isFirstTime ? 'Đã đặt mật khẩu.' : 'Đã đổi mật khẩu.');
+    }
+
     private function ensureNotAdmin(Request $request): void
     {
         abort_if($request->user()->isAdmin(), 403, 'Trang này dành cho khách hàng.');
