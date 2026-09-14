@@ -11,7 +11,7 @@ use Illuminate\Support\Facades\Schema;
  * hiện link nào chứ không hề biết thật. Deploy xoá cache là quên hết; admin sửa tay caption trên
  * Facebook là lệch mà không ai hay. Bảng này giữ hai lớp thông tin tách bạch:
  *  - product_key/target_url: reel đang hiện link của sản phẩm nào — job facebook:sync-reels đọc
- *    caption thật từ Graph API 5 phút/lần để ghi đè cho đúng thực tế.
+ *    caption thật từ Graph API 10 phút/lần để ghi đè cho đúng thực tế.
  *  - leased_until: reel đang được GIỮ cho sản phẩm đó tới khi nào, để request khác không đè
  *    caption trong lúc khách còn đang xem.
  */

@@ -23,7 +23,7 @@ use Illuminate\Support\Facades\Log;
  *  - caption không có link → slot trống hẳn, thả lease luôn.
  *  - Graph API lỗi → giữ nguyên bản ghi, chỉ ghi sync_error để admin thấy.
  *
- * Chạy theo lịch 5 phút/lần (routes/console.php), dùng chung cấu hình Facebook ở /admin/api-config.
+ * Chạy theo lịch 10 phút/lần (routes/console.php), dùng chung cấu hình Facebook ở /admin/api-config.
  */
 class FacebookReelSyncService
 {

@@ -168,7 +168,7 @@ async function copyCron() {
 
         <!-- Slot reel -->
         <h2 class="text-base font-bold text-[var(--color-ink)] mb-1">Slot reel Facebook</h2>
-        <p class="text-xs text-[var(--color-muted)] mb-3">Reel nào đang hiện link sản phẩm nào — job <span class="font-mono">facebook:sync-reels</span> đọc caption thật 5 phút/lần để đối soát.</p>
+        <p class="text-xs text-[var(--color-muted)] mb-3">Reel nào đang hiện link sản phẩm nào — job <span class="font-mono">facebook:sync-reels</span> đọc caption thật 10 phút/lần để đối soát.</p>
         <div class="bg-[var(--color-surface)] rounded-2xl border border-[var(--color-line)] overflow-hidden mb-6">
             <div class="overflow-x-auto">
                 <table class="w-full text-sm">

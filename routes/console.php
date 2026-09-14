@@ -28,7 +28,7 @@ Schedule::command('model:prune', ['--model' => [VoucherRef::class]])
 // chế độ reel thì lệnh thoát ngay, không gọi API nào. storeOutput() để bảng kết quả của lệnh
 // được ghi lại và xem được ở /admin/scheduler (ScheduledTaskRecorder).
 Schedule::command('facebook:sync-reels')
-    ->everyFiveMinutes()
+    ->everyTenMinutes()
     ->withoutOverlapping()
     ->description('Đối soát caption reel Facebook với bảng slot')
     ->storeOutput();

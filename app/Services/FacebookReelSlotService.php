@@ -25,7 +25,7 @@ use Illuminate\Support\Facades\Log;
  *
  * Trạng thái slot nằm ở bảng facebook_reel_slots, không phải cache: cache bị xoá mỗi lần deploy,
  * và quan trọng hơn, cache chỉ ghi lại thứ MÌNH ĐÃ LÀM chứ không phải thứ ĐANG CÓ trên Facebook.
- * Job facebook:sync-reels (5 phút/lần) đọc caption thật và ghi đè product_key/target_url cho
+ * Job facebook:sync-reels (10 phút/lần) đọc caption thật và ghi đè product_key/target_url cho
  * khớp thực tế — xem FacebookReelSync. Nhờ đó khi reel vẫn còn hiện đúng link (lease hết hạn
  * nhưng chưa ai lấy) thì thuê lại được mà không tốn lời gọi API.
  *

@@ -7,7 +7,7 @@ use Illuminate\Console\Command;
 
 /**
  * Đọc caption thật của từng reel trong nhóm và cập nhật bảng facebook_reel_slots cho khớp —
- * xem FacebookReelSyncService. Chạy theo lịch 5 phút/lần; chạy tay để xem trạng thái hiện tại:
+ * xem FacebookReelSyncService. Chạy theo lịch 10 phút/lần; chạy tay để xem trạng thái hiện tại:
  *
  *   php artisan facebook:sync-reels
  */
