@@ -9,6 +9,7 @@ import FestiveDecor from '@/Components/FestiveDecor.vue'
 import NotificationBell from '@/Components/NotificationBell.vue'
 import AccountDrawer from '@/Components/AccountDrawer.vue'
 import MessengerButton from '@/Components/MessengerButton.vue'
+import CashbackMarquee from '@/Components/CashbackMarquee.vue'
 import { useCashback } from '@/composables/useCashback'
 
 const auth = useAuthStore()
@@ -124,6 +125,12 @@ const accountDrawerOpen = ref(false)
                 </div>
             </div>
         </header>
+
+        <!-- Chữ chạy nhắc khách chưa đăng nhập về hoàn tiền. Cố ý đặt NGOÀI <header> sticky:
+             header đang cao 4rem, nhét thêm thanh này vào trong thì phần dính trên đỉnh thành
+             ~6rem, trên điện thoại ăn mất một phần đáng kể màn hình suốt cả phiên. Nằm đây thì
+             khách thấy ngay lúc vào trang rồi cuộn qua là khuất — tự ẩn hẳn khi đã đăng nhập. -->
+        <CashbackMarquee />
 
         <!-- Page content with transition -->
         <main class="pb-20 md:pb-0">

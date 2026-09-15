@@ -237,6 +237,48 @@
     .festive-float, .festive-sway, .festive-twinkle, .festive-glow, .festive-drift { animation: none !important; }
 }
 
+/* Thanh chữ chạy ngang cho khách chưa đăng nhập (Components/CashbackMarquee.vue).
+   Chạy bằng transform (không phải left/margin) để trình duyệt hợp thành trên GPU — thanh này
+   nằm trên mọi trang khách và chạy liên tục, animation đụng tới layout sẽ ăn pin điện thoại. */
+.marquee {
+    overflow: hidden;
+    white-space: nowrap;
+}
+.marquee__track {
+    display: inline-flex;
+    /* Thời lượng cố định: thêm/bớt câu trong messages thì tốc độ chạy đổi theo. Muốn chậm lại
+       thì tăng số giây ở đây, đừng đổi bằng cách cắt bớt câu. */
+    animation: marqueeSlide 34s linear infinite;
+    will-change: transform;
+}
+.marquee__group {
+    display: inline-flex;
+    flex: none;
+}
+.marquee__item {
+    padding-inline: 0.75rem;
+}
+.marquee__dot {
+    margin-left: 0.75rem;
+    opacity: 0.45;
+}
+/* Rê chuột vào để đọc kịp câu đang chạy (máy tính). Điện thoại không có hover nên không ảnh
+   hưởng — ở đó khách đọc được nhờ tốc độ chậm. */
+.marquee:hover .marquee__track {
+    animation-play-state: paused;
+}
+
+@keyframes marqueeSlide {
+    from { transform: translateX(0); }
+    to { transform: translateX(-50%); }
+}
+
+/* Người tắt hiệu ứng chuyển động: đứng yên ở câu đầu, vẫn đọc được nội dung quan trọng nhất
+   (câu đầu là câu nói về hoàn tiền). */
+@media (prefers-reduced-motion: reduce) {
+    .marquee__track { animation: none !important; }
+}
+
 @keyframes fadeUp {
     from { opacity: 0; transform: translateY(18px); }
     to { opacity: 1; transform: none; }
