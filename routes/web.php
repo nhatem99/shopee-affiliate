@@ -3,6 +3,7 @@
 use App\Http\Controllers\Admin\ActivityController;
 use App\Http\Controllers\Admin\ApiConfigController;
 use App\Http\Controllers\Admin\BlockedIpController;
+use App\Http\Controllers\Admin\ConsoleController;
 use App\Http\Controllers\Admin\DashboardController;
 use App\Http\Controllers\Admin\ImpersonationController;
 use App\Http\Controllers\Admin\LogController;
@@ -180,6 +181,9 @@ Route::middleware(['auth', 'auth.admin'])->prefix('admin')->name('admin.')->grou
     // Scheduler: cron có chạy không, job nào chạy lúc nào, bấm chạy ngay — cũng để khỏi SSH.
     Route::get('/scheduler', [SchedulerController::class, 'index'])->name('scheduler');
     Route::post('/scheduler/run', [SchedulerController::class, 'run'])->name('scheduler.run');
+    // Dán lệnh artisan chạy ngay trên web (chỉ lệnh trong danh sách cho phép) — cũng để khỏi SSH.
+    Route::get('/console', [ConsoleController::class, 'index'])->name('console');
+    Route::post('/console/run', [ConsoleController::class, 'run'])->name('console.run');
     Route::get('/voucher-buttons', [VoucherButtonConfigController::class, 'index'])->name('voucher-buttons');
     Route::patch('/voucher-buttons/{voucherButtonConfig}', [VoucherButtonConfigController::class, 'update'])->name('voucher-buttons.update');
 });

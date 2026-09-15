@@ -48,6 +48,7 @@ const navGroups = [
             { href: '/admin/blocked-ips', icon: '🚫', label: 'Chặn IP' },
             { href: '/admin/logs', icon: '🐞', label: 'Nhật ký lỗi' },
             { href: '/admin/scheduler', icon: '⏱️', label: 'Lịch chạy' },
+            { href: '/admin/console', icon: '⌨️', label: 'Lệnh artisan' },
         ],
     },
 ]
