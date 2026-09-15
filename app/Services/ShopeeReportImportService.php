@@ -4,6 +4,7 @@ namespace App\Services;
 
 use App\Models\ShopeeOrder;
 use App\Models\User;
+use App\Notifications\NewOrderNotification;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
@@ -49,6 +50,17 @@ class ShopeeReportImportService
     /** Thiếu một trong những cột này thì không có gì để nhập — dừng ngay thay vì nhập nửa vời. */
     private const REQUIRED = ['order_id', 'item_id', 'net_commission', 'order_status_raw'];
 
+    public function __construct(private CashbackService $cashback) {}
+
+    /**
+     * Đơn lần đầu được gán cho khách trong lần nhập này, gom theo "user_id:order_id" để báo cho
+     * khách MỘT lần cho cả đơn — một đơn nhiều món nằm trên nhiều dòng báo cáo, báo theo dòng là
+     * khách nhận 3 chuông cho một lần mua.
+     *
+     * @var array<string, array{user_id: int, order_id: string, product_name: ?string, lines: int, net_total: float, status: string}>
+     */
+    private array $newOrders = [];
+
     /**
      * Nguyên văn trạng thái Shopee => trạng thái chuẩn hoá.
      *
@@ -80,6 +92,16 @@ class ShopeeReportImportService
             // vài nghìn truy vấn cho một tập user rất nhỏ.
             $users = User::whereNotNull('sub_id')->pluck('id', 'sub_id')->all();
 
+            // Cặp (khách, đơn) đã có từ trước, để biết dòng nào là đơn MỚI của khách đó. Tra một
+            // lần thay vì mỗi dòng một truy vấn — cùng lý do với $users ở trên.
+            $known = ShopeeOrder::whereNotNull('user_id')
+                ->distinct()
+                ->get(['user_id', 'order_id'])
+                ->map(fn (ShopeeOrder $o) => $o->user_id.':'.$o->order_id)
+                ->flip()
+                ->all();
+            $this->newOrders = [];
+
             while (($raw = fgetcsv($handle, 0, ',', '"', '')) !== false) {
                 // fgetcsv trả [null] cho dòng trắng cuối file.
                 if ($raw === [null] || $raw === []) {
@@ -93,13 +115,44 @@ class ShopeeReportImportService
                 }
 
                 $summary['rows']++;
-                $this->save($row, $users, $summary);
+                $this->save($row, $users, $known, $summary);
             }
+
+            $this->notifyNewOrders();
 
             return $summary;
         } finally {
             fclose($handle);
         }
+    }
+
+    /**
+     * Chỉ báo đơn còn "Chờ Shopee xác nhận". Đơn nhập vào đã hoàn thành thì ngay sau import
+     * CashbackService::sync() cộng tiền và tự gửi CommissionCreditedNotification — báo thêm "đơn
+     * mới" nữa là hai chuông cho một đơn. Đơn huỷ thì không có gì đáng mừng để báo.
+     */
+    private function notifyNewOrders(): void
+    {
+        $rate = $this->cashback->rate();
+
+        $pending = array_filter($this->newOrders, fn (array $o) => $o['status'] === 'pending');
+
+        if ($pending === []) {
+            return;
+        }
+
+        $users = User::whereIn('id', array_column($pending, 'user_id'))->get()->keyBy('id');
+
+        foreach ($pending as $o) {
+            $users->get($o['user_id'])?->notify(new NewOrderNotification(
+                $o['order_id'],
+                $o['product_name'],
+                max(0, $o['lines'] - 1),
+                $rate > 0 ? round($o['net_total'] * $rate / 100, 2) : null,
+            ));
+        }
+
+        $this->newOrders = [];
     }
 
     /**
@@ -178,14 +231,19 @@ class ShopeeReportImportService
     /**
      * @param  array<string, string>  $row
      * @param  array<string, int>  $users
+     * @param  array<string, int>  $known
      * @param  array<string, int>  $summary
      */
-    private function save(array $row, array $users, array &$summary): void
+    private function save(array $row, array $users, array &$known, array &$summary): void
     {
         $subId = $this->extractUserSubId($row);
         $userId = $subId !== null ? ($users[$subId] ?? null) : null;
 
         $summary[$userId !== null ? 'matched' : 'unmatched']++;
+
+        if ($userId !== null) {
+            $this->rememberNewOrder($userId, $row, $known);
+        }
 
         $order = ShopeeOrder::updateOrCreate(
             [
@@ -217,6 +275,40 @@ class ShopeeReportImportService
         );
 
         $summary[$order->wasRecentlyCreated ? 'created' : 'updated']++;
+    }
+
+    /**
+     * @param  array<string, string>  $row
+     * @param  array<string, int>  $known
+     */
+    private function rememberNewOrder(int $userId, array $row, array &$known): void
+    {
+        $key = $userId.':'.$row['order_id'];
+        $status = $this->status($row['order_status_raw'] ?? '');
+
+        if (isset($known[$key])) {
+            // Dòng tiếp theo của một đơn nhiều món vừa thấy ở trên: cộng dồn, không thêm đơn mới.
+            if (isset($this->newOrders[$key])) {
+                $this->newOrders[$key]['lines']++;
+                $this->newOrders[$key]['net_total'] += $this->money($row['net_commission'] ?? '');
+                // Một dòng huỷ/hoàn thành là cả đơn không còn "đang chờ" — xem OrderHistoryController.
+                if ($status !== 'pending') {
+                    $this->newOrders[$key]['status'] = $status;
+                }
+            }
+
+            return;
+        }
+
+        $known[$key] = 1;
+        $this->newOrders[$key] = [
+            'user_id' => $userId,
+            'order_id' => $row['order_id'],
+            'product_name' => ($row['product_name'] ?? '') !== '' ? $row['product_name'] : null,
+            'lines' => 1,
+            'net_total' => $this->money($row['net_commission'] ?? ''),
+            'status' => $status,
+        ];
     }
 
     /**

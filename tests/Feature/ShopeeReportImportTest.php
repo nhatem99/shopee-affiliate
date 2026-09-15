@@ -2,9 +2,13 @@
 
 namespace Tests\Feature;
 
+use App\Models\Setting;
 use App\Models\ShopeeOrder;
+use App\Notifications\NewOrderNotification;
+use App\Services\CashbackService;
 use App\Services\ShopeeReportImportService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Notifications\DatabaseNotification;
 use RuntimeException;
 use Tests\TestCase;
 
@@ -150,6 +154,49 @@ class ShopeeReportImportTest extends TestCase
 
         $this->assertSame('u7k2m9', $line->user_sub_id);
         $this->assertNull($line->user_id);
+    }
+
+    // ── Báo cho khách ─────────────────────────────────────────────────────────
+
+    /**
+     * Khách có 1 đơn đang chờ (2 dòng) và 1 đơn đã hoàn thành (2 dòng) trong fixture: chỉ đơn
+     * đang chờ được báo "đơn mới", và báo MỘT lần dù có hai dòng. Đơn hoàn thành để
+     * CashbackService báo "tiền về ví" sau đó, không báo đúp.
+     */
+    public function test_pending_order_seen_for_the_first_time_notifies_the_customer_once(): void
+    {
+        Setting::set(CashbackService::RATE_KEY, '50');
+        $user = $this->createUser();
+        $user->forceFill(['sub_id' => 'u7k2m9'])->save();
+
+        $this->import();
+
+        $notifications = $user->notifications()->where('type', NewOrderNotification::class)->get();
+
+        $this->assertCount(1, $notifications);
+        $this->assertStringContainsString('Bỉm Gooby', $notifications[0]->data['body']);
+        $this->assertStringContainsString('+1 sản phẩm', $notifications[0]->data['body']);
+        // 84.937,6 + 0 hoa hồng ròng × 50% = 42.469 đ dự kiến.
+        $this->assertStringContainsString('42.469', $notifications[0]->data['body']);
+        $this->assertSame('/don-hang', $notifications[0]->data['url']);
+    }
+
+    public function test_reimport_does_not_notify_about_the_same_order_again(): void
+    {
+        $user = $this->createUser();
+        $user->forceFill(['sub_id' => 'u7k2m9'])->save();
+
+        $this->import();
+        $this->import();
+
+        $this->assertSame(1, $user->notifications()->where('type', NewOrderNotification::class)->count());
+    }
+
+    public function test_unmatched_lines_notify_nobody(): void
+    {
+        $this->import();
+
+        $this->assertSame(0, DatabaseNotification::count());
     }
 
     // ── Nhập lại ──────────────────────────────────────────────────────────────

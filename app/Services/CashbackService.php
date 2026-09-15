@@ -5,6 +5,8 @@ namespace App\Services;
 use App\Models\Commission;
 use App\Models\Setting;
 use App\Models\ShopeeOrder;
+use App\Models\User;
+use App\Notifications\CommissionCreditedNotification;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 
@@ -126,6 +128,11 @@ class CashbackService
                 ]);
 
                 $summary['created']++;
+
+                // Báo cho khách đúng lúc tiền vào ví — chỉ khi TẠO mới. Shopee chỉnh lại số
+                // sau đó (đổi trả một phần) đi nhánh update dưới, không báo: một chuông "trừ
+                // 3.000 đ" chỉ gây hoang mang mà khách cũng chẳng làm gì được.
+                User::find($userId)?->notify(new CommissionCreditedNotification($amount, $orderId));
 
                 return;
             }

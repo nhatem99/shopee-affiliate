@@ -6,6 +6,7 @@ use App\Models\Commission;
 use App\Models\Setting;
 use App\Models\ShopeeOrder;
 use App\Models\User;
+use App\Notifications\CommissionCreditedNotification;
 use App\Services\CashbackService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
@@ -62,6 +63,22 @@ class CashbackSyncTest extends TestCase
         $this->assertSame('5000.00', $commission->amount);
         $this->assertSame('approved', $commission->status);
         $this->assertSame($this->user->id, $commission->user_id);
+    }
+
+    public function test_crediting_a_commission_notifies_the_customer_once(): void
+    {
+        $this->line(['order_id' => 'A', 'net_commission' => 10000]);
+
+        $this->sync();
+        // Chạy lại không đổi gì thì không báo lại.
+        $this->sync();
+
+        $notifications = $this->user->notifications()->where('type', CommissionCreditedNotification::class)->get();
+
+        $this->assertCount(1, $notifications);
+        $this->assertStringContainsString('+5.000 đ', $notifications[0]->data['body']);
+        $this->assertStringContainsString('A', $notifications[0]->data['body']);
+        $this->assertSame('/vi/lich-su', $notifications[0]->data['url']);
     }
 
     /**
