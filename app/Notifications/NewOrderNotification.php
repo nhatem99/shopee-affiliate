@@ -32,6 +32,8 @@ class NewOrderNotification extends AppNotification
             'body' => $body,
             'url' => '/don-hang',
             'icon' => '🛒',
+            // Không hiển thị; để orders:notify-backfill biết đơn nào đã được báo rồi.
+            'order_id' => $this->orderId,
         ];
     }
 }

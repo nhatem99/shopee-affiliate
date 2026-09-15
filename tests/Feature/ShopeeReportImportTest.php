@@ -192,6 +192,27 @@ class ShopeeReportImportTest extends TestCase
         $this->assertSame(1, $user->notifications()->where('type', NewOrderNotification::class)->count());
     }
 
+    /** Đơn nhập trước khi có tính năng thông báo: lệnh gửi bù phải báo đúng đơn đang chờ, và chỉ một lần. */
+    public function test_backfill_command_notifies_old_pending_orders_once(): void
+    {
+        $user = $this->createUser();
+        $user->forceFill(['sub_id' => 'u7k2m9'])->save();
+
+        $this->import();
+        // Giả lập đơn nhập từ trước khi có tính năng: xoá chuông đã gửi lúc import.
+        $user->notifications()->delete();
+
+        $this->artisan('orders:notify-backfill')->assertSuccessful();
+        $this->assertSame(0, $user->notifications()->count());
+
+        $this->artisan('orders:notify-backfill', ['--send' => true])->assertSuccessful();
+        $this->artisan('orders:notify-backfill', ['--send' => true])->assertSuccessful();
+
+        $notifications = $user->notifications()->where('type', NewOrderNotification::class)->get();
+        $this->assertCount(1, $notifications);
+        $this->assertSame('260909JA8XKJ9J', $notifications[0]->data['order_id']);
+    }
+
     public function test_unmatched_lines_notify_nobody(): void
     {
         $this->import();
