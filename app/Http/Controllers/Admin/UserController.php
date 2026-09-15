@@ -38,6 +38,9 @@ class UserController extends Controller
                 'banned_at' => $u->banned_at?->toDateTimeString(),
                 'banned_reason' => $u->banned_reason,
                 'created_at' => $u->created_at->toDateString(),
+                'last_seen_at' => $u->last_seen_at?->toDateTimeString(),
+                // "x phút trước" tính ở server theo múi giờ app — máy admin có thể đặt múi giờ khác.
+                'last_seen_human' => $u->last_seen_at?->locale('vi')->diffForHumans(),
             ])
             ->withQueryString();
 

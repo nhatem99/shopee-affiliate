@@ -204,6 +204,7 @@ function confirmRole() {
                         <th class="px-4 py-3 font-semibold text-right">Hoa hồng duyệt</th>
                         <th class="px-4 py-3 font-semibold text-right">Số dư khả dụng</th>
                         <th class="px-4 py-3 font-semibold">Trạng thái</th>
+                        <th class="px-4 py-3 font-semibold">Truy cập cuối</th>
                         <th class="px-4 py-3 font-semibold">Thao tác</th>
                     </tr>
                 </thead>
@@ -229,6 +230,13 @@ function confirmRole() {
                             <span v-else class="px-2 py-1 rounded-full text-xs font-semibold bg-green-100 text-green-700">Hoạt động</span>
                             <p v-if="u.banned_at && u.banned_reason" class="text-xs text-red-500 mt-1">{{ u.banned_reason }}</p>
                         </td>
+                        <td class="px-4 py-3 whitespace-nowrap">
+                            <template v-if="u.last_seen_at">
+                                <p class="text-sm font-semibold text-[var(--color-ink)]">{{ u.last_seen_human }}</p>
+                                <p class="text-xs text-[var(--color-muted)]">{{ u.last_seen_at }}</p>
+                            </template>
+                            <span v-else class="text-xs text-[var(--color-muted)]">Chưa ghi nhận</span>
+                        </td>
                         <td class="px-4 py-3">
                             <div class="flex flex-wrap items-center gap-x-3 gap-y-1">
                                 <button v-if="u.id !== currentUserId && u.role !== 'admin' && !u.banned_at" @click="impersonating = u" class="text-xs font-semibold text-[var(--color-brand-green)] hover:underline transition">Vào tài khoản</button>
@@ -243,7 +251,7 @@ function confirmRole() {
                         </td>
                     </tr>
                     <tr v-if="!users?.data?.length">
-                        <td colspan="7" class="px-4 py-10 text-center text-[var(--color-muted)]">Không tìm thấy tài khoản nào.</td>
+                        <td colspan="8" class="px-4 py-10 text-center text-[var(--color-muted)]">Không tìm thấy tài khoản nào.</td>
                     </tr>
                 </tbody>
             </table>

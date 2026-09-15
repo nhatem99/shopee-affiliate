@@ -91,6 +91,7 @@ class User extends Authenticatable
             'password' => 'hashed',
             'wallet_balance' => 'decimal:2',
             'banned_at' => 'datetime',
+            'last_seen_at' => 'datetime',
         ];
     }
 
