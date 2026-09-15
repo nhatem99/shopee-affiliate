@@ -4,6 +4,7 @@ use App\Http\Controllers\Admin\ActivityController;
 use App\Http\Controllers\Admin\ApiConfigController;
 use App\Http\Controllers\Admin\BlockedIpController;
 use App\Http\Controllers\Admin\DashboardController;
+use App\Http\Controllers\Admin\ImpersonationController;
 use App\Http\Controllers\Admin\LogController;
 use App\Http\Controllers\Admin\OrderController;
 use App\Http\Controllers\Admin\PromoContentController;
@@ -72,6 +73,9 @@ Route::middleware('guest')->group(function () {
 });
 
 Route::post('/logout', [LoginController::class, 'destroy'])->middleware('auth')->name('logout');
+// Thoát chế độ "xem như khách" của admin — chỉ cần auth vì lúc này phiên đang là khách, không
+// qua được auth.admin; ImpersonationService tự kiểm tra id admin lưu trong session.
+Route::post('/impersonate/leave', [ImpersonationController::class, 'stop'])->middleware('auth')->name('impersonate.leave');
 
 // Affiliate scan (throttled, open to all)
 // GET fallback: redirect home if user refreshes after a scan
@@ -161,6 +165,8 @@ Route::middleware(['auth', 'auth.admin'])->prefix('admin')->name('admin.')->grou
     Route::post('/users/{user}/password', [AdminUserController::class, 'resetPassword'])->name('users.password');
     Route::post('/users/{user}/ban', [AdminUserController::class, 'ban'])->name('users.ban');
     Route::delete('/users/{user}/ban', [AdminUserController::class, 'unban'])->name('users.unban');
+    // Admin nhảy vào tài khoản khách để xem đúng những gì khách thấy. Lối thoát là /impersonate/leave ở trên, cạnh /logout.
+    Route::post('/users/{user}/impersonate', [ImpersonationController::class, 'start'])->name('users.impersonate');
     Route::get('/settings', [SettingsController::class, 'index'])->name('settings');
     Route::post('/settings', [SettingsController::class, 'update'])->name('settings.update');
     // Kho mẫu bài đăng để admin copy đi giới thiệu web (nhóm Facebook, Zalo, TikTok...).

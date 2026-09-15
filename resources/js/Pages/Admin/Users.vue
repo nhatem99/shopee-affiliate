@@ -114,6 +114,18 @@ function unban(u) {
     })
 }
 
+// ── Vào tài khoản khách ───────────────────────────────────────────────────────
+
+// Sau khi vào, phiên trở thành phiên của khách và trang chủ hiện thanh vàng "Đang xem với tư
+// cách ... — Thoát" (AppLayout.vue) để quay lại đây.
+const impersonating = ref(null)
+
+function confirmImpersonate() {
+    router.post(`/admin/users/${impersonating.value.id}/impersonate`, {}, {
+        onError: (errors) => { impersonating.value = null; toast.error(errors.impersonate || 'Không vào được tài khoản') },
+    })
+}
+
 // ── Đổi quyền ─────────────────────────────────────────────────────────────────
 
 const roleTarget = ref(null)
@@ -219,6 +231,7 @@ function confirmRole() {
                         </td>
                         <td class="px-4 py-3">
                             <div class="flex flex-wrap items-center gap-x-3 gap-y-1">
+                                <button v-if="u.id !== currentUserId && u.role !== 'admin' && !u.banned_at" @click="impersonating = u" class="text-xs font-semibold text-[var(--color-brand-green)] hover:underline transition">Vào tài khoản</button>
                                 <button @click="openEdit(u)" class="text-xs font-semibold text-[var(--color-accent)] hover:underline transition">Sửa</button>
                                 <button @click="openReset(u)" class="text-xs font-semibold text-blue-600 hover:underline transition">Mật khẩu</button>
                                 <button v-if="u.id !== currentUserId" @click="roleTarget = u" class="text-xs font-semibold text-purple-600 hover:underline transition">
@@ -341,6 +354,28 @@ function confirmRole() {
                         </button>
                     </div>
                 </form>
+            </div>
+        </div>
+
+        <!-- Xác nhận vào tài khoản khách -->
+        <div v-if="impersonating" class="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+            <div class="bg-[var(--color-surface)] rounded-2xl p-6 w-full max-w-md">
+                <h2 class="font-extrabold text-[var(--color-ink)] mb-1">Vào tài khoản khách</h2>
+                <p class="text-xs text-[var(--color-muted)] mb-5">
+                    {{ impersonating.name }} · {{ impersonating.email }} — bạn sẽ thấy trang web y hệt khách này
+                    (số dư, lịch sử, thông báo...) và mọi thao tác (quét link, gửi lệnh rút...) đều tính cho họ.
+                    Bấm <b>Thoát</b> trên thanh vàng để quay về quản trị.
+                </p>
+                <div class="flex gap-3">
+                    <button @click="confirmImpersonate"
+                        class="flex-1 bg-[var(--color-brand-green)] hover:opacity-90 text-white font-semibold py-2.5 rounded-xl text-sm transition">
+                        Vào ngay
+                    </button>
+                    <button @click="impersonating = null"
+                        class="px-6 bg-[var(--color-peach-soft)] text-[var(--color-ink)] font-semibold py-2.5 rounded-xl text-sm hover:bg-[var(--color-peach)] transition">
+                        Hủy
+                    </button>
+                </div>
             </div>
         </div>
 

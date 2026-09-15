@@ -6,6 +6,7 @@ use App\Http\Controllers\NotificationController;
 use App\Http\Controllers\ProfileController;
 use App\Models\Setting;
 use App\Services\CashbackService;
+use App\Services\ImpersonationService;
 use Illuminate\Http\Request;
 use Inertia\Middleware;
 
@@ -28,6 +29,9 @@ class HandleInertiaRequests extends Middleware
                     'email' => $request->user()->email,
                     'role' => $request->user()->role,
                 ] : null,
+                // Admin đang "xem như khách" (ImpersonationService): AppLayout dựa vào đây để hiện
+                // thanh "Đang xem với tư cách ... — Thoát". Null với mọi phiên bình thường.
+                'impersonator' => fn () => $this->impersonator($request),
             ],
             // Chuông thông báo ở header. Chỉ khách (không phải admin) mới có; đóng trong closure
             // để không tốn hai truy vấn cho khách vãng lai và các request partial reload.
@@ -73,6 +77,16 @@ class HandleInertiaRequests extends Middleware
                 'festiveDecor' => Setting::getBool('festive_decor', false),
             ],
         ]);
+    }
+
+    /**
+     * @return array{id: int, name: string}|null
+     */
+    private function impersonator(Request $request): ?array
+    {
+        $admin = app(ImpersonationService::class)->impersonator($request);
+
+        return $admin ? ['id' => $admin->id, 'name' => $admin->name] : null;
     }
 
     /**

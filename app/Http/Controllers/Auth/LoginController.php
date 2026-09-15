@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Auth;
 
 use App\Http\Controllers\Controller;
+use App\Services\ImpersonationService;
 use App\Services\TrackingService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -71,8 +72,16 @@ class LoginController extends Controller
         return redirect()->intended(route('home'));
     }
 
-    public function destroy(Request $request): RedirectResponse
+    public function destroy(Request $request, ImpersonationService $impersonation): RedirectResponse
     {
+        // Admin đang "xem như khách" mà bấm Đăng xuất (menu tài khoản của khách) thì gần như
+        // chắc chắn là muốn thoát vai khách, không phải muốn mất luôn phiên admin của mình.
+        if ($impersonation->isActive($request)) {
+            return $impersonation->stop($request)
+                ? redirect()->route('admin.users')->with('success', 'Đã quay về tài khoản quản trị.')
+                : redirect()->route('home');
+        }
+
         Auth::logout();
         $request->session()->invalidate();
         $request->session()->regenerateToken();

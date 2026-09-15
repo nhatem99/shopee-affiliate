@@ -3,6 +3,7 @@
 namespace App\Http\Middleware;
 
 use App\Models\Setting;
+use App\Services\ImpersonationService;
 use Closure;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
@@ -19,6 +20,10 @@ class MaintenanceMode
      * cần kiểm tra xem tìm mã / mở link còn chạy không, mà những luồng đó chỉ tồn tại ở phía
      * khách. Khách vẫn thấy trang bảo trì như cũ.
      *
+     * Admin đang "xem như khách" (ImpersonationService) cũng đi qua: lúc đó request->user() là
+     * khách nên isAdmin() sai, mà mục đích của việc mạo danh chính là kiểm tra trang khách —
+     * và không cho qua thì cũng không bấm được nút Thoát để về admin.
+     *
      * @param  Closure(Request): (Response)  $next
      */
     public function handle(Request $request, Closure $next): Response
@@ -27,7 +32,9 @@ class MaintenanceMode
             return $next($request);
         }
 
-        if ($request->routeIs('logout', 'admin.*') || ($request->user()?->isAdmin() ?? false)) {
+        if ($request->routeIs('logout', 'admin.*')
+            || ($request->user()?->isAdmin() ?? false)
+            || app(ImpersonationService::class)->isActive($request)) {
             return $next($request);
         }
 

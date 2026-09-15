@@ -1,5 +1,5 @@
 <script setup>
-import { Link, usePage } from '@inertiajs/vue3'
+import { Link, router, usePage } from '@inertiajs/vue3'
 import { computed, ref } from 'vue'
 import { useAuthStore } from '@/Stores/useAuthStore'
 import BottomNav from '@/Components/BottomNav.vue'
@@ -19,6 +19,13 @@ const current = computed(() => page.url)
 const customerAuthEnabled = computed(() => page.props.settings?.customerAuthEnabled ?? true)
 // Server chỉ bật cờ này cho admin — khách đang bảo trì thì không tới được layout này.
 const maintenanceMode = computed(() => page.props.settings?.maintenanceMode ?? false)
+// Admin đang "xem như khách" (Admin → Tài khoản → Vào tài khoản). Server chỉ set khi phiên có
+// id admin trong session — xem ImpersonationService.
+const impersonator = computed(() => page.props.auth?.impersonator ?? null)
+
+function leaveImpersonation() {
+    router.post('/impersonate/leave')
+}
 
 // Icon hamburger mở AccountDrawer — menu tài khoản trượt từ trái, không rời trang đang xem.
 // Chỉ khách đã đăng nhập mới có gì để xem trong đó (admin dùng AdminLayout riêng, không qua đây).
@@ -34,6 +41,12 @@ const accountDrawerOpen = ref(false)
         <div v-if="maintenanceMode" class="bg-amber-500 text-[#1c0a00] text-xs md:text-sm font-semibold px-4 py-2 flex flex-wrap items-center justify-center gap-x-2 gap-y-1 text-center">
             <span>🔧 Đang bật chế độ bảo trì — khách chỉ thấy trang bảo trì, bạn đang xem với quyền admin.</span>
             <Link href="/admin/settings" class="underline underline-offset-2 hover:opacity-80">Tắt bảo trì</Link>
+        </div>
+
+        <!-- Nhắc admin: đang xem với tư cách khách, mọi thao tác đều tính cho khách này -->
+        <div v-if="impersonator" class="bg-amber-500 text-[#1c0a00] text-xs md:text-sm font-semibold px-4 py-2 flex flex-wrap items-center justify-center gap-x-2 gap-y-1 text-center">
+            <span>👤 Đang xem với tư cách <b>{{ auth.user?.name }}</b> ({{ auth.user?.email }}) — bạn là {{ impersonator.name }}.</span>
+            <button type="button" @click="leaveImpersonation" class="underline underline-offset-2 hover:opacity-80">Thoát về quản trị</button>
         </div>
 
         <!-- Header -->
