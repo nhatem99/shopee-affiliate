@@ -3,6 +3,7 @@
 namespace Tests\Feature;
 
 use App\Models\Setting;
+use App\Models\UserActivity;
 use App\Services\ImpersonationService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
@@ -112,6 +113,22 @@ class AdminImpersonationTest extends TestCase
 
         $this->post('/impersonate/leave')->assertRedirect('/');
         $this->assertGuest();
+    }
+
+    public function test_visits_while_impersonating_are_not_counted_for_the_customer(): void
+    {
+        $admin = $this->createAdmin();
+        $customer = $this->createUser();
+
+        $this->actingAs($admin)->post("/admin/users/{$customer->id}/impersonate");
+
+        $this->withHeader('User-Agent', 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) Safari/604.1')
+            ->get('/')
+            ->assertOk();
+
+        $this->assertSame(0, UserActivity::where('event_type', 'page_view')->where('user_id', $customer->id)->count());
+        // Sự kiện bảo mật thì vẫn ghi để biết ai đã vào tài khoản của ai.
+        $this->assertSame(1, UserActivity::where('event_type', 'impersonate_start')->where('user_id', $admin->id)->count());
     }
 
     public function test_impersonating_session_passes_maintenance_mode(): void

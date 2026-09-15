@@ -28,7 +28,9 @@ class TrackingService
 
         // Admin vào web để kiểm tra/test — không phải khách, không tính vào thống kê.
         // (Sự kiện bảo mật đi qua logSecurityEvent nên vẫn được ghi đầy đủ.)
-        if ($request->user()?->isAdmin()) {
+        // Kể cả khi admin đang "vào tài khoản khách": lúc đó request->user() là khách, ghi vào
+        // thì lượt xem của admin thành lượt truy cập của khách đó — sai thống kê của họ.
+        if ($request->user()?->isAdmin() || $this->isImpersonating($request)) {
             return null;
         }
 
@@ -59,6 +61,11 @@ class TrackingService
         }
 
         return $activity;
+    }
+
+    private function isImpersonating(Request $request): bool
+    {
+        return $request->hasSession() && $request->session()->has(ImpersonationService::KEY);
     }
 
     /**
