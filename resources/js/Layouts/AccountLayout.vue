@@ -3,7 +3,7 @@ import { Link, usePage } from '@inertiajs/vue3'
 import { computed } from 'vue'
 import AppLayout from '@/Layouts/AppLayout.vue'
 import { useAuthStore } from '@/Stores/useAuthStore'
-import { accountNavItems, isAccountNavActive } from '@/accountNavItems'
+import { accountNavItemsFor, isAccountNavActive } from '@/accountNavItems'
 
 // Khung dùng chung cho mọi trang trong mục Tài khoản: Tổng quan, Thông tin cá nhân, Mật khẩu,
 // Lịch sử số dư ví, Thông báo. Vẫn nằm trong AppLayout (giữ header + BottomNav của cả site)
@@ -19,7 +19,7 @@ const current = computed(() => page.url)
 
 // Danh sách mục + logic active dùng chung với AccountDrawer.vue (menu trượt từ icon hamburger
 // trên mọi trang) — xem resources/js/accountNavItems.js.
-const navItems = accountNavItems
+const navItems = computed(() => accountNavItemsFor(page.props.settings))
 
 function isActive(href) {
     return isAccountNavActive(current.value, href)

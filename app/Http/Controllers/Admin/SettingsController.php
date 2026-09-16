@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\Setting;
 use App\Services\CashbackLeaderboardService;
 use App\Services\CashbackService;
+use App\Services\ChatService;
 use App\Services\VoucherSourceResolver;
 use App\Services\WelcomeBonusService;
 use Illuminate\Http\RedirectResponse;
@@ -26,6 +27,7 @@ class SettingsController extends Controller
             'leaderboardDemo' => Setting::getBool(CashbackLeaderboardService::DEMO_KEY, CashbackLeaderboardService::DEMO_DEFAULT),
             'communityUrl' => Setting::get('community_url') ?: '',
             'messengerUrl' => Setting::get('messenger_url') ?: '',
+            'supportChatEnabled' => ChatService::enabled(),
             'cashbackRate' => (float) Setting::get(CashbackService::RATE_KEY, 0),
             'welcomeBonusEnabled' => Setting::getBool(WelcomeBonusService::ENABLED_KEY, true),
             'welcomeBonusAmount' => (float) Setting::get(WelcomeBonusService::AMOUNT_KEY, WelcomeBonusService::DEFAULT_AMOUNT),
@@ -50,6 +52,7 @@ class SettingsController extends Controller
             'leaderboard_demo' => ['sometimes', 'boolean'],
             'community_url' => ['sometimes', 'nullable', 'url', 'max:255'],
             'messenger_url' => ['sometimes', 'nullable', 'url', 'max:255'],
+            'support_chat_enabled' => ['sometimes', 'boolean'],
             'cashback_rate' => ['sometimes', 'numeric', 'min:0', 'max:100'],
             'cashback_display_rate' => ['sometimes', 'nullable', 'numeric', 'min:0', 'max:100'],
             'welcome_bonus_enabled' => ['sometimes', 'boolean'],
@@ -95,6 +98,10 @@ class SettingsController extends Controller
 
         if (array_key_exists('messenger_url', $validated)) {
             Setting::set('messenger_url', $validated['messenger_url'] ?? '');
+        }
+
+        if (array_key_exists('support_chat_enabled', $validated)) {
+            Setting::set(ChatService::ENABLED_KEY, $validated['support_chat_enabled'] ? '1' : '0');
         }
 
         if (array_key_exists('cashback_rate', $validated)) {

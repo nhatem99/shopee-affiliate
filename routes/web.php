@@ -3,6 +3,7 @@
 use App\Http\Controllers\Admin\ActivityController;
 use App\Http\Controllers\Admin\ApiConfigController;
 use App\Http\Controllers\Admin\BlockedIpController;
+use App\Http\Controllers\Admin\ChatController as AdminChatController;
 use App\Http\Controllers\Admin\ConsoleController;
 use App\Http\Controllers\Admin\DashboardController;
 use App\Http\Controllers\Admin\ImpersonationController;
@@ -22,6 +23,7 @@ use App\Http\Controllers\Auth\GoogleController;
 use App\Http\Controllers\Auth\LoginController;
 use App\Http\Controllers\Auth\RegisterController;
 use App\Http\Controllers\BlogController;
+use App\Http\Controllers\ChatController;
 use App\Http\Controllers\NotificationController;
 use App\Http\Controllers\OrderHistoryController;
 use App\Http\Controllers\ProfileController;
@@ -134,6 +136,10 @@ Route::middleware('auth')->group(function () {
     Route::post('/profile/password', [ProfileController::class, 'updatePassword'])->middleware('throttle:login')->name('profile.password');
     Route::post('/withdrawals', [WithdrawalController::class, 'store'])->middleware('throttle:withdrawals')->name('withdrawals.store');
     Route::get('/vi/lich-su', [ProfileController::class, 'walletHistory'])->name('wallet.history');
+    // Chat hỗ trợ với admin. Poll bằng chính route index (router.reload only:['messages']) nên
+    // không có route "lấy tin mới" riêng — xem ChatService.
+    Route::get('/ho-tro', [ChatController::class, 'index'])->name('support');
+    Route::post('/ho-tro/gui', [ChatController::class, 'store'])->middleware('throttle:chat')->name('support.send');
     Route::get('/thong-bao', [NotificationController::class, 'index'])->name('notifications');
     Route::post('/thong-bao/doc-het', [NotificationController::class, 'readAll'])->name('notifications.readAll');
     Route::post('/thong-bao/{id}/doc', [NotificationController::class, 'read'])->name('notifications.read');
@@ -168,6 +174,15 @@ Route::middleware(['auth', 'auth.admin'])->prefix('admin')->name('admin.')->grou
     Route::delete('/users/{user}/ban', [AdminUserController::class, 'unban'])->name('users.unban');
     // Admin nhảy vào tài khoản khách để xem đúng những gì khách thấy. Lối thoát là /impersonate/leave ở trên, cạnh /logout.
     Route::post('/users/{user}/impersonate', [ImpersonationController::class, 'start'])->name('users.impersonate');
+    // Hộp thư hỗ trợ: khách nhắn ở /ho-tro, admin đọc và trả lời ở đây.
+    Route::get('/chats', [AdminChatController::class, 'index'])->name('chats');
+    // Badge "có khách đang chờ" ở sidebar, AdminLayout gọi lại mỗi 30 giây. Là JSON chứ không
+    // phải partial reload của Inertia: reload chạy LẠI controller của trang đang mở, tức mở
+    // /admin/dashboard là cứ 30 giây chạy lại toàn bộ thống kê chỉ để lấy một con số.
+    // Phải khai trước /chats/{conversation}, không thì 'unread' bị bắt làm id hội thoại.
+    Route::get('/chats/unread', [AdminChatController::class, 'unread'])->name('chats.unread');
+    Route::get('/chats/{conversation}', [AdminChatController::class, 'show'])->name('chats.show');
+    Route::post('/chats/{conversation}/reply', [AdminChatController::class, 'reply'])->middleware('throttle:chat')->name('chats.reply');
     Route::get('/settings', [SettingsController::class, 'index'])->name('settings');
     Route::post('/settings', [SettingsController::class, 'update'])->name('settings.update');
     // Kho mẫu bài đăng để admin copy đi giới thiệu web (nhóm Facebook, Zalo, TikTok...).

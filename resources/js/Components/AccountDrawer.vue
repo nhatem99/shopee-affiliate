@@ -2,7 +2,7 @@
 import { Link, usePage } from '@inertiajs/vue3'
 import { computed, watch } from 'vue'
 import { useAuthStore } from '@/Stores/useAuthStore'
-import { accountNavItems, isAccountNavActive } from '@/accountNavItems'
+import { accountNavItemsFor, isAccountNavActive } from '@/accountNavItems'
 
 // Menu tài khoản trượt từ TRÁI qua, mở bằng icon hamburger ở header (xem AppLayout.vue) — khác
 // AccountLayout.vue (sidebar tĩnh, chỉ nằm trong các trang /profile*): cái này nổi trên MỌI
@@ -15,6 +15,7 @@ const auth = useAuthStore()
 const current = computed(() => page.url)
 // Đóng trong HandleInertiaRequests::wallet() — null khi khách vãng lai/admin, không hiện banner.
 const balance = computed(() => page.props.wallet?.available ?? null)
+const navItems = computed(() => accountNavItemsFor(page.props.settings))
 
 function isActive(href) {
     return isAccountNavActive(current.value, href)
@@ -72,7 +73,7 @@ watch(current, () => emit('close'))
 
                 <nav class="flex-1 px-3 pb-3 space-y-0.5">
                     <Link
-                        v-for="item in accountNavItems"
+                        v-for="item in navItems"
                         :key="item.href"
                         :href="item.href"
                         class="flex items-center gap-3 px-2 py-2.5 rounded-xl text-sm font-semibold transition"

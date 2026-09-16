@@ -9,6 +9,7 @@ import FestiveDecor from '@/Components/FestiveDecor.vue'
 import NotificationBell from '@/Components/NotificationBell.vue'
 import AccountDrawer from '@/Components/AccountDrawer.vue'
 import MessengerButton from '@/Components/MessengerButton.vue'
+import ChatButton from '@/Components/ChatButton.vue'
 import CashbackMarquee from '@/Components/CashbackMarquee.vue'
 import { useCashback } from '@/composables/useCashback'
 
@@ -17,6 +18,9 @@ const { cashbackOn } = useCashback()
 const page = usePage()
 const current = computed(() => page.url)
 const customerAuthEnabled = computed(() => page.props.settings?.customerAuthEnabled ?? true)
+// Chat trong web chỉ dành cho khách đã đăng nhập (cần một tài khoản để gắn hội thoại vào).
+// Khách vãng lai và khi admin tắt chat thì quay về icon Messenger như trước.
+const supportChatEnabled = computed(() => (page.props.settings?.supportChatEnabled ?? false) && auth.isLoggedIn)
 // Server chỉ bật cờ này cho admin — khách đang bảo trì thì không tới được layout này.
 const maintenanceMode = computed(() => page.props.settings?.maintenanceMode ?? false)
 // Admin đang "xem như khách" (Admin → Tài khoản → Vào tài khoản). Server chỉ set khi phiên có
@@ -155,7 +159,10 @@ const accountDrawerOpen = ref(false)
         </main>
 
         <BottomNav />
-        <MessengerButton v-if="!auth.isAdmin" />
+        <!-- Một nút nổi duy nhất ở góc: chat trong web nếu đang bật, không thì Messenger.
+             Hai nút chồng lên nhau cùng lúc là bắt khách chọn kênh hỗ trợ trước khi kịp hỏi. -->
+        <ChatButton v-if="!auth.isAdmin && supportChatEnabled" />
+        <MessengerButton v-else-if="!auth.isAdmin" />
         <ToastContainer />
         <AccountDrawer v-if="auth.isLoggedIn && !auth.isAdmin" :open="accountDrawerOpen" @close="accountDrawerOpen = false" />
     </div>

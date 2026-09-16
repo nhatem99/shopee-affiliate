@@ -6,6 +6,7 @@ use App\Http\Controllers\NotificationController;
 use App\Http\Controllers\ProfileController;
 use App\Models\Setting;
 use App\Services\CashbackService;
+use App\Services\ChatService;
 use App\Services\ImpersonationService;
 use Illuminate\Http\Request;
 use Inertia\Middleware;
@@ -36,6 +37,9 @@ class HandleInertiaRequests extends Middleware
             // Chuông thông báo ở header. Chỉ khách (không phải admin) mới có; đóng trong closure
             // để không tốn hai truy vấn cho khách vãng lai và các request partial reload.
             'notifications' => fn () => $this->notifications($request),
+            // Badge chat hỗ trợ: số tin chưa đọc của khách, hoặc số khách đang chờ admin trả
+            // lời. Đóng closure như notifications() — khách vãng lai không tốn truy vấn nào.
+            'chat' => fn () => $this->chat($request),
             // Banner "Số dư khả dụng" trong AccountDrawer.vue (menu trượt từ icon hamburger).
             // Cùng lý do đóng closure như notifications(): availableBalance() chạy 2 query tổng
             // hợp, chỉ đáng tính trên full visit của khách đã đăng nhập, không phải mọi request.
@@ -52,6 +56,9 @@ class HandleInertiaRequests extends Middleware
                 // Icon Messenger nổi (AppLayout.vue) — khách bấm là nhảy thẳng sang chat trên
                 // Messenger. Chưa đặt thì icon tự ẩn, không hiện nút chết dẫn về đâu cả.
                 'messengerUrl' => Setting::get('messenger_url') ?: null,
+                // Chat hỗ trợ ngay trong web (/ho-tro). Bật thì nút nổi góc màn hình của khách
+                // đã đăng nhập dẫn vào đó thay vì sang Messenger — xem AppLayout.vue.
+                'supportChatEnabled' => ChatService::enabled(),
                 // Chỉ admin cần cờ này: admin duyệt trang khách y như bình thường khi đang bảo
                 // trì (xem MaintenanceMode) nên rất dễ quên là khách vẫn đang bị chặn — AppLayout
                 // dựa vào đây để hiện thanh nhắc.
@@ -112,6 +119,31 @@ class HandleInertiaRequests extends Middleware
                 ->values()
                 ->all(),
         ];
+    }
+
+    /**
+     * Khách: số tin admin gửi mà chưa đọc. Admin: số hội thoại đang chờ trả lời.
+     *
+     * Admin vẫn có badge kể cả khi chat đang tắt ở Cài đặt — tắt chỉ chặn khách gửi THÊM, những
+     * gì đang chờ trả lời thì không được phép biến mất khỏi tầm mắt.
+     *
+     * @return array{unread: int}|null
+     */
+    private function chat(Request $request): ?array
+    {
+        $user = $request->user();
+
+        if (! $user) {
+            return null;
+        }
+
+        $chat = app(ChatService::class);
+
+        if ($user->isAdmin()) {
+            return ['unread' => $chat->unreadForAdmin()];
+        }
+
+        return ChatService::enabled() ? ['unread' => $chat->unreadForUser($user)] : null;
     }
 
     /**

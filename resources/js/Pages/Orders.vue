@@ -1,6 +1,11 @@
 <script setup>
-import { Head, Link } from '@inertiajs/vue3'
+import { computed } from 'vue'
+import { Head, Link, usePage } from '@inertiajs/vue3'
 import AppLayout from '@/Layouts/AppLayout.vue'
+
+// Nút "Hỏi về đơn này" chỉ hiện khi chat đang bật — tắt thì /ho-tro trả 404.
+const page = usePage()
+const chatEnabled = computed(() => page.props.settings?.supportChatEnabled ?? false)
 
 defineProps({
     orders: Object,
@@ -103,7 +108,16 @@ const statusMeta = {
                         {{ statusMeta[o.status].note }}
                     </p>
 
-                    <p class="text-[11px] text-[var(--color-muted)] mt-2">Mã đơn Shopee: {{ o.order_id }}</p>
+                    <div class="mt-2 flex flex-wrap items-center justify-between gap-2">
+                        <p class="text-[11px] text-[var(--color-muted)]">Mã đơn Shopee: {{ o.order_id }}</p>
+                        <!-- Mang sẵn mã đơn sang khung chat: khách khỏi phải copy, admin khỏi
+                             phải hỏi lại "đơn nào bạn ơi" — xem ChatController::orderContext. -->
+                        <Link
+                            v-if="chatEnabled"
+                            :href="`/ho-tro?don=${encodeURIComponent(o.order_id)}`"
+                            class="text-xs font-semibold text-[var(--color-accent)] hover:underline"
+                        >💬 Hỏi về đơn này</Link>
+                    </div>
                 </div>
 
                 <!-- Phân trang -->

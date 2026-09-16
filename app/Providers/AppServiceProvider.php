@@ -43,6 +43,12 @@ class AppServiceProvider extends ServiceProvider
             return Limit::perMinute(10)->by($request->user()?->id ?: $request->ip());
         });
 
+        // Chat hỗ trợ. Rộng tay hơn mấy cái trên vì gõ nhiều dòng ngắn liên tiếp là cách người
+        // ta nhắn tin bình thường, nhưng vẫn đủ chặn kiểu dội hàng trăm dòng vào hộp thư admin.
+        RateLimiter::for('chat', function (Request $request) {
+            return Limit::perMinute(20)->by($request->user()?->id ?: $request->ip());
+        });
+
         if ($this->app->environment('production')) {
             URL::forceScheme('https');
         }

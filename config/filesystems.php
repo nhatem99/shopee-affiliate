@@ -47,6 +47,22 @@ return [
             'report' => false,
         ],
 
+        /*
+         * File do NGƯỜI DÙNG tải lên (hiện tại: ảnh đính kèm trong chat hỗ trợ).
+         *
+         * Nằm thẳng trong public/uploads chứ không dùng disk 'public' + `artisan storage:link`:
+         * symlink là một bước deploy rời, quên chạy thì ảnh hỏng im lặng (404, không log gì cả),
+         * và trên Windows nó còn đòi quyền admin. Thư mục thật thì không có gì để quên.
+         */
+        'uploads' => [
+            'driver' => 'local',
+            'root' => public_path('uploads'),
+            'url' => rtrim(env('APP_URL', 'http://localhost'), '/').'/uploads',
+            'visibility' => 'public',
+            'throw' => false,
+            'report' => false,
+        ],
+
         's3' => [
             'driver' => 's3',
             'key' => env('AWS_ACCESS_KEY_ID'),

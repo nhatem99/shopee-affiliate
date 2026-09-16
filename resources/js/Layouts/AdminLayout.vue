@@ -1,6 +1,7 @@
 ﻿<script setup>
-import { Link, usePage } from '@inertiajs/vue3'
-import { computed, ref, watch } from 'vue'
+import { Link, router, usePage } from '@inertiajs/vue3'
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import axios from 'axios'
 import { useAuthStore } from '@/Stores/useAuthStore'
 import ToastContainer from '@/Components/ToastContainer.vue'
 import ThemeToggle from '@/Components/ThemeToggle.vue'
@@ -8,6 +9,90 @@ import ThemeToggle from '@/Components/ThemeToggle.vue'
 const page = usePage()
 const auth = useAuthStore()
 const current = computed(() => page.url)
+
+// Con số lấy về từ nhịp poll nhẹ bên dưới; chưa poll lần nào thì dùng số server gửi kèm trang.
+const polledUnread = ref(null)
+const chatUnread = computed(() => polledUnread.value ?? page.props.chat?.unread ?? 0)
+
+// Mỗi lần chuyển trang (và mỗi nhịp poll của /admin/chats) server đều gửi lại con số mới nhất —
+// tin nó hơn số đã poll, nếu không thì vừa trả lời xong badge vẫn treo tới nhịp poll kế tiếp.
+watch(() => page.props.chat?.unread, (value) => {
+    if (typeof value === 'number') polledUnread.value = value
+})
+
+/*
+ * Khách nhắn tin trong lúc admin đang làm việc khác — đây là chỗ báo cho admin biết.
+ *
+ * Admin KHÔNG có chuông thông báo như khách (xem HandleInertiaRequests::notifications), nên nếu
+ * không có đoạn này thì cách duy nhất biết có người nhắn là tự bấm vào mục Hỗ trợ mà xem. Ba
+ * mức, tăng dần theo mức độ admin đã rời đi: badge ở sidebar, số trên tiêu đề tab, và thông báo
+ * của hệ điều hành (chỉ khi admin đã bấm nút xin quyền ở /admin/chats).
+ *
+ * Cố ý VẪN poll khi tab bị ẩn, ngược với hai trang chat: tab ẩn chính là lúc cần báo nhất.
+ */
+const POLL_MS = 30000
+let timer = null
+let offNavigate = null
+let lastSeenUnread = null
+
+function pollBadge() {
+    // Trang /admin/chats tự poll và đã xin luôn prop 'chat' — đừng hỏi chồng lên.
+    if (current.value.startsWith('/admin/chats')) return
+
+    // Endpoint JSON riêng, KHÔNG phải router.reload: partial reload vẫn chạy lại controller của
+    // trang đang mở — đứng ở /admin/dashboard thì cứ 30 giây chạy lại toàn bộ thống kê.
+    axios.get('/admin/chats/unread')
+        .then(({ data }) => {
+            if (typeof data?.unread === 'number') polledUnread.value = data.unread
+        })
+        // Mạng chập chờn hay phiên hết hạn thì im lặng bỏ qua: đây là một con số trang trí, không
+        // đáng để ném lỗi vào mặt admin đang làm việc khác.
+        .catch(() => {})
+}
+
+// Inertia đặt lại document.title sau mỗi lần điều hướng (thẻ <Head> của từng trang), nên số đếm
+// phải được gắn lại sau đó — setTimeout để chạy sau lượt cập nhật title của Inertia.
+function applyTitleBadge() {
+    const base = document.title.replace(/^\(\d+\+?\)\s+/, '')
+    document.title = chatUnread.value ? `(${chatUnread.value}) ${base}` : base
+}
+
+function notifyDesktop(count) {
+    if (typeof Notification === 'undefined' || Notification.permission !== 'granted') return
+
+    const notification = new Notification('Có khách đang chờ trả lời', {
+        body: count > 1 ? `${count} hội thoại chưa trả lời` : 'Một khách vừa nhắn tin',
+        tag: 'chat-unread', // thay thế thông báo cũ thay vì xếp chồng một dãy
+    })
+
+    notification.onclick = () => {
+        window.focus()
+        router.visit('/admin/chats')
+        notification.close()
+    }
+}
+
+watch(chatUnread, (count) => {
+    applyTitleBadge()
+
+    // Lần đầu chỉ ghi nhận mốc: mở trang quản trị mà có sẵn 3 khách đang chờ từ hôm qua thì đó
+    // không phải "vừa có người nhắn".
+    if (lastSeenUnread !== null && count > lastSeenUnread) notifyDesktop(count)
+
+    lastSeenUnread = count
+})
+
+onMounted(() => {
+    lastSeenUnread = chatUnread.value
+    applyTitleBadge()
+    timer = setInterval(pollBadge, POLL_MS)
+    offNavigate = router.on('navigate', () => setTimeout(applyTitleBadge, 0))
+})
+
+onBeforeUnmount(() => {
+    clearInterval(timer)
+    if (offNavigate) offNavigate()
+})
 
 const mobileOpen = ref(false)
 // Đóng sidebar mobile mỗi khi chuyển trang, tránh bị kẹt mở đè lên nội dung mới.
@@ -30,6 +115,9 @@ const navGroups = [
             { href: '/admin/orders', icon: '📦', label: 'Đơn hàng' },
             { href: '/admin/shopee-orders', icon: '🧾', label: 'Báo cáo Shopee' },
             { href: '/admin/withdrawals', icon: '💸', label: 'Rút tiền' },
+            // badge: số khách đang chờ trả lời (page.props.chat) — admin không có chuông thông
+            // báo như khách, đây là chỗ DUY NHẤT thấy có người nhắn tin.
+            { href: '/admin/chats', icon: '💬', label: 'Hỗ trợ', badge: true },
         ],
     },
     {
@@ -89,7 +177,11 @@ const navGroups = [
                                 : 'text-white/60 hover:text-white hover:bg-[var(--color-side-soft)]'"
                         >
                             <span>{{ item.icon }}</span>
-                            {{ item.label }}
+                            <span class="flex-1 min-w-0 truncate">{{ item.label }}</span>
+                            <span
+                                v-if="item.badge && chatUnread"
+                                class="flex-none min-w-[20px] h-5 px-1.5 rounded-full bg-[var(--color-accent)] text-white text-[11px] font-extrabold flex items-center justify-center"
+                            >{{ chatUnread > 9 ? '9+' : chatUnread }}</span>
                         </Link>
                     </div>
                 </div>

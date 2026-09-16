@@ -13,6 +13,7 @@ const props = defineProps({
     leaderboardDemo: { type: Boolean, default: true },
     communityUrl: { type: String, default: '' },
     messengerUrl: { type: String, default: '' },
+    supportChatEnabled: { type: Boolean, default: true },
     cashbackRate: { type: Number, default: 0 },
     // null = chưa đặt riêng, khách đang thấy đúng tỉ lệ thực.
     cashbackDisplayRate: { type: Number, default: null },
@@ -37,6 +38,8 @@ const communityUrl = ref(props.communityUrl)
 const savingCommunityUrl = ref(false)
 const messengerUrl = ref(props.messengerUrl)
 const savingMessengerUrl = ref(false)
+const supportChatEnabled = ref(props.supportChatEnabled)
+const savingSupportChat = ref(false)
 const cashbackRate = ref(props.cashbackRate)
 const savingCashbackRate = ref(false)
 const cashbackDisplayRate = ref(props.cashbackDisplayRate ?? '')
@@ -55,6 +58,7 @@ watch(() => props.fbigWindowAutoSwitch, (v) => { fbigWindowAutoSwitch.value = v 
 watch(() => props.leaderboardDemo, (v) => { leaderboardDemo.value = v })
 watch(() => props.communityUrl, (v) => { communityUrl.value = v })
 watch(() => props.messengerUrl, (v) => { messengerUrl.value = v })
+watch(() => props.supportChatEnabled, (v) => { supportChatEnabled.value = v })
 watch(() => props.cashbackRate, (v) => { cashbackRate.value = v })
 watch(() => props.cashbackDisplayRate, (v) => { cashbackDisplayRate.value = v ?? '' })
 watch(() => props.welcomeBonusEnabled, (v) => { welcomeBonusEnabled.value = v })
@@ -185,6 +189,24 @@ function saveMessengerUrl() {
         onFinish: () => { savingMessengerUrl.value = false },
     })
 }
+function toggleSupportChat() {
+    const next = !supportChatEnabled.value
+    supportChatEnabled.value = next
+    savingSupportChat.value = true
+
+    router.post('/admin/settings', { support_chat_enabled: next }, {
+        preserveScroll: true,
+        onSuccess: () => toast.success(next
+            ? 'Đã bật chat trong web — nhớ ngó mục Hỗ trợ ở menu trái.'
+            : 'Đã tắt chat trong web — khách quay lại dùng icon Messenger.'),
+        onError: () => {
+            supportChatEnabled.value = !next // rollback nếu lưu lỗi
+            toast.error('Không lưu được cài đặt, vui lòng thử lại.')
+        },
+        onFinish: () => { savingSupportChat.value = false },
+    })
+}
+
 function saveCashbackRate() {
     savingCashbackRate.value = true
 
@@ -607,6 +629,40 @@ function saveCashbackDisplayRate() {
                         :disabled="savingCommunityUrl"
                         class="btn-fire px-6 py-2.5 rounded-xl text-sm whitespace-nowrap disabled:opacity-60"
                     >{{ savingCommunityUrl ? 'Đang lưu...' : 'Lưu link' }}</button>
+                </div>
+            </div>
+
+            <div class="bg-[var(--color-surface)] rounded-2xl border border-[var(--color-line)] p-6">
+                <div class="flex items-start justify-between gap-6">
+                    <div class="min-w-0">
+                        <h2 class="font-bold text-[var(--color-ink)] mb-1">💬 Chat với hỗ trợ ngay trong web</h2>
+                        <p class="text-sm text-[var(--color-muted)] leading-relaxed">
+                            Khách đã đăng nhập nhắn tin ở <span class="font-mono text-xs">/ho-tro</span>, bạn đọc và trả lời ở mục
+                            <strong class="text-[var(--color-ink)]">Hỗ trợ</strong> trong menu bên trái (có badge số người đang chờ).
+                            Khách nhận thông báo 🔔 khi bạn trả lời mà họ không mở trang.
+                            Bật cái này thì nút nổi góc màn hình của khách đã đăng nhập dẫn vào đây thay vì sang Messenger —
+                            <strong class="text-[var(--color-ink)]">tắt đi nếu bạn không định kiểm tra thường xuyên</strong>,
+                            tin nhắn không ai trả lời còn tệ hơn là không có ô chat.
+                        </p>
+                    </div>
+                    <button
+                        type="button"
+                        role="switch"
+                        :aria-checked="supportChatEnabled"
+                        :disabled="savingSupportChat"
+                        @click="toggleSupportChat"
+                        class="relative inline-flex h-7 w-12 flex-none items-center rounded-full transition-colors disabled:opacity-60"
+                        :class="supportChatEnabled ? 'bg-[var(--color-brand-green)]' : 'bg-[var(--color-line)]'"
+                    >
+                        <span class="inline-block h-5 w-5 rounded-full bg-white shadow transition-transform" :class="supportChatEnabled ? 'translate-x-6' : 'translate-x-1'"></span>
+                    </button>
+                </div>
+
+                <div class="mt-4 pt-4 border-t border-[var(--color-line)] flex items-center gap-2 text-sm">
+                    <span class="w-2 h-2 rounded-full flex-none" :class="supportChatEnabled ? 'bg-[var(--color-brand-green)]' : 'bg-[var(--color-muted)]'"></span>
+                    <span class="text-[var(--color-ink)] font-medium">
+                        {{ supportChatEnabled ? 'Đang bật — khách nhắn thẳng trong web.' : 'Đang tắt — khách dùng icon Messenger bên dưới.' }}
+                    </span>
                 </div>
             </div>
 
