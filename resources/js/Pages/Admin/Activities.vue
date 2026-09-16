@@ -167,6 +167,27 @@ function shortTime(value) {
     return m ? `${m[3]}/${m[2]} ${m[4]}:${m[5]}` : (value || '—')
 }
 
+function money(n) {
+    return '₫' + Number(n || 0).toLocaleString('vi-VN')
+}
+
+const orderStatusIcons = {
+    completed: '✅',
+    pending: '⏳',
+    cancelled: '❌',
+}
+
+// Cú bấm link này có ra đơn Shopee không — ghép ở backend theo thời gian click + tên sản phẩm.
+function orderTitle(o) {
+    const status = { completed: 'Đã hoàn thành', pending: 'Đang chờ xử lý', cancelled: 'Đã huỷ' }[o.status] || o.status
+    return [
+        `Đơn ${o.order_id} — ${status}`,
+        `Hoa hồng: ${money(o.commission)}`,
+        o.ordered_at ? `Đặt lúc: ${o.ordered_at}` : null,
+        o.cross_sell ? `Khách bấm link sản phẩm này nhưng mua: ${o.product_name}` : null,
+    ].filter(Boolean).join('\n')
+}
+
 function deviceLine(a) {
     const device = deviceLabels[a.device_type] || a.device_type
     const ua = [a.browser, a.os_name].filter(Boolean).join(' / ')
@@ -193,15 +214,19 @@ function shortDate(value) {
     return m ? `${m[3]}/${m[2]}` : value
 }
 
-// Bấm một sản phẩm ở box chuyển đổi: lọc bảng theo đúng sản phẩm đó và chỉ lấy
-// sự kiện facebook_open, để số dòng khớp với con số đang hiển thị cạnh tên.
+function isProductFilter(name, eventType) {
+    return props.filters?.product === name && props.filters?.event_type === eventType
+}
+
+// Bấm một con số ở box chuyển đổi: lọc bảng theo đúng sản phẩm đó và đúng bước của phễu
+// (mở Facebook / bấm link sang Shopee), để số dòng khớp với con số vừa bấm.
 // Bấm lại lần nữa thì bỏ lọc.
-function pickProduct(name) {
-    const isActive = props.filters?.product === name
+function pickProduct(name, eventType) {
+    const isActive = isProductFilter(name, eventType)
     apply({
         ...props.filters,
         product: isActive ? '' : name,
-        event_type: isActive ? props.filters?.event_type : 'facebook_open',
+        event_type: isActive ? '' : eventType,
     })
 }
 
@@ -356,29 +381,69 @@ function pickDay(date) {
                 </p>
             </div>
             <div class="grid grid-cols-1 md:grid-cols-[auto_1fr] gap-3 md:gap-6 items-start">
-                <div class="min-w-0">
-                    <p class="text-xs text-[var(--color-muted)] mb-1">Tổng lượt chuyển đổi</p>
-                    <p class="text-3xl font-extrabold text-[var(--color-ink)]">{{ summary?.conversions?.total ?? 0 }}</p>
+                <div class="min-w-0 flex md:block gap-6">
+                    <div>
+                        <p class="text-xs text-[var(--color-muted)] mb-1">Mở Facebook</p>
+                        <p class="text-3xl font-extrabold text-[#1877F2]">{{ summary?.conversions?.total ?? 0 }}</p>
+                    </div>
+                    <div class="md:mt-3">
+                        <p class="text-xs text-[var(--color-muted)] mb-1">Bấm link → Shopee</p>
+                        <p class="text-3xl font-extrabold text-emerald-500">{{ summary?.conversions?.clicks ?? 0 }}</p>
+                    </div>
+                    <div class="md:mt-3">
+                        <p class="text-xs text-[var(--color-muted)] mb-1">Ra đơn</p>
+                        <p class="text-3xl font-extrabold text-amber-500">{{ summary?.conversions?.orders ?? 0 }}</p>
+                        <p class="text-xs font-semibold text-amber-500">{{ money(summary?.conversions?.commission) }}</p>
+                    </div>
                 </div>
                 <div class="min-w-0">
-                    <p class="text-xs text-[var(--color-muted)] mb-1">Sản phẩm được chuyển đổi <span class="hidden md:inline">— bấm để xem chi tiết từng lượt</span></p>
+                    <div class="flex items-baseline justify-between gap-2 mb-1 text-xs text-[var(--color-muted)]">
+                        <span>Sản phẩm được chuyển đổi <span class="hidden md:inline">— bấm vào số để xem chi tiết từng lượt</span></span>
+                        <span class="flex-none">
+                            <span class="text-[#1877F2] font-semibold">Mở FB</span>
+                            <span class="mx-1">/</span>
+                            <span class="text-emerald-500 font-semibold">Bấm link</span>
+                            <span class="mx-1">/</span>
+                            <span class="text-amber-500 font-semibold">Đơn</span>
+                        </span>
+                    </div>
                     <ol class="text-sm text-[var(--color-ink)] space-y-1">
-                        <li v-for="(count, name, idx) in summary?.conversions?.top_products" :key="name">
+                        <li v-for="(p, idx) in summary?.conversions?.products" :key="p.name" class="flex items-baseline gap-1">
+                            <span class="flex-none w-5 text-xs text-[var(--color-muted)] tabular-nums">{{ idx + 1 }}.</span>
                             <button
-                                @click="pickProduct(name)"
-                                :title="`Lọc bảng theo sản phẩm: ${name}`"
-                                class="flex items-baseline gap-2 w-full text-left rounded-lg px-1 py-0.5 hover:bg-[#1877F2]/10 hover:text-[#1877F2] transition"
-                                :class="filters?.product === name ? 'bg-[#1877F2]/10 text-[#1877F2] font-semibold' : ''"
+                                @click="pickProduct(p.name, 'facebook_open')"
+                                :title="`Lượt mở Facebook của: ${p.name}`"
+                                class="min-w-0 flex-1 flex items-baseline gap-2 text-left rounded-lg px-1 py-0.5 hover:bg-[#1877F2]/10 hover:text-[#1877F2] transition"
+                                :class="isProductFilter(p.name, 'facebook_open') ? 'bg-[#1877F2]/10 text-[#1877F2] font-semibold' : ''"
                             >
-                                <span class="flex-none w-5 text-xs text-[var(--color-muted)] tabular-nums">{{ idx + 1 }}.</span>
-                                <span class="min-w-0 flex-1 line-clamp-2 break-words">{{ name }}</span>
-                                <b class="flex-none tabular-nums">{{ count }}</b>
+                                <span class="min-w-0 flex-1 line-clamp-2 break-words">{{ p.name }}</span>
+                                <b class="flex-none tabular-nums">{{ p.opens }}</b>
                             </button>
+                            <button
+                                @click="pickProduct(p.name, 'short_link_click')"
+                                :title="`Lượt bấm link trong Facebook (đi tới Shopee) của: ${p.name}`"
+                                class="flex-none w-8 text-right tabular-nums rounded-lg px-1 py-0.5 hover:bg-emerald-500/10 transition"
+                                :class="isProductFilter(p.name, 'short_link_click') ? 'bg-emerald-500/10 font-semibold' : ''"
+                            >
+                                <b :class="p.clicks ? 'text-emerald-500' : 'text-[var(--color-muted)]'">{{ p.clicks }}</b>
+                            </button>
+                            <span class="flex-none w-[4.5rem] md:w-32 text-right tabular-nums"
+                                :title="p.orders ? `${p.orders} đơn Shopee đến từ cú bấm link của sản phẩm này — hoa hồng ${money(p.commission)}` : 'Chưa ghép được đơn Shopee nào với cú bấm link của sản phẩm này'">
+                                <b v-if="p.orders" class="text-amber-500">💰{{ p.orders }}</b>
+                                <b v-else class="text-[var(--color-muted)]">0</b>
+                                <span v-if="p.orders" class="hidden md:inline text-xs text-amber-500/80 ml-1">{{ money(p.commission) }}</span>
+                            </span>
                         </li>
-                        <li v-if="!Object.keys(summary?.conversions?.top_products || {}).length" class="text-[var(--color-muted)]">
+                        <li v-if="!summary?.conversions?.products?.length" class="text-[var(--color-muted)]">
                             Chưa có lượt chuyển đổi nào
                         </li>
                     </ol>
+                    <p class="mt-2 text-[11px] text-[var(--color-muted)]">
+                        Đơn ghép từ báo cáo hoa hồng Shopee theo thời gian click + tên sản phẩm.
+                        <template v-if="summary?.conversions?.unmatched_orders">
+                            Còn <b class="text-[var(--color-ink)]">{{ summary.conversions.unmatched_orders }}</b> đơn trong khoảng này không ghép được với cú bấm nào (đơn có trước khi bật theo dõi, hoặc khách vào Shopee từ đường khác).
+                        </template>
+                    </p>
                 </div>
             </div>
         </div>
@@ -520,6 +585,13 @@ function pickDay(date) {
                         <span class="flex-none text-[var(--color-muted)]">Sản phẩm</span>
                         <span class="min-w-0 text-right text-[var(--color-ink)]/80 break-words line-clamp-2">{{ a.product_name || a.source }}</span>
                     </div>
+                    <div v-if="a.order" class="flex items-baseline justify-between gap-3">
+                        <span class="flex-none text-[var(--color-muted)]">Đơn Shopee</span>
+                        <span class="min-w-0 text-right font-semibold text-amber-500 break-words">
+                            {{ orderStatusIcons[a.order.status] || '' }} {{ money(a.order.commission) }}
+                            <span v-if="a.order.cross_sell" class="text-[var(--color-muted)] font-normal">(mua SP khác)</span>
+                        </span>
+                    </div>
                 </div>
             </div>
             <div v-if="!activities?.data?.length"
@@ -536,6 +608,7 @@ function pickDay(date) {
                         <th class="px-4 py-3 font-semibold">Sự kiện</th>
                         <th class="px-4 py-3 font-semibold">Người dùng</th>
                         <th class="px-4 py-3 font-semibold">Sản phẩm / Nguồn</th>
+                        <th class="px-4 py-3 font-semibold">Đơn Shopee</th>
                         <th class="px-4 py-3 font-semibold">Mã</th>
                         <th class="px-4 py-3 font-semibold">Thiết bị</th>
                         <th class="px-4 py-3 font-semibold">Trình duyệt / OS</th>
@@ -550,6 +623,13 @@ function pickDay(date) {
                         <td class="px-4 py-3 text-[var(--color-ink)] font-medium whitespace-nowrap">{{ eventLabels[a.event_type] || a.event_type }}</td>
                         <td class="px-4 py-3 text-[var(--color-ink)]/70">{{ a.user || 'Khách' }}</td>
                         <td class="px-4 py-3 text-[var(--color-ink)]/70 max-w-[200px] truncate">{{ a.product_name || a.source || '—' }}</td>
+                        <td class="px-4 py-3 whitespace-nowrap">
+                            <span v-if="a.order" :title="orderTitle(a.order)" class="font-semibold text-amber-500">
+                                {{ orderStatusIcons[a.order.status] || '' }} {{ money(a.order.commission) }}
+                                <span v-if="a.order.cross_sell" class="text-[var(--color-muted)] font-normal">(SP khác)</span>
+                            </span>
+                            <span v-else class="text-[var(--color-muted)]">—</span>
+                        </td>
                         <td class="px-4 py-3 font-mono text-[var(--color-ink)]">{{ a.voucher_code || '—' }}</td>
                         <td class="px-4 py-3 whitespace-nowrap">{{ deviceLabels[a.device_type] || a.device_type || '—' }}</td>
                         <td class="px-4 py-3 text-[var(--color-ink)]/70 whitespace-nowrap">{{ [a.browser, a.os_name].filter(Boolean).join(' / ') || '—' }}</td>
@@ -564,7 +644,7 @@ function pickDay(date) {
                         <td class="px-4 py-3 text-[var(--color-ink)]/70 whitespace-nowrap">{{ a.traffic_source ? trafficSourceLabel(a.traffic_source) : '—' }}</td>
                     </tr>
                     <tr v-if="!activities?.data?.length">
-                        <td colspan="10" class="px-6 py-10 text-center text-[var(--color-muted)]">Chưa có hoạt động nào.</td>
+                        <td colspan="11" class="px-6 py-10 text-center text-[var(--color-muted)]">Chưa có hoạt động nào.</td>
                     </tr>
                 </tbody>
             </table>

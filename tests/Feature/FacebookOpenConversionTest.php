@@ -53,6 +53,10 @@ class FacebookOpenConversionTest extends TestCase
         $log(['source' => 'fb_comment', 'product_name' => 'Áo thun']);
         $log(['source' => 'fb_comment', 'product_name' => 'Áo thun']);
         $log(['source' => 'fb_reel', 'product_name' => 'Quần jean']);
+        // Bước sau: bấm link trong Facebook để sang Shopee.
+        $log(['event_type' => 'short_link_click', 'source' => 'kieushopee', 'product_name' => 'Áo thun']);
+        // Sản phẩm chỉ có click (reel còn hiện link cũ) vẫn phải xuất hiện trong phễu.
+        $log(['event_type' => 'short_link_click', 'source' => 'kieushopee', 'product_name' => 'Nón lưỡi trai']);
         // Không phải chuyển đổi → không được tính.
         $log(['event_type' => 'page_view', 'source' => null, 'product_name' => 'Áo thun']);
 
@@ -61,10 +65,12 @@ class FacebookOpenConversionTest extends TestCase
             ->assertOk()
             ->assertInertia(fn ($page) => $page
                 ->where('summary.conversions.total', 3)
+                ->where('summary.conversions.clicks', 2)
                 ->where('summary.conversions.by_mode.fb_comment', 2)
                 ->where('summary.conversions.by_mode.fb_reel', 1)
-                ->where('summary.conversions.top_products.Áo thun', 2)
-                ->where('summary.conversions.top_products.Quần jean', 1)
+                ->where('summary.conversions.products.0', ['name' => 'Áo thun', 'opens' => 2, 'clicks' => 1, 'orders' => 0, 'commission' => 0])
+                ->where('summary.conversions.products.1', ['name' => 'Quần jean', 'opens' => 1, 'clicks' => 0, 'orders' => 0, 'commission' => 0])
+                ->where('summary.conversions.products.2', ['name' => 'Nón lưỡi trai', 'opens' => 0, 'clicks' => 1, 'orders' => 0, 'commission' => 0])
             );
     }
 }

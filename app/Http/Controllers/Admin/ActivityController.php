@@ -4,10 +4,12 @@ namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
 use App\Models\UserActivity;
+use App\Services\ClickOrderMatchService;
 use App\Services\TrackingService;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Carbon;
 use Inertia\Inertia;
 use Inertia\Response;
 use Symfony\Component\HttpFoundation\StreamedResponse;
@@ -21,12 +23,23 @@ class ActivityController extends Controller
         'Nguồn truy cập', 'Referrer', 'URL',
     ];
 
+    public function __construct(private ClickOrderMatchService $clickOrders) {}
+
     public function index(Request $request): Response
     {
-        $activities = $this->filteredQuery($request)
+        $paginator = $this->filteredQuery($request)
             ->with('user')
             ->latest()
             ->paginate(30)
+            ->withQueryString();
+
+        // Cú bấm link nào trên trang này đã ra đơn Shopee — đối chiếu ngay trên 30 dòng đang
+        // xem, không phải cả bảng log.
+        $pageOrders = $this->clickOrders->match(
+            collect($paginator->items())->filter(fn (UserActivity $a) => $a->event_type === 'short_link_click')
+        )['by_click'];
+
+        $activities = $paginator
             ->through(fn (UserActivity $a) => [
                 'id' => $a->id,
                 'user' => $a->user?->name,
@@ -44,8 +57,8 @@ class ActivityController extends Controller
                 'traffic_source' => $a->traffic_source,
                 'referrer_host' => $a->referrer_host,
                 'created_at' => $a->created_at->toDateTimeString(),
-            ])
-            ->withQueryString();
+                'order' => $pageOrders[$a->id] ?? null,
+            ]);
 
         $recentWindow = now()->subDays(7);
 
@@ -54,11 +67,29 @@ class ActivityController extends Controller
         // Nếu admin đang lọc theo ngày thì thống kê đúng khoảng đó; không lọc thì lấy 7 ngày.
         $from = $this->date($request->input('from'));
         $to = $this->date($request->input('to'));
-        $conversionQuery = fn (): Builder => UserActivity::where('event_type', 'facebook_open')
+        $inRange = fn (string $eventType): Builder => UserActivity::where('event_type', $eventType)
             ->when($from || $to, function (Builder $q) use ($from, $to) {
                 $q->when($from, fn (Builder $q) => $q->whereDate('created_at', '>=', $from))
                     ->when($to, fn (Builder $q) => $q->whereDate('created_at', '<=', $to));
             }, fn (Builder $q) => $q->where('created_at', '>=', $recentWindow));
+
+        $conversionQuery = fn (): Builder => $inRange('facebook_open');
+        // Bước SAU khi mở Facebook: khách bấm link trong caption reel/bình luận → /go/{code}
+        // → sang Shopee. Đây mới là cú bấm ra tiền, nên phải đứng cạnh lượt mở Facebook để
+        // thấy ngay sản phẩm nào rơi rụng ở giữa hai bước.
+        $clickQuery = fn (): Builder => $inRange('short_link_click');
+
+        // Bước cuối của phễu: cú bấm link nào ra ĐƠN THẬT trong báo cáo hoa hồng Shopee.
+        // Truyền cả khoảng ngày đang xem để đếm được cả đơn KHÔNG đến từ cú bấm nào.
+        [$rangeStart, $rangeEnd] = ($from || $to)
+            ? [$from ? Carbon::parse($from)->startOfDay() : null, $to ? Carbon::parse($to)->endOfDay() : null]
+            : [$recentWindow, now()];
+
+        $clickOrders = $this->clickOrders->match(
+            $clickQuery()->whereNotNull('product_name')->get(['id', 'created_at', 'product_name']),
+            $rangeStart,
+            $rangeEnd,
+        );
 
         return Inertia::render('Admin/Activities', [
             'activities' => $activities,
@@ -112,18 +143,16 @@ class ActivityController extends Controller
                     ->pluck('total', 'ip_address'),
                 'conversions' => [
                     'total' => $conversionQuery()->count(),
+                    'clicks' => $clickQuery()->count(),
+                    'orders' => $clickOrders['orders'],
+                    'commission' => $clickOrders['commission'],
+                    'unmatched_orders' => $clickOrders['unmatched_orders'],
                     'by_mode' => $conversionQuery()
                         ->whereNotNull('source')
                         ->selectRaw('source, COUNT(*) as total')
                         ->groupBy('source')
                         ->pluck('total', 'source'),
-                    'top_products' => $conversionQuery()
-                        ->whereNotNull('product_name')
-                        ->selectRaw('product_name, COUNT(*) as total')
-                        ->groupBy('product_name')
-                        ->orderByDesc('total')
-                        ->limit(8)
-                        ->pluck('total', 'product_name'),
+                    'products' => $this->productFunnel($conversionQuery(), $clickQuery(), $clickOrders['by_product'], 8),
                 ],
                 // Đếm các dấu hiệu tấn công (brute-force login/OTP, cố vào admin trái phép,
                 // bị chặn bởi rate-limit) để admin thấy ngay khi vào trang theo dõi.
@@ -166,6 +195,42 @@ class ActivityController extends Controller
         }
 
         return $daily;
+    }
+
+    /**
+     * Ghép cả phễu theo tên sản phẩm: mở Facebook → bấm link sang Shopee → ra đơn thật.
+     * Sản phẩm chỉ có click mà không có lượt mở (reel vẫn còn hiện link cũ nên người lướt
+     * Facebook tự nhiên bấm vào) vẫn được liệt kê — đó cũng là đơn hàng thật.
+     *
+     * @param  array<string, array{orders: int, commission: float}>  $orders  Từ ClickOrderMatchService.
+     * @return list<array{name: string, opens: int, clicks: int, orders: int, commission: float}>
+     */
+    private function productFunnel(Builder $opens, Builder $clicks, array $orders, int $limit): array
+    {
+        $countByProduct = fn (Builder $q) => $q->whereNotNull('product_name')
+            ->selectRaw('product_name, COUNT(*) as total')
+            ->groupBy('product_name')
+            ->pluck('total', 'product_name');
+
+        $opened = $countByProduct($opens);
+        $clicked = $countByProduct($clicks);
+
+        return $opened->keys()
+            ->merge($clicked->keys())
+            ->unique()
+            ->map(fn ($name) => [
+                'name' => (string) $name,
+                'opens' => (int) ($opened[$name] ?? 0),
+                'clicks' => (int) ($clicked[$name] ?? 0),
+                'orders' => (int) ($orders[(string) $name]['orders'] ?? 0),
+                'commission' => (float) ($orders[(string) $name]['commission'] ?? 0),
+            ])
+            // Sản phẩm RA ĐƠN đứng trước — đó mới là thứ đáng nhìn, lượt mở Facebook chỉ là
+            // bước giữa đường.
+            ->sortBy(fn (array $row) => [-$row['orders'], -$row['opens'], -$row['clicks']])
+            ->take($limit)
+            ->values()
+            ->all();
     }
 
     /**
