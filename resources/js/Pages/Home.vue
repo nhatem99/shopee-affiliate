@@ -1,5 +1,5 @@
 ﻿<script setup>
-import { ref, computed, nextTick, onMounted, onUnmounted } from 'vue'
+import { ref, computed, nextTick, onMounted, onUnmounted, watch } from 'vue'
 import { Head, Link, usePage } from '@inertiajs/vue3'
 import { router } from '@inertiajs/vue3'
 import axios from 'axios'
@@ -115,11 +115,29 @@ const alreadyResolved = computed(
     () => resolvedUrl.value !== null && voucherUrl.value.trim() === resolvedUrl.value,
 )
 
+// Moi link ra khỏi đoạn text vừa dán. App Shopee (và Zalo/Messenger khi chuyển tiếp) hay copy
+// kèm lời dẫn kiểu "Xem sản phẩm ... tại Shopee! https://vn.shp.ee/..." — gửi nguyên cả câu lên
+// server là rớt validate `url`, khách chỉ thấy "Có lỗi xảy ra". Không có link thì trả nguyên text
+// để server báo đúng lý do.
+function extractUrl(text) {
+    return String(text || '').match(/https?:\/\/\S+/i)?.[0] ?? String(text || '').trim()
+}
+
 async function pasteVoucherUrl() {
     try {
-        const text = (await navigator.clipboard.readText()).trim()
+        let text = (await navigator.clipboard.readText()).trim()
+        // Clipboard chỉ có kiểu URL (một số app iOS copy link bằng UIPasteboard.url, không kèm
+        // plain text): readText() trả rỗng dù dán tay vẫn ra chữ. Đọc thêm text/uri-list.
+        if (!text && navigator.clipboard.read) {
+            for (const item of await navigator.clipboard.read()) {
+                if (item.types.includes('text/uri-list')) {
+                    text = (await (await item.getType('text/uri-list')).text()).trim()
+                    break
+                }
+            }
+        }
         if (text) {
-            voucherUrl.value = text
+            voucherUrl.value = extractUrl(text)
             resolveVoucher()
         }
     } catch (e) {
@@ -129,10 +147,48 @@ async function pasteVoucherUrl() {
 
 // Dán link vào ô là tự động quét luôn, không cần bấm nút — giống các trang tương tự.
 function onVoucherUrlPaste(e) {
-    const text = (e.clipboardData || window.clipboardData)?.getData('text')?.trim()
+    const data = e.clipboardData || window.clipboardData
+    // Cùng lý do với pasteVoucherUrl: clipboard chỉ mang kiểu URL thì getData('text') rỗng.
+    const text = (data?.getData('text') || data?.getData('text/uri-list') || data?.getData('url') || '').trim()
     if (!text) return
     e.preventDefault()
-    voucherUrl.value = text
+    voucherUrl.value = extractUrl(text)
+    resolveVoucher()
+}
+
+// Giá trị của ô NGAY TRƯỚC lần đổi gần nhất — để onVoucherUrlInput biết đoạn nào vừa được chèn.
+// Bắt bằng watcher sync (chạy ngay trong lúc gán, trước handler @input) chứ không ghi trong
+// handler: gán bằng code (nút Dán, sự kiện paste) không sinh sự kiện input, ghi trong handler
+// thì mốc so sánh bị cũ và lần chèn sau tính nhầm cả link cũ vào đoạn "vừa chèn".
+let voucherUrlBefore = ''
+watch(voucherUrl, (_, oldValue) => {
+    voucherUrlBefore = oldValue
+}, { flush: 'sync' })
+
+/**
+ * Lưới hứng cho những đường dán KHÔNG đi qua sự kiện `paste`, mà v-model vẫn nhận được chữ:
+ *  • gợi ý clipboard trên thanh QuickType của bàn phím iPhone (ô type=url hiện sẵn link vừa
+ *    copy ở app khác, chạm là chèn) — WebKit coi đó là gõ chữ (insertText), không phải paste;
+ *  • kéo-thả, tự điền, hoặc handler paste ở trên bỏ qua vì không đọc được text.
+ * Không có lưới này thì link hiện trong ô mà không quét gì cả — khách tưởng trang chết, vì họ
+ * đã quen "dán là chạy". Ca thật trên iPhone/Safari: dán link thứ hai xong ô hiện link mà không quét.
+ *
+ * Chỉ nhận ĐOẠN VỪA CHÈN (so với giá trị trước đó) chứ không nhận cả ô: chèn vào ô đang có link
+ * cũ thì ô thành "link1link2", lấy link cuối trong đoạn chèn mới đúng là link khách muốn. Gõ tay
+ * từng ký tự thì đoạn chèn không bao giờ thành link → không quét, nút "Tìm mã ngay" vẫn còn đó.
+ */
+function onVoucherUrlInput(e) {
+    const value = e.target.value
+    const before = voucherUrlBefore
+    let head = 0
+    while (head < before.length && head < value.length && before[head] === value[head]) head++
+    let tail = 0
+    while (tail < before.length - head && tail < value.length - head
+        && before[before.length - 1 - tail] === value[value.length - 1 - tail]) tail++
+    const inserted = value.slice(head, value.length - tail)
+    const url = inserted.match(/https?:\/\/\S+/i)?.[0]
+    if (!url) return
+    voucherUrl.value = url
     resolveVoucher()
 }
 
@@ -174,12 +230,28 @@ function focusVoucherTool() {
     voucherUrlInput.value?.focus()
 }
 
+// Link đang được tìm (null khi rảnh) và số thứ tự lượt tìm mới nhất. Mỗi lượt giữ số của mình
+// và chỉ đụng vào trạng thái chung khi vẫn là lượt mới nhất — lượt cũ bị Inertia huỷ (khách dán
+// link khác đè lên) vẫn được gọi onFinish, không có số thì nó tắt cờ `resolving` của lượt mới.
+let resolvingUrl = null
+let resolveSeq = 0
+
 function resolveVoucher() {
-    if (!voucherUrl.value.trim()) return
+    const url = voucherUrl.value.trim()
+    if (!url) return
     // Chặn gửi trùng ở ngay đây, không chỉ dựa vào :disabled của nút: Enter và sự kiện dán đều
     // gọi thẳng hàm này mà không đi qua nút. Trong log hoạt động đã thấy khách dán/bấm lặp lại
     // cách nhau 2-3 giây, và mỗi lượt trượt cache của nguồn ganma là một job ~20 giây.
-    if (resolving.value) return
+    // Chỉ chặn khi CÙNG link: dán link KHÁC trong lúc đang chờ là ý khách đã đổi, cho đi luôn
+    // (router.post tự huỷ lượt cũ) — khoá cứng là khách đứng nhìn ô im lặng suốt 20-45 giây.
+    // Nói cho khách biết vì sao không có gì xảy ra: nút "Đang tìm mã..." bị ẩn khi khung đã dính.
+    if (resolving.value && url === resolvingUrl) {
+        toast.info('Đang tìm mã cho link này rồi, đợi thêm chút nhé...')
+
+        return
+    }
+    const seq = ++resolveSeq
+    resolvingUrl = url
     resolving.value = true
     voucherError.value = null
     // Xoá link đã lấy của lần quét trước: nút kết quả dùng chung key 'result', còn các dòng
@@ -187,9 +259,10 @@ function resolveVoucher() {
     // khách bấm phải comment của sản phẩm khác.
     readyLinks.value = {}
 
-    router.post('/voucher/resolve', { url: voucherUrl.value }, {
+    router.post('/voucher/resolve', { url }, {
         preserveScroll: true,
         onSuccess: () => {
+            if (seq !== resolveSeq) return
             resolving.value = false
             // Ghi lại link vừa quét xong để khoá nút. Chỉ đặt ở onSuccess: quét lỗi thì phải cho
             // khách bấm thử lại, không được khoá.
@@ -229,7 +302,10 @@ function resolveVoucher() {
             }
         },
         onError: (errors) => {
-            voucherError.value = errors.voucher_url || 'Có lỗi xảy ra, vui lòng thử lại.'
+            if (seq !== resolveSeq) return
+            // `url` là lỗi validate của Laravel (chuỗi dán vào không phải link), `voucher_url`
+            // là lỗi nghiệp vụ controller trả về — cả hai đều đã viết cho khách đọc.
+            voucherError.value = errors.voucher_url || errors.url || 'Có lỗi xảy ra, vui lòng thử lại.'
             toast.error(voucherError.value)
         },
         // onFinish chạy trong MỌI trường hợp, kể cả request đứt giữa đường (mạng yếu, khách
@@ -237,13 +313,30 @@ function resolveVoucher() {
         // rồi thì `resolving` còn khoá cả ô nhập, nên kẹt cờ này nghĩa là khách không sửa
         // được link mà cũng không thử lại được, phải tải lại trang.
         onFinish: () => {
+            if (seq !== resolveSeq) return
             resolving.value = false
+            resolvingUrl = null
         },
     })
 }
 
 const shorteningKey = ref(null)
 const autoRedirecting = ref(false)
+
+/**
+ * Trang được lấy lại từ bộ nhớ đệm quay-lui (bfcache) — chuyện thường ngày trên iPhone: khách
+ * bấm bước 1 sang app Shopee, quay lại bằng nút Back là Safari trả nguyên trang cũ, không tải
+ * lại. Request nào đang chạy lúc rời trang đã bị trình duyệt cắt mà không gọi callback nào,
+ * nên cờ nào còn bật là ô nhập/nút mua bị khoá vĩnh viễn cho tới khi tải lại trang.
+ */
+function onPageShow(e) {
+    if (!e.persisted) return
+    resolveSeq++
+    resolving.value = false
+    resolvingUrl = null
+    shorteningKey.value = null
+    autoRedirecting.value = false
+}
 
 // Nhãn nút phải nói đúng nơi nó dẫn tới. "Mua ngay" mà mở ra Facebook là khách tưởng lỗi.
 const ctaLabel = computed(() => {
@@ -542,11 +635,13 @@ function onScroll() {
 onMounted(() => {
     window.addEventListener('scroll', onScroll, { passive: true })
     window.addEventListener('resize', onScroll, { passive: true })
+    window.addEventListener('pageshow', onPageShow)
     measureStuck()
 })
 onUnmounted(() => {
     window.removeEventListener('scroll', onScroll)
     window.removeEventListener('resize', onScroll)
+    window.removeEventListener('pageshow', onPageShow)
 })
 </script>
 
@@ -613,6 +708,7 @@ onUnmounted(() => {
                                     enterkeyhint="search"
                                     @keydown.enter="resolveVoucher"
                                     @paste="onVoucherUrlPaste"
+                                    @input="onVoucherUrlInput"
                                     placeholder="Dán link Shopee (shopee.vn hoặc s.shopee.vn)..."
                                     class="w-full pl-10 pr-20 border border-[var(--color-line)] rounded-xl text-sm bg-[var(--color-surface)] focus:outline-none focus:border-[var(--color-accent)] focus:ring-2 focus:ring-[var(--color-peach)] transition-all duration-200"
                                     :class="stuck ? 'py-3' : 'py-4'"
