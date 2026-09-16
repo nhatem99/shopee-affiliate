@@ -60,6 +60,21 @@ class AdminActivityFilterExportTest extends TestCase
             ->assertInertia(fn ($page) => $page->where('activities.total', 2));
     }
 
+    public function test_filter_by_product_name_from_conversion_box(): void
+    {
+        $this->log('1.1.1.1', '2026-09-15 10:00:00', ['event_type' => 'facebook_open', 'product_name' => 'Sách - Sanctify (Trọn bộ)', 'voucher_code' => 'KEEP']);
+        $this->log('1.1.1.1', '2026-09-15 10:05:00', ['event_type' => 'facebook_open', 'product_name' => 'DORA TOTE Túi tote', 'voucher_code' => 'DROP']);
+
+        $this->actingAs($this->createAdmin())
+            ->get('/admin/activities?product='.urlencode('Sách - Sanctify (Trọn bộ)').'&event_type=facebook_open')
+            ->assertOk()
+            ->assertInertia(fn ($page) => $page
+                ->where('activities.total', 1)
+                ->where('activities.data.0.voucher_code', 'KEEP')
+                ->where('filters.product', 'Sách - Sanctify (Trọn bộ)')
+            );
+    }
+
     public function test_filter_by_date_range_is_inclusive_of_both_ends(): void
     {
         $this->log('1.1.1.1', '2026-09-01 23:59:00');

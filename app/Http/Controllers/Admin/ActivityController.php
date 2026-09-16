@@ -238,6 +238,12 @@ class ActivityController extends Controller
             }
         }
 
+        // Bấm một sản phẩm ở box chuyển đổi → lọc đúng tên đó. Tên lấy từ chính
+        // nhóm GROUP BY nên so khớp chính xác, không cần LIKE.
+        if ($request->filled('product')) {
+            $query->where('product_name', $request->input('product'));
+        }
+
         if ($request->filled('ip')) {
             $ip = trim((string) $request->input('ip'));
             // Gõ đủ IP thì so khớp chính xác; gõ một phần (vd '113.161.') thì tìm gần
@@ -263,7 +269,7 @@ class ActivityController extends Controller
     /** @return array<string, string> */
     private function activeFilters(Request $request): array
     {
-        $filters = $request->only(['event_type', 'platform', 'device_type', 'traffic_source', 'ip']);
+        $filters = $request->only(['event_type', 'platform', 'device_type', 'traffic_source', 'ip', 'product']);
         $filters['ip'] = isset($filters['ip']) ? trim((string) $filters['ip']) : null;
         $filters['from'] = $this->date($request->input('from'));
         $filters['to'] = $this->date($request->input('to'));

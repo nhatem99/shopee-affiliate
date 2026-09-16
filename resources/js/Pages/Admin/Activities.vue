@@ -193,6 +193,18 @@ function shortDate(value) {
     return m ? `${m[3]}/${m[2]}` : value
 }
 
+// Bấm một sản phẩm ở box chuyển đổi: lọc bảng theo đúng sản phẩm đó và chỉ lấy
+// sự kiện facebook_open, để số dòng khớp với con số đang hiển thị cạnh tên.
+// Bấm lại lần nữa thì bỏ lọc.
+function pickProduct(name) {
+    const isActive = props.filters?.product === name
+    apply({
+        ...props.filters,
+        product: isActive ? '' : name,
+        event_type: isActive ? props.filters?.event_type : 'facebook_open',
+    })
+}
+
 // Bấm vào một ngày thì lọc bảng bên dưới đúng ngày đó.
 function pickDay(date) {
     fromInput.value = date
@@ -349,15 +361,19 @@ function pickDay(date) {
                     <p class="text-3xl font-extrabold text-[var(--color-ink)]">{{ summary?.conversions?.total ?? 0 }}</p>
                 </div>
                 <div class="min-w-0">
-                    <p class="text-xs text-[var(--color-muted)] mb-1">Sản phẩm được chuyển đổi</p>
+                    <p class="text-xs text-[var(--color-muted)] mb-1">Sản phẩm được chuyển đổi <span class="hidden md:inline">— bấm để xem chi tiết từng lượt</span></p>
                     <ol class="text-sm text-[var(--color-ink)] space-y-1">
-                        <li
-                            v-for="(count, name, idx) in summary?.conversions?.top_products" :key="name"
-                            class="flex items-baseline gap-2"
-                        >
-                            <span class="flex-none w-5 text-xs text-[var(--color-muted)] tabular-nums">{{ idx + 1 }}.</span>
-                            <span class="min-w-0 flex-1 line-clamp-2 break-words">{{ name }}</span>
-                            <b class="flex-none tabular-nums">{{ count }}</b>
+                        <li v-for="(count, name, idx) in summary?.conversions?.top_products" :key="name">
+                            <button
+                                @click="pickProduct(name)"
+                                :title="`Lọc bảng theo sản phẩm: ${name}`"
+                                class="flex items-baseline gap-2 w-full text-left rounded-lg px-1 py-0.5 hover:bg-[#1877F2]/10 hover:text-[#1877F2] transition"
+                                :class="filters?.product === name ? 'bg-[#1877F2]/10 text-[#1877F2] font-semibold' : ''"
+                            >
+                                <span class="flex-none w-5 text-xs text-[var(--color-muted)] tabular-nums">{{ idx + 1 }}.</span>
+                                <span class="min-w-0 flex-1 line-clamp-2 break-words">{{ name }}</span>
+                                <b class="flex-none tabular-nums">{{ count }}</b>
+                            </button>
                         </li>
                         <li v-if="!Object.keys(summary?.conversions?.top_products || {}).length" class="text-[var(--color-muted)]">
                             Chưa có lượt chuyển đổi nào
@@ -438,6 +454,13 @@ function pickDay(date) {
                     {{ label }}
                 </button>
             </div>
+
+            <button v-if="filters?.product" @click="filter('product', '')"
+                :title="filters.product"
+                class="px-4 py-2.5 md:py-2 rounded-xl text-sm font-semibold bg-[#1877F2] text-white flex items-center justify-center gap-1.5 min-w-0 md:max-w-[22rem]">
+                <span class="truncate">Sản phẩm: {{ filters.product }}</span>
+                <span class="flex-none">✕</span>
+            </button>
 
             <button v-if="filters?.traffic_source" @click="filter('traffic_source', '')"
                 class="px-4 py-2.5 md:py-2 rounded-xl text-sm font-semibold bg-[var(--color-accent)] text-white flex items-center justify-center gap-1.5 md:order-none">
