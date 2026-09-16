@@ -8,6 +8,7 @@ const props = defineProps({
     customerAuthEnabled: { type: Boolean, required: true },
     maintenanceMode: { type: Boolean, required: true },
     festiveDecor: { type: Boolean, default: false },
+    historyRebuyEnabled: { type: Boolean, default: false },
     leaderboardDemo: { type: Boolean, default: true },
     communityUrl: { type: String, default: '' },
     messengerUrl: { type: String, default: '' },
@@ -25,6 +26,8 @@ const savingCustomerAuth = ref(false)
 const savingMaintenance = ref(false)
 const festiveDecor = ref(props.festiveDecor)
 const savingFestive = ref(false)
+const historyRebuyEnabled = ref(props.historyRebuyEnabled)
+const savingHistoryRebuy = ref(false)
 const leaderboardDemo = ref(props.leaderboardDemo)
 const savingLeaderboardDemo = ref(false)
 const communityUrl = ref(props.communityUrl)
@@ -44,6 +47,7 @@ const savingWelcomeBonusAmount = ref(false)
 watch(() => props.customerAuthEnabled, (v) => { customerAuthEnabled.value = v })
 watch(() => props.maintenanceMode, (v) => { maintenanceMode.value = v })
 watch(() => props.festiveDecor, (v) => { festiveDecor.value = v })
+watch(() => props.historyRebuyEnabled, (v) => { historyRebuyEnabled.value = v })
 watch(() => props.leaderboardDemo, (v) => { leaderboardDemo.value = v })
 watch(() => props.communityUrl, (v) => { communityUrl.value = v })
 watch(() => props.messengerUrl, (v) => { messengerUrl.value = v })
@@ -97,6 +101,24 @@ function toggleFestive() {
             toast.error('Không lưu được cài đặt, vui lòng thử lại.')
         },
         onFinish: () => { savingFestive.value = false },
+    })
+}
+
+function toggleHistoryRebuy() {
+    const next = !historyRebuyEnabled.value
+    historyRebuyEnabled.value = next
+    savingHistoryRebuy.value = true
+
+    router.post('/admin/settings', { history_rebuy_enabled: next }, {
+        preserveScroll: true,
+        onSuccess: () => toast.success(next
+            ? 'Đã bật mua lại từ lịch sử.'
+            : 'Đã tắt — khách phải dán lại link mới mua được.'),
+        onError: () => {
+            historyRebuyEnabled.value = !next // rollback nếu lưu lỗi
+            toast.error('Không lưu được cài đặt, vui lòng thử lại.')
+        },
+        onFinish: () => { savingHistoryRebuy.value = false },
     })
 }
 
@@ -301,6 +323,44 @@ function saveCashbackDisplayRate() {
                             :class="festiveDecor ? 'translate-x-6' : 'translate-x-0'"
                         ></span>
                     </button>
+                </div>
+            </div>
+
+            <div class="bg-[var(--color-surface)] rounded-2xl border border-[var(--color-line)] p-6">
+                <div class="flex items-start justify-between gap-6">
+                    <div class="min-w-0">
+                        <h2 class="font-bold text-[var(--color-ink)] mb-1">🕘 Mua lại từ lịch sử</h2>
+                        <p class="text-sm text-[var(--color-muted)] leading-relaxed">
+                            Cho khách bấm mua thẳng từ mục đã quét trước đó — cả khối lịch sử dưới ô dán link
+                            ở trang chủ lẫn trang Lịch sử. Tắt thì mỗi mục chỉ còn là sổ ghi, muốn mua phải
+                            dán lại link để quét mới. Nên tắt: mã trong link cũ có thể đã hết lượt hoặc hết
+                            hạn từ lúc quét, và lượt bấm đi từ đó không chắc được ghi nhận.
+                        </p>
+                    </div>
+
+                    <button
+                        type="button"
+                        role="switch"
+                        :aria-checked="historyRebuyEnabled"
+                        @click="toggleHistoryRebuy"
+                        :disabled="savingHistoryRebuy"
+                        class="relative flex-none w-14 h-8 rounded-full transition-colors duration-200 disabled:opacity-60"
+                        :class="historyRebuyEnabled ? 'bg-[var(--color-accent)]' : 'bg-[var(--color-line)]'"
+                    >
+                        <span
+                            class="absolute top-1 left-1 w-6 h-6 rounded-full bg-white shadow-md transition-transform duration-200"
+                            :class="historyRebuyEnabled ? 'translate-x-6' : 'translate-x-0'"
+                        ></span>
+                    </button>
+                </div>
+
+                <div class="mt-4 pt-4 border-t border-[var(--color-line)] flex items-center gap-2 text-sm">
+                    <span class="w-2 h-2 rounded-full flex-none" :class="historyRebuyEnabled ? 'bg-[var(--color-accent)]' : 'bg-[var(--color-muted)]'"></span>
+                    <span class="text-[var(--color-ink)] font-medium">
+                        {{ historyRebuyEnabled
+                            ? 'Đang bật — lịch sử có nút mua, khách bấm lại được không cần dán link.'
+                            : 'Đang tắt — khách luôn phải dán lại link khi muốn mua.' }}
+                    </span>
                 </div>
             </div>
 

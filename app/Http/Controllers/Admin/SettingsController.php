@@ -20,6 +20,7 @@ class SettingsController extends Controller
             'customerAuthEnabled' => Setting::getBool('customer_auth_enabled', true),
             'maintenanceMode' => Setting::getBool('maintenance_mode', false),
             'festiveDecor' => Setting::getBool('festive_decor', false),
+            'historyRebuyEnabled' => Setting::getBool('history_rebuy_enabled', false),
             'leaderboardDemo' => Setting::getBool(CashbackLeaderboardService::DEMO_KEY, CashbackLeaderboardService::DEMO_DEFAULT),
             'communityUrl' => Setting::get('community_url') ?: '',
             'messengerUrl' => Setting::get('messenger_url') ?: '',
@@ -42,6 +43,7 @@ class SettingsController extends Controller
             'customer_auth_enabled' => ['sometimes', 'boolean'],
             'maintenance_mode' => ['sometimes', 'boolean'],
             'festive_decor' => ['sometimes', 'boolean'],
+            'history_rebuy_enabled' => ['sometimes', 'boolean'],
             'leaderboard_demo' => ['sometimes', 'boolean'],
             'community_url' => ['sometimes', 'nullable', 'url', 'max:255'],
             'messenger_url' => ['sometimes', 'nullable', 'url', 'max:255'],
@@ -70,6 +72,10 @@ class SettingsController extends Controller
 
         if (array_key_exists('festive_decor', $validated)) {
             Setting::set('festive_decor', $validated['festive_decor'] ? '1' : '0');
+        }
+
+        if (array_key_exists('history_rebuy_enabled', $validated)) {
+            Setting::set('history_rebuy_enabled', $validated['history_rebuy_enabled'] ? '1' : '0');
         }
 
         if (array_key_exists('leaderboard_demo', $validated)) {

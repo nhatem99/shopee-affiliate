@@ -75,6 +75,11 @@ class HandleInertiaRequests extends Middleware
                 'minWithdrawal' => ProfileController::MIN_WITHDRAWAL,
                 // Lớp trang trí theo mùa trên trang khách (Components/FestiveDecor.vue).
                 'festiveDecor' => Setting::getBool('festive_decor', false),
+                // Cho khách bấm mua lại thẳng từ lịch sử hay bắt dán lại link để quét mới. Chia sẻ
+                // toàn cục vì có HAI trang lịch sử dùng tới: khối lịch sử trên trang chủ
+                // (Pages/Home.vue, lưu ở localStorage) và trang /history (Pages/History.vue).
+                // Mặc định TẮT: mã trong link cũ có thể đã hết lượt/hết hạn từ lúc quét.
+                'historyRebuyEnabled' => Setting::getBool('history_rebuy_enabled', false),
             ],
         ]);
     }

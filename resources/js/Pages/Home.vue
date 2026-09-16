@@ -1,6 +1,6 @@
 ﻿<script setup>
 import { ref, computed, nextTick, onMounted, onUnmounted } from 'vue'
-import { Head, Link } from '@inertiajs/vue3'
+import { Head, Link, usePage } from '@inertiajs/vue3'
 import { router } from '@inertiajs/vue3'
 import axios from 'axios'
 import { useLocalStorage } from '@vueuse/core'
@@ -78,6 +78,12 @@ const resultCtaEl = ref(null)
 const resolving = ref(false)
 const voucherError = ref(null)
 const history = useLocalStorage('sv_history', [])
+
+// Công tắc "Mua lại từ lịch sử" ở Admin > Cài đặt (Setting 'history_rebuy_enabled'). TẮT (mặc
+// định) thì mọi mục lịch sử chỉ còn là sổ ghi những sản phẩm đã tra: khách muốn mua phải dán lại
+// link để quét mới, vì mã gắn trong ref cũ có thể đã hết lượt/hết hạn từ lúc quét.
+const page = usePage()
+const historyRebuy = computed(() => page.props.settings?.historyRebuyEnabled ?? false)
 
 // Dọn lịch sử ngay khi mở trang, trước khi khách kịp bấm phải mục chết:
 //  - ref chỉ sống 7 ngày (VoucherRefService::TTL_DAYS) — mục cũ hơn bấm chắc chắn lỗi.
@@ -198,6 +204,9 @@ function resolveVoucher() {
                         // Lưu token mờ để "mua lại" sau này chỉ cần bấm nút, không cần hiện đường
                         // dẫn thô cho khách. ref do server phát ra (xem VoucherRefService) và sống
                         // 7 ngày — hết hạn thì /voucher/shorten trả 422 và báo lỗi.
+                        // Vẫn lưu cả khi công tắc historyRebuy đang tắt: admin bật lại giữa chừng
+                        // thì những mục ghi trong lúc tắt phải bấm được ngay, không thì khách thấy
+                        // nửa danh sách có nút nửa không mà chẳng hiểu vì sao.
                         ref: result.voucher_ref,
                         // Chế độ mã YTB: mua lại từ lịch sử cũng phải qua bước 1 như lần đầu.
                         ytb_activate_url: result.ytb_activate_url || null,
@@ -863,10 +872,21 @@ onUnmounted(() => {
                                 <span class="truncate flex-1 text-sm text-[var(--color-ink)] font-medium">{{ h.product_name || 'Sản phẩm' }}</span>
                                 <span class="text-[var(--color-muted)] text-xs whitespace-nowrap">{{ new Date(h.created_at).toLocaleDateString('vi-VN') }}</span>
                             </div>
+                            <!-- Công tắc "Mua lại từ lịch sử" (Admin > Cài đặt) đang TẮT: không có
+                                 nút mua nào ở đây, khách muốn mua phải dán lại link để quét mới —
+                                 mã trong ref cũ có thể đã hết lượt/hết hạn từ lúc quét. -->
+                            <button
+                                v-if="!historyRebuy"
+                                type="button"
+                                @click="focusVoucherTool"
+                                class="px-4 py-2 rounded-lg text-xs font-bold inline-flex items-center gap-1.5 border border-[var(--color-line)] text-[var(--color-muted)] hover:border-[var(--color-accent)] hover:text-[var(--color-accent)] transition"
+                            >
+                                <span>📋</span> Dán lại link để lấy mã
+                            </button>
                             <!-- Chế độ mã YTB: mua lại từ lịch sử cũng phải kích hoạt YouTube trước
                                  (bước 1) y như lần đầu — trạng thái nhớ theo ref trong sessionStorage. -->
                             <a
-                                v-if="h.ref && historyYtbBlocked(h)"
+                                v-if="historyRebuy && h.ref && historyYtbBlocked(h)"
                                 :href="h.ytb_activate_url"
                                 @click="markYtbActivated(h.ref)"
                                 class="mb-2 px-4 py-2 rounded-lg text-xs inline-flex items-center gap-1.5 font-bold text-white bg-[#FF0000] no-underline"
@@ -876,7 +896,7 @@ onUnmounted(() => {
                             <!-- Mục cũ (trước khi chuyển sang một mã duy nhất) không có h.ref nên
                                  không hiện nút — chúng tự trôi khỏi danh sách sau 5 lần quét mới. -->
                             <button
-                                v-if="h.ref && historyYtbBlocked(h)"
+                                v-if="historyRebuy && h.ref && historyYtbBlocked(h)"
                                 type="button"
                                 disabled
                                 class="btn-fire px-4 py-2 rounded-lg text-xs flex items-center gap-1.5 opacity-50 cursor-not-allowed"
@@ -884,7 +904,7 @@ onUnmounted(() => {
                                 <span>🔒</span> Bước 2: {{ viaFacebookComment ? 'Lấy mã qua Facebook' : 'Mua ngay' }}
                             </button>
                             <a
-                                v-else-if="h.ref && readyLinks[`hist-${hi}`]"
+                                v-else-if="historyRebuy && h.ref && readyLinks[`hist-${hi}`]"
                                 :href="facebookAppLink(readyLinks[`hist-${hi}`])"
                                 @click="trackFacebookOpen(readyLinks[`hist-${hi}`], h.product_name)"
                                 class="btn-fire px-4 py-2 rounded-lg text-xs inline-flex items-center gap-1.5 no-underline"
@@ -893,7 +913,7 @@ onUnmounted(() => {
                                 {{ isFacebookLink(readyLinks[`hist-${hi}`]) ? 'Mở Facebook ngay' : 'Mua ngay' }}
                             </a>
                             <button
-                                v-else-if="h.ref"
+                                v-else-if="historyRebuy && h.ref"
                                 @click="openVoucherLink({ key: `hist-${hi}`, ref: h.ref }, h.product_name, h.product_image)"
                                 :disabled="shorteningKey === `hist-${hi}`"
                                 class="btn-fire px-4 py-2 rounded-lg text-xs flex items-center gap-1.5 disabled:opacity-60"

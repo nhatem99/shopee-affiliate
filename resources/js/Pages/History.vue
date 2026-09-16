@@ -1,10 +1,17 @@
 ﻿<script setup>
-import { Head, Link } from '@inertiajs/vue3'
+import { computed } from 'vue'
+import { Head, Link, usePage } from '@inertiajs/vue3'
 import AppLayout from '@/Layouts/AppLayout.vue'
 
 defineProps({
     links: Object,
 })
+
+// Công tắc "Mua lại từ lịch sử" ở Admin > Cài đặt (Setting 'history_rebuy_enabled'). TẮT (mặc
+// định) thì không mở thẳng link cũ từ đây: mã đã áp trong đó có thể hết lượt/hết hạn và lượt bấm
+// không chắc được ghi nhận — khách muốn mua thì về trang chủ dán lại link để quét mới.
+const page = usePage()
+const historyRebuy = computed(() => page.props.settings?.historyRebuyEnabled ?? false)
 
 function vnd(n) {
     return '₫' + Number(n).toLocaleString('vi-VN')
@@ -44,10 +51,14 @@ const platformLabels = { shopee: 'Shopee', lazada: 'Lazada', tiki: 'Tiki', tikto
                             </span>
                         </div>
                     </div>
-                    <a v-if="link.short_url" :href="link.short_url" target="_blank" rel="noopener"
+                    <a v-if="historyRebuy && link.short_url" :href="link.short_url" target="_blank" rel="noopener"
                         class="text-xs font-semibold text-[var(--color-accent)] hover:underline whitespace-nowrap">
                         Mở link →
                     </a>
+                    <Link v-else-if="!historyRebuy" href="/"
+                        class="text-xs font-semibold text-[var(--color-accent)] hover:underline whitespace-nowrap">
+                        Dán lại link →
+                    </Link>
                 </div>
 
                 <!-- Pagination -->
