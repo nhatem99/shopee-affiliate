@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\Setting;
 use App\Services\CashbackLeaderboardService;
 use App\Services\CashbackService;
+use App\Services\VoucherSourceResolver;
 use App\Services\WelcomeBonusService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -21,6 +22,7 @@ class SettingsController extends Controller
             'maintenanceMode' => Setting::getBool('maintenance_mode', false),
             'festiveDecor' => Setting::getBool('festive_decor', false),
             'historyRebuyEnabled' => Setting::getBool('history_rebuy_enabled', false),
+            'fbigWindowAutoSwitch' => VoucherSourceResolver::autoSwitchEnabled(),
             'leaderboardDemo' => Setting::getBool(CashbackLeaderboardService::DEMO_KEY, CashbackLeaderboardService::DEMO_DEFAULT),
             'communityUrl' => Setting::get('community_url') ?: '',
             'messengerUrl' => Setting::get('messenger_url') ?: '',
@@ -44,6 +46,7 @@ class SettingsController extends Controller
             'maintenance_mode' => ['sometimes', 'boolean'],
             'festive_decor' => ['sometimes', 'boolean'],
             'history_rebuy_enabled' => ['sometimes', 'boolean'],
+            'fbig_window_auto_switch' => ['sometimes', 'boolean'],
             'leaderboard_demo' => ['sometimes', 'boolean'],
             'community_url' => ['sometimes', 'nullable', 'url', 'max:255'],
             'messenger_url' => ['sometimes', 'nullable', 'url', 'max:255'],
@@ -76,6 +79,10 @@ class SettingsController extends Controller
 
         if (array_key_exists('history_rebuy_enabled', $validated)) {
             Setting::set('history_rebuy_enabled', $validated['history_rebuy_enabled'] ? '1' : '0');
+        }
+
+        if (array_key_exists('fbig_window_auto_switch', $validated)) {
+            Setting::set(VoucherSourceResolver::AUTO_SWITCH_KEY, $validated['fbig_window_auto_switch'] ? '1' : '0');
         }
 
         if (array_key_exists('leaderboard_demo', $validated)) {

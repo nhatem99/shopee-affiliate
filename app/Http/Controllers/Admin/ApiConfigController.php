@@ -8,6 +8,7 @@ use App\Services\AccessTradeService;
 use App\Services\FacebookPageService;
 use App\Services\GanmaService;
 use App\Services\KieuShopeeService;
+use App\Services\RestockScheduleService;
 use App\Services\ShopeeApiService;
 use App\Services\VoucherSourceResolver;
 use Illuminate\Http\JsonResponse;
@@ -19,9 +20,18 @@ use Inertia\Response;
 
 class ApiConfigController extends Controller
 {
-    public function index(): Response
+    public function index(VoucherSourceResolver $sources, RestockScheduleService $restock): Response
     {
         return Inertia::render('Admin/ApiConfig', [
+            // Nguồn nào ĐANG thật sự phục vụ khách. Không suy ra từ is_active của từng thẻ được
+            // nữa: trong khung giờ back mã FB-IG, activeSource() ghi đè lựa chọn ganma của admin
+            // (xem VoucherSourceResolver::activeSource) mà không sửa gì trong DB — nhìn công tắc
+            // thì thấy ganma, nhưng mọi lượt quét lại đi qua kieushopee.
+            'voucherSource' => [
+                'configured' => $sources->configuredSource(),
+                'active' => $sources->activeSource(),
+                'fbIgWindowEndsAt' => $restock->fbIgWindowEndsAt()?->format('H:i'),
+            ],
             'configs' => ApiConfig::all()->map(fn ($c) => [
                 'id' => $c->id,
                 'name' => $c->name,

@@ -9,7 +9,19 @@ const toast = useToast()
 
 const props = defineProps({
     configs: Array,
+    // { configured, active, fbIgWindowEndsAt } — xem ApiConfigController::index(). `active` khác
+    // `configured` nghĩa là lớp ghi đè theo khung giờ back mã FB-IG đang chạy.
+    voucherSource: { type: Object, default: () => ({}) },
 })
+
+// Đang trong khung giờ back mã FB-IG và admin để ganma: mọi lượt quét tạm đi qua kieushopee, hết
+// khung là tự về ganma (VoucherSourceResolver::activeSource). Không có dòng này thì thẻ ganma vẫn
+// hiện "Đang phục vụ khách" — sai với thứ khách đang thật sự nhận.
+const sourceOverridden = computed(
+    () => !!props.voucherSource?.active
+        && !!props.voucherSource?.configured
+        && props.voucherSource.active !== props.voucherSource.configured,
+)
 
 const editing = ref(null)
 const testResult = ref({})
@@ -217,8 +229,11 @@ async function testConfig(config) {
                     <template v-if="isVoucherSource(config.platform)">
                         <p>
                             <span class="font-medium text-[var(--color-ink)]">Trạng thái:</span>
-                            <span v-if="config.is_active" class="text-[var(--color-accent-deep)] font-semibold">
-                                Đang phục vụ khách — mọi lượt lấy mã đi qua nguồn này
+                            <span v-if="config.platform === voucherSource.active" class="text-[var(--color-accent-deep)] font-semibold">
+                                Đang phục vụ khách — mọi lượt lấy mã đi qua nguồn này<template v-if="sourceOverridden">, tạm thời tới {{ voucherSource.fbIgWindowEndsAt }} (khung giờ back mã FB-IG)</template>
+                            </span>
+                            <span v-else-if="config.platform === voucherSource.configured" class="text-amber-600 font-semibold">
+                                Tạm nhường cho FB-IG tới {{ voucherSource.fbIgWindowEndsAt }} — hết khung giờ back mã là tự quay lại nguồn này
                             </span>
                             <span v-else>Đang tắt</span>
                         </p>
@@ -301,6 +316,10 @@ async function testConfig(config) {
                                 shopee.vn đầy đủ sẽ được báo phải copy lại từ app.
                                 <br />• Mỗi lượt lấy mã mất <b>khoảng 20 giây</b> (kieushopee chỉ vài giây), vì bên
                                 họ xếp hàng xử lý.
+                                <br /><br />
+                                Nếu bật <b>"Tự chuyển sang FB-IG trong khung giờ back mã"</b> ở trang <b>Cài đặt</b>:
+                                tới 0h, 9h, 15h, 20h (mỗi khung 1 tiếng) hệ thống tạm chuyển sang kieushopee rồi tự
+                                quay lại ganma khi hết khung. Công tắc ở đây không bị sửa.
                             </p>
                         </div>
 

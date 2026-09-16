@@ -9,6 +9,7 @@ const props = defineProps({
     maintenanceMode: { type: Boolean, required: true },
     festiveDecor: { type: Boolean, default: false },
     historyRebuyEnabled: { type: Boolean, default: false },
+    fbigWindowAutoSwitch: { type: Boolean, default: false },
     leaderboardDemo: { type: Boolean, default: true },
     communityUrl: { type: String, default: '' },
     messengerUrl: { type: String, default: '' },
@@ -28,6 +29,8 @@ const festiveDecor = ref(props.festiveDecor)
 const savingFestive = ref(false)
 const historyRebuyEnabled = ref(props.historyRebuyEnabled)
 const savingHistoryRebuy = ref(false)
+const fbigWindowAutoSwitch = ref(props.fbigWindowAutoSwitch)
+const savingFbigAutoSwitch = ref(false)
 const leaderboardDemo = ref(props.leaderboardDemo)
 const savingLeaderboardDemo = ref(false)
 const communityUrl = ref(props.communityUrl)
@@ -48,6 +51,7 @@ watch(() => props.customerAuthEnabled, (v) => { customerAuthEnabled.value = v })
 watch(() => props.maintenanceMode, (v) => { maintenanceMode.value = v })
 watch(() => props.festiveDecor, (v) => { festiveDecor.value = v })
 watch(() => props.historyRebuyEnabled, (v) => { historyRebuyEnabled.value = v })
+watch(() => props.fbigWindowAutoSwitch, (v) => { fbigWindowAutoSwitch.value = v })
 watch(() => props.leaderboardDemo, (v) => { leaderboardDemo.value = v })
 watch(() => props.communityUrl, (v) => { communityUrl.value = v })
 watch(() => props.messengerUrl, (v) => { messengerUrl.value = v })
@@ -119,6 +123,24 @@ function toggleHistoryRebuy() {
             toast.error('Không lưu được cài đặt, vui lòng thử lại.')
         },
         onFinish: () => { savingHistoryRebuy.value = false },
+    })
+}
+
+function toggleFbigAutoSwitch() {
+    const next = !fbigWindowAutoSwitch.value
+    fbigWindowAutoSwitch.value = next
+    savingFbigAutoSwitch.value = true
+
+    router.post('/admin/settings', { fbig_window_auto_switch: next }, {
+        preserveScroll: true,
+        onSuccess: () => toast.success(next
+            ? 'Đã bật tự chuyển sang FB-IG trong khung giờ back mã.'
+            : 'Đã tắt — nguồn lấy mã giữ đúng lựa chọn ở trang Cấu hình API.'),
+        onError: () => {
+            fbigWindowAutoSwitch.value = !next // rollback nếu lưu lỗi
+            toast.error('Không lưu được cài đặt, vui lòng thử lại.')
+        },
+        onFinish: () => { savingFbigAutoSwitch.value = false },
     })
 }
 
@@ -360,6 +382,45 @@ function saveCashbackDisplayRate() {
                         {{ historyRebuyEnabled
                             ? 'Đang bật — lịch sử có nút mua, khách bấm lại được không cần dán link.'
                             : 'Đang tắt — khách luôn phải dán lại link khi muốn mua.' }}
+                    </span>
+                </div>
+            </div>
+
+            <div class="bg-[var(--color-surface)] rounded-2xl border border-[var(--color-line)] p-6">
+                <div class="flex items-start justify-between gap-6">
+                    <div class="min-w-0">
+                        <h2 class="font-bold text-[var(--color-ink)] mb-1">⚡ Tự chuyển sang FB-IG trong khung giờ back mã</h2>
+                        <p class="text-sm text-[var(--color-muted)] leading-relaxed">
+                            Khi nguồn lấy mã đang là <b>ganma (mã YouTube)</b>: tới khung giờ back mã FB-IG
+                            (<b>0h, 9h, 15h, 20h — mỗi khung 1 tiếng</b>, giờ VN) thì tạm chuyển sang
+                            <b>kieushopee</b>, hết khung tự quay lại ganma. Đang để kieushopee sẵn thì không đổi gì.
+                            Công tắc nguồn ở trang Cấu hình API <b>không bị sửa</b> — đây chỉ là lớp ghi đè tạm thời.
+                            Giao diện khách không đổi gì cả.
+                        </p>
+                    </div>
+
+                    <button
+                        type="button"
+                        role="switch"
+                        :aria-checked="fbigWindowAutoSwitch"
+                        @click="toggleFbigAutoSwitch"
+                        :disabled="savingFbigAutoSwitch"
+                        class="relative flex-none w-14 h-8 rounded-full transition-colors duration-200 disabled:opacity-60"
+                        :class="fbigWindowAutoSwitch ? 'bg-[var(--color-accent)]' : 'bg-[var(--color-line)]'"
+                    >
+                        <span
+                            class="absolute top-1 left-1 w-6 h-6 rounded-full bg-white shadow-md transition-transform duration-200"
+                            :class="fbigWindowAutoSwitch ? 'translate-x-6' : 'translate-x-0'"
+                        ></span>
+                    </button>
+                </div>
+
+                <div class="mt-4 pt-4 border-t border-[var(--color-line)] flex items-center gap-2 text-sm">
+                    <span class="w-2 h-2 rounded-full flex-none" :class="fbigWindowAutoSwitch ? 'bg-[var(--color-accent)]' : 'bg-[var(--color-muted)]'"></span>
+                    <span class="text-[var(--color-ink)] font-medium">
+                        {{ fbigWindowAutoSwitch
+                            ? 'Đang bật — xem nguồn nào thật sự đang phục vụ khách ở trang Cấu hình API.'
+                            : 'Đang tắt — nguồn lấy mã luôn đúng lựa chọn ở trang Cấu hình API.' }}
                     </span>
                 </div>
             </div>
