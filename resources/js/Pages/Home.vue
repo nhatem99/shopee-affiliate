@@ -60,11 +60,6 @@ const showLoggedInCashbackBadge = computed(
     () => cashbackOn.value && auth.isLoggedIn && !props.viaFacebookComment,
 )
 
-// Khối chặn ngay trước nút mua cũng phải im ở chế độ Facebook, vì cùng một lý do: ở đó không
-// đảm bảo được đơn của khách đi qua đúng short-link của chính khách. Mời người ta đăng nhập
-// bằng một lời hứa mà mình biết là có thể sai thì tệ hơn là không mời.
-const showGuestBuyNudge = computed(() => showGuestCashbackNudge.value && !props.viaFacebookComment)
-
 // --- tietkiemvi.com: công cụ lấy link voucher công khai, không cần đăng nhập ---
 // Nguồn cấp mã (kieushopee) trả về ĐÚNG MỘT link đã áp sẵn mã cho mỗi sản phẩm, nên ở đây
 // chỉ có một nút "Mua ngay" — không còn danh sách mã theo từng nền tảng để khách phải chọn.
@@ -392,6 +387,25 @@ function historyYtbBlocked(h) {
     return !!h.ytb_activate_url && !isYtbActivated(h.ref)
 }
 
+// Bấm bước 1 xong là khách rời sang Shopee — và đo trên production (14 ngày tới 16-09-2026)
+// thì chỉ 13/25 lượt quay lại làm bước 2. Số còn lại nhiều khả năng mua luôn tại trang vừa
+// mở: đơn đó KHÔNG có mã, mà link bước 1 là link kích hoạt chứ không phải link mua.
+// Lời nhắc đặt ở hai chỗ: trước khi bấm (lúc còn đọc được) và ngay khi khách quay lại tab.
+const ytbStep2Done = ref(false)
+const ytbReturnNudge = ref(false)
+
+function onTabVisible() {
+    if (document.visibilityState !== 'visible') return
+    // Chưa bấm bước 1, hoặc đã làm xong bước 2 rồi thì không nhắc — nhắc thừa chỉ làm phiền.
+    if (!props.voucherResult?.ytb_activate_url || ytbBlocked.value || ytbStep2Done.value) return
+
+    ytbReturnNudge.value = true
+    scrollToResult()
+}
+
+onMounted(() => document.addEventListener('visibilitychange', onTabVisible))
+onUnmounted(() => document.removeEventListener('visibilitychange', onTabVisible))
+
 const ua = typeof navigator !== 'undefined' ? navigator.userAgent : ''
 const isAndroid = /Android/i.test(ua)
 // Đang ở trong webview của Facebook/Instagram/Zalo thì intent:// không mở được gì cả — giữ
@@ -424,6 +438,8 @@ function isFacebookLink(url) {
  * để request vẫn hoàn tất; không await, không chặn điều hướng.
  */
 function trackFacebookOpen(url, productName) {
+    ytbStep2Done.value = true
+
     if (!isFacebookLink(url)) return
 
     try {
@@ -503,6 +519,7 @@ async function goStraightToVoucher() {
 async function openVoucherLink(entry, productName = null, productImage = null) {
     if (!entry?.ref || shorteningKey.value) return
 
+    ytbStep2Done.value = true
     shorteningKey.value = entry.key
 
     // Chế độ Facebook: chỉ lấy link rồi hiện anchor, tuyệt đối không window.open/location.href
@@ -811,22 +828,45 @@ onUnmounted(() => {
                         class="mb-3 mt-3 rounded-xl border border-[#FF0000]/30 bg-[#FF0000]/5 px-4 py-3"
                     >
                         <p class="text-sm font-bold text-[var(--color-ink)] mb-2">Mã này cần kích hoạt YouTube trước — làm theo thứ tự:</p>
-                        <ol class="text-xs text-[var(--color-ink)] leading-relaxed space-y-1 list-decimal list-inside mb-3">
-                            <li>Bấm <b>Kích hoạt mã YouTube</b> → Shopee mở ra. Không cần làm gì ở đó, <b>quay lại đây</b>.</li>
+                        <ol class="text-xs text-[var(--color-ink)] leading-relaxed space-y-1 list-decimal list-inside mb-2">
+                            <li>Bấm <b>Kích hoạt mã YouTube</b> → Shopee mở ra. <b>Tuyệt đối không đặt hàng ở đó</b>, chỉ cần <b>quay lại đây</b>.</li>
                             <li>Bấm tiếp nút <b>{{ viaFacebookComment ? 'Lấy mã qua Facebook' : 'Mua ngay' }}</b> bên dưới như bình thường.</li>
                         </ol>
+
+                        <!-- Đây là chỗ duy nhất lời nhắc còn kịp: bấm xong là khách sang Shopee,
+                             nhìn thấy đúng sản phẩm mình định mua và rất dễ đặt hàng luôn. -->
+                        <div class="mb-3 rounded-lg bg-[#FF0000]/10 border border-[#FF0000]/30 px-3 py-2.5">
+                            <p class="text-xs font-bold text-[#c00000] leading-relaxed">
+                                ⛔ Đừng đặt hàng ngay ở bước 1
+                            </p>
+                            <p class="text-[11px] text-[var(--color-ink)] leading-relaxed mt-1">
+                                Shopee sẽ mở ra với mã đã nhận, nhưng <b>đừng bấm mua ở trang đó</b> —
+                                đặt hàng ngay tại bước này dễ khiến tài khoản bị Shopee đánh dấu <b>F02</b>.
+                                Hãy quay lại đây làm tiếp <b>bước 2</b> rồi mới đặt hàng.
+                            </p>
+                        </div>
+
                         <a
                             v-if="ytbBlocked"
                             :href="voucherResult.ytb_activate_url"
                             @click="markYtbActivated(voucherResult.voucher_ref)"
-                            class="w-full px-4 py-3 rounded-xl flex items-center justify-center gap-2 text-sm font-bold text-white bg-[#FF0000] hover:bg-[#d90000] transition no-underline animate-pulse-ring"
+                            class="w-full px-4 py-2.5 rounded-xl flex flex-col items-center justify-center text-white bg-[#FF0000] hover:bg-[#d90000] transition no-underline animate-pulse-ring"
                         >
-                            <span>▶️</span>
-                            <span>Bước 1: Kích hoạt mã YouTube</span>
+                            <span class="flex items-center gap-2 text-sm font-bold">
+                                <span>▶️</span>
+                                <span>Bước 1: Kích hoạt mã YouTube</span>
+                            </span>
+                            <span class="text-[11px] font-semibold text-white/80">Mở ra rồi quay lại — đừng đặt hàng</span>
                         </a>
-                        <div v-else class="flex items-center gap-2 text-sm font-semibold text-[var(--color-brand-green)]">
-                            <span>✓</span>
-                            <span>Đã kích hoạt — làm tiếp bước 2 bên dưới.</span>
+                        <div v-else class="rounded-lg bg-[var(--color-brand-green)]/10 border border-[var(--color-brand-green)]/30 px-3 py-2.5">
+                            <p class="flex items-center gap-2 text-sm font-bold text-[var(--color-brand-green)]">
+                                <span>✓</span>
+                                <span>Đã nhận mã xong bước 1</span>
+                            </p>
+                            <p class="text-[11px] text-[var(--color-ink)] leading-relaxed mt-1">
+                                Giờ bấm nút <b>bước 2</b> bên dưới để đặt hàng — <b>đừng mua thẳng trên Shopee</b>,
+                                dễ bị đánh dấu <b>F02</b>.
+                            </p>
                         </div>
                         <button
                             v-if="ytbBlocked"
@@ -834,6 +874,21 @@ onUnmounted(() => {
                             @click="markYtbActivated(voucherResult.voucher_ref)"
                             class="mt-2 text-[11px] text-[var(--color-muted)] underline underline-offset-2"
                         >Vừa kích hoạt rồi (Shopee đã mở)? Bỏ qua bước này</button>
+                    </div>
+
+                    <!-- Khách vừa từ Shopee quay lại mà chưa làm bước 2. Nhắc thẳng vào mặt vì
+                         đây là lúc họ có thể vừa đặt hàng hụt mã xong — biết sớm thì còn huỷ
+                         đơn và làm lại được. -->
+                    <div
+                        v-if="!autoRedirecting && ytbReturnNudge && voucherResult.voucher_ref"
+                        class="mb-3 mt-3 rounded-xl border border-[#FF0000]/40 bg-[#FF0000]/10 px-4 py-3"
+                    >
+                        <p class="text-sm font-bold text-[#c00000] mb-1">⚠️ Bạn chưa làm bước 2 — đừng mua ở bước 1</p>
+                        <p class="text-xs text-[var(--color-ink)] leading-relaxed">
+                            Nếu bạn vừa đặt hàng thẳng ở trang Shopee lúc nãy thì nên <b>huỷ đơn đó</b> —
+                            mua ở bước 1 dễ khiến tài khoản bị đánh dấu <b>F02</b>. Đặt lại bằng nút
+                            <b>{{ viaFacebookComment ? 'Lấy mã qua Facebook' : 'Mua ngay' }}</b> bên dưới.
+                        </p>
                     </div>
 
                     <!-- Nói trước khi khách bấm: nút này mở Facebook, không phải mở thẳng Shopee. -->
@@ -848,28 +903,12 @@ onUnmounted(() => {
                         <p class="text-xs text-[var(--color-muted)] mt-2">Phải đi qua Facebook thì mã mới có hiệu lực — đừng đóng giữa chừng nhé.</p>
                     </div>
 
-                    <!-- Cửa cuối trước cú bấm mua của khách vãng lai. Đây là chỗ duy nhất trên
-                         cả trang mà lời nhắc còn kịp có tác dụng: bấm xong là khách sang Shopee,
-                         đơn đó vĩnh viễn không quy về ai được.
-                         Cố ý KHÔNG dùng btn-fire và KHÔNG dùng animate-pulse-ring — hai thứ đó
-                         đang là của nút "Mua ngay" ngay bên dưới; đánh nhau về độ nổi bật ở đây
-                         chỉ làm khách chậm lại đúng lúc họ đã muốn mua. -->
-                    <div
-                        v-if="!autoRedirecting && voucherResult.voucher_ref && showGuestBuyNudge"
-                        class="mb-3 rounded-xl bg-[var(--color-side)] border border-white/10 px-4 py-3.5"
-                    >
-                        <p class="text-sm font-bold text-white mb-1">🔒 Mua lúc này thì chắc chắn không được hoàn tiền</p>
-                        <p class="text-xs text-white/70 leading-relaxed mb-3">
-                            Đăng nhập trước rồi mới bấm mua thì đơn này mới được ghi nhận về tài khoản của bạn.
-                            Khi Shopee chốt đơn ở trạng thái Hoàn thành và tụi mình đối soát xong, bạn được chia lại
-                            <b class="text-white">{{ cashbackRate }}% khoản hoa hồng</b> Shopee trả cho đơn đó.
-                            Bấm mua khi chưa đăng nhập thì sau này không cứu lại được.
-                        </p>
-                        <Link
-                            :href="joinHref"
-                            class="block w-full text-center bg-white text-[var(--color-ink)] text-sm font-bold py-2.5 rounded-lg no-underline hover:bg-white/90 transition"
-                        >{{ joinLabel }}</Link>
-                    </div>
+                    <!-- Trước đây chỗ này có khối mời khách vãng lai đăng nhập để được hoàn tiền.
+                         Đã bỏ: nó chắn nguyên một màn hình điện thoại ngay trước nút mua, đúng lúc
+                         khách đã muốn bấm — trong khi ở chế độ Facebook (đang chạy) nó vốn đã bị ẩn,
+                         và lời mời cũng chưa chắc giữ được lời hứa: link trên caption reel dùng lại
+                         theo SẢN PHẨM nên có thể mang sub_id của khách khác. Lời mời hoàn tiền vẫn
+                         còn ở cuối trang (showGuestCashbackNudge), chỗ không cản đường mua hàng. -->
 
                     <!-- Mã đã được áp sẵn trong link nên khách không phải chọn/nhập gì, chỉ bấm mở. -->
                     <div v-if="!autoRedirecting && voucherResult.voucher_ref" ref="resultCtaEl" class="flex items-stretch gap-1.5 mb-4">
