@@ -108,7 +108,7 @@ return [
         // ID của Server Action, do bản build Next.js của họ sinh ra: MỖI LẦN HỌ DEPLOY LẠI
         // là ID này đổi và request sẽ hỏng (404/500). Lấy ID mới bằng cách mở tool trên site,
         // xem tab Network → request POST → header `next-action`.
-        'next_action' => env('KIEUSHOPEE_NEXT_ACTION', '40b7104a0118f057e6843f62bb2c67bc4824e3ec0a'),
+        'next_action' => env('KIEUSHOPEE_NEXT_ACTION', '404c52f3900e67aef658bc66241a1a6be83477b3c1'),
 
         // ID của "tool" đang được gọi trên site nguồn — cũng đọc từ chính request đó (field
         // multipart `1_toolId`). Tool này trả về đúng một link đã áp mã cho mỗi sản phẩm.
