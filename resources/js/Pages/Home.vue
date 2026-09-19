@@ -9,6 +9,7 @@ import CouponTicket from '@/Components/CouponTicket.vue'
 import RestockSchedule from '@/Components/RestockSchedule.vue'
 import CashbackExplainer from '@/Components/CashbackExplainer.vue'
 import CashbackLeaderboard from '@/Components/CashbackLeaderboard.vue'
+import HowItWorksSteps from '@/Components/HowItWorksSteps.vue'
 import { useToast } from '@/composables/useToast'
 import { useCashback } from '@/composables/useCashback'
 import { useFestive } from '@/composables/useFestive'
@@ -597,17 +598,26 @@ const filteredVouchers = computed(() => {
     return props.vouchers.filter(v => v.platform === activePlatform.value || v.platform === 'all')
 })
 
-// Hướng dẫn chính thức của trang. Khi hoàn tiền đang bật thì bước ĐĂNG NHẬP phải nằm ngay trong
-// đây: sub_id chỉ được gắn tại đúng giây khách bấm nút mua, nên khách làm đủ ba bước cũ một cách
-// hoàn hảo vẫn nhận 0đ. Một bản hướng dẫn dẫn tới 0đ là lỗi nặng hơn cả việc không có hướng dẫn.
+// Hướng dẫn chính thức của trang, hiện thành thanh bước ngang ngay dưới ô dán link
+// (Components/HowItWorksSteps.vue). Khi hoàn tiền đang bật thì bước ĐĂNG NHẬP phải nằm ngay
+// trong đây: sub_id chỉ được gắn tại đúng giây khách bấm nút mua, nên khách làm đủ ba bước cũ
+// một cách hoàn hảo vẫn nhận 0đ. Một bản hướng dẫn dẫn tới 0đ là lỗi nặng hơn cả việc không có
+// hướng dẫn.
+//
+// `label` là chữ hiện dưới icon nên phải NGẮN — bốn tới năm bước đứng cùng một hàng trên màn
+// hình 375px; `desc` là bản đầy đủ, đi vào thuộc tính title của từng bước.
 const steps = computed(() => [
     ...(cashbackOn.value ? [
-        { icon: '🔑', title: 'Đăng nhập trước', desc: 'Bắt buộc nếu bạn muốn được hoàn tiền — đơn chỉ ghi nhận được về tài khoản đang đăng nhập tại lúc bấm mua. Chỉ cần làm một lần.', badge: 'emerald' },
+        { icon: '🔑', label: 'Đăng nhập', desc: 'Bắt buộc nếu bạn muốn được hoàn tiền — đơn chỉ ghi nhận được về tài khoản đang đăng nhập tại lúc bấm mua. Chỉ cần làm một lần.' },
     ] : []),
-    { icon: '📎', title: 'Dán link sản phẩm Shopee', desc: 'Copy link sản phẩm từ app hoặc web Shopee, dán vào ô ở đầu trang.', badge: 'cyan' },
-    { icon: '🔍', title: 'Tự động quét mã', desc: 'Không cần bấm nút — hệ thống tự tìm mã Facebook, YouTube, Instagram còn hiệu lực ngay khi bạn dán link.', badge: 'orange' },
-    { icon: '🛍️', title: 'Chọn mã & mua ngay', desc: 'Bấm vào mã phù hợp (mã có nhãn “Đề xuất” là tốt nhất) — link mua hàng đã áp sẵn voucher sẽ tự mở ra.', badge: 'emerald' },
+    { icon: '📎', label: 'Dán link', desc: 'Copy link sản phẩm từ app hoặc web Shopee, dán vào ô ở đầu trang.' },
+    { icon: '🔍', label: 'Tự quét mã', desc: 'Không cần bấm nút — hệ thống tự tìm mã Facebook, YouTube, Instagram còn hiệu lực ngay khi bạn dán link.' },
+    { icon: '🛍️', label: 'Bấm mua', desc: 'Bấm nút mua ở khối kết quả — link đã áp sẵn mã giảm giá sẽ tự mở ra, không cần nhập mã.' },
 ])
+
+// Tiêu đề phải nói đúng thứ khách nhận được: chưa bật hoàn tiền thì trang chỉ tìm mã giảm giá,
+// hứa "nhận hoàn tiền" lúc đó là hứa suông.
+const stepsTitle = computed(() => cashbackOn.value ? 'Các bước nhận hoàn tiền' : 'Các bước lấy mã giảm giá')
 
 // FAQ phải theo trạng thái chương trình hoàn tiền: khi admin chưa bật (tỉ lệ = 0) thì hệ thống
 // thật sự không trả đồng nào, nên câu trả lời cũ mới là câu đúng. Bật lên rồi mà vẫn để nguyên
@@ -965,6 +975,14 @@ onUnmounted(() => {
                     </div>
                 </div>
 
+                <!-- Hướng dẫn 4 bước, đặt NGAY SAU ô dán link (và sau khối kết quả nếu đang có).
+                     Đứng sau kết quả chứ không chen vào giữa: lúc vừa quét xong, thứ khách cần
+                     thấy ngay dưới ô nhập là sản phẩm + nút mua, không phải bảng hướng dẫn.
+                     Không có kết quả thì khối này tự nằm sát ô nhập, đúng chỗ khách đang phân vân. -->
+                <div v-if="canUseVoucherTool" class="mt-4">
+                    <HowItWorksSteps :title="stepsTitle" :steps="steps" />
+                </div>
+
                 <!-- Lịch sử chuyển đổi (lưu trên trình duyệt) + Bảng xếp hạng hoàn tiền, dạng tab.
                      Chỉ hiện thanh tab khi cả hai cùng có; thiếu một bên thì hiện thẳng bên còn lại
                      với tiêu đề thường, không bắt khách bấm tab để xem thứ duy nhất đang có. -->
@@ -1116,21 +1134,6 @@ onUnmounted(() => {
                 <p v-if="!filteredVouchers.length" class="text-center text-[var(--color-muted)] text-sm py-8">
                     Chưa có mã cho sàn này. Thử chọn sàn khác nhé!
                 </p>
-            </div>
-        </section>
-
-        <!-- How it works -->
-        <section class="py-16 px-4 bg-[var(--color-bg)]">
-            <div class="max-w-4xl mx-auto text-center">
-                <h2 class="text-2xl md:text-3xl font-extrabold text-[var(--color-ink)] mb-12">Chỉ {{ steps.length }} bước đơn giản</h2>
-                <div class="grid grid-cols-1 gap-6" :class="steps.length === 4 ? 'md:grid-cols-2' : 'md:grid-cols-3'">
-                    <div v-for="(step, i) in steps" :key="i" class="card-glass rounded-2xl p-6 flex flex-col items-center text-center">
-                        <span class="step-badge px-2.5 py-1 text-xs mb-4" :class="`step-badge--${step.badge}`">BƯỚC {{ i + 1 }}</span>
-                        <div class="w-16 h-16 rounded-2xl bg-[var(--color-peach-soft)] flex items-center justify-center text-3xl mb-4">{{ step.icon }}</div>
-                        <h3 class="font-extrabold text-[var(--color-ink)] mb-2">{{ step.title }}</h3>
-                        <p class="text-[var(--color-muted)] text-sm leading-relaxed">{{ step.desc }}</p>
-                    </div>
-                </div>
             </div>
         </section>
 
