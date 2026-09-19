@@ -6,6 +6,7 @@ use App\Models\ApiConfig;
 use App\Models\FacebookReelSlot;
 use App\Models\ShortLink;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Str;
 
 /**
  * Đối soát bảng facebook_reel_slots với caption THẬT trên Facebook.
@@ -48,6 +49,68 @@ class FacebookReelSyncService
         }
 
         return $results;
+    }
+
+    /**
+     * Kiểm tra đường ĐỔI caption reel còn sống hay không, bằng cách ghi lại ĐÚNG caption đang
+     * có rồi đọc lại xác nhận. Ghi đè bằng chính nội dung cũ nên thành công thì reel không đổi
+     * gì, thất bại thì cũng không đổi gì — chạy lúc nào cũng an toàn.
+     *
+     * Lý do cần nút này thay vì `php artisan facebook:reel-caption`: endpoint POST /{reel_id}
+     * với field `description` KHÔNG có trong tài liệu Meta (xem FacebookPageService::updateReelCaption),
+     * nên nó chết lúc nào không ai báo. Khi đó mọi slot đều rollback và bảng chỉ hiện "Rảnh" kèm
+     * một lỗi Graph khó đọc — phân biệt "Meta đã chặn" với "ID reel sai" phải bằng một lần ghi
+     * thật, mà SSH vào server thì không phải lúc nào cũng vào được.
+     *
+     * @return array{ok: bool, message: string}
+     */
+    public function probeCaptionWrite(string $reelId): array
+    {
+        $config = ApiConfig::where('platform', 'facebook')->where('is_active', true)->first();
+
+        if (! $config || ! $config->app_id || ! $config->app_secret) {
+            return ['ok' => false, 'message' => 'Chưa có cấu hình Facebook đang bật ở /admin/api-config.'];
+        }
+
+        // Chỉ cho thử reel trong nhóm đã cấu hình. Không chặn thì đây thành cửa sửa caption
+        // BẤT KỲ object nào mà token với tới được, mở từ web.
+        if (! in_array($reelId, (new FacebookReelSlotService($config))->pool(), true)) {
+            return ['ok' => false, 'message' => "Reel {$reelId} không nằm trong nhóm reel đã cấu hình."];
+        }
+
+        $service = new FacebookPageService($config->app_id, $config->app_secret);
+        $before = $service->fetchReelCaption($reelId);
+
+        if ($before === null) {
+            return [
+                'ok' => false,
+                'message' => 'Không ĐỌC được caption — ID reel sai hoặc không thuộc page này. Graph trả: '
+                    .Str::limit((string) $service->lastError, 200),
+            ];
+        }
+
+        if (trim($before) === '') {
+            // Ghi chuỗi rỗng đè lên caption rỗng thì Graph có thể từ chối vì lý do khác hẳn,
+            // đọc ra kết luận sai. Reel chưa có caption thì cứ để khách quét thật.
+            return ['ok' => false, 'message' => 'Reel này đang không có caption nên không thử ghi đè được — chọn reel khác.'];
+        }
+
+        if (! $service->updateReelCaption($reelId, $before)) {
+            return [
+                'ok' => false,
+                'message' => 'Meta TỪ CHỐI đổi caption (caption trên reel không đổi). Graph trả: '
+                    .Str::limit((string) $service->lastError, 200),
+            ];
+        }
+
+        // Graph trả {"success":true} được cả khi không đổi gì, nên phải đọc lại mới chắc.
+        $after = $service->fetchReelCaption($reelId);
+
+        if ($after !== $before) {
+            return ['ok' => false, 'message' => 'Graph báo thành công nhưng đọc lại thấy caption đã khác — không tin được kết quả ghi.'];
+        }
+
+        return ['ok' => true, 'message' => 'Đổi caption vẫn chạy — Meta nhận lệnh ghi và đọc lại khớp nguyên văn.'];
     }
 
     /** @return array{reel_id: string, status: string, product_key: ?string, error: ?string} */

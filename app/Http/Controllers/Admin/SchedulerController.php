@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
+use App\Services\FacebookReelSyncService;
 use App\Services\SchedulerService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -41,6 +42,24 @@ class SchedulerController extends Controller
             $run->succeeded()
                 ? "Đã chạy {$run->command} xong."
                 : "{$run->command} kết thúc với mã lỗi {$run->exit_code} — xem output bên dưới.",
+        );
+    }
+
+    /**
+     * Nút "Thử ghi" cạnh mỗi reel: ghi lại đúng caption đang có để biết đường đổi caption còn
+     * sống hay không. Tách khỏi run() vì run() cố tình chỉ nhận lệnh có trong lịch cron.
+     */
+    public function probeReelCaption(Request $request, FacebookReelSyncService $reels): RedirectResponse
+    {
+        $validated = $request->validate([
+            'reel_id' => ['required', 'string', 'max:64'],
+        ]);
+
+        $result = $reels->probeCaptionWrite($validated['reel_id']);
+
+        return back()->with(
+            $result['ok'] ? 'success' : 'error',
+            "Reel {$validated['reel_id']}: {$result['message']}",
         );
     }
 }

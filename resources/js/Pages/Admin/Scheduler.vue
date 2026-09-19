@@ -15,6 +15,7 @@ const props = defineProps({
 
 const running = ref(null)
 const refreshing = ref(false)
+const probing = ref(null)
 
 // Dòng lịch sử nào đang mở output.
 const expanded = ref(new Set())
@@ -38,6 +39,22 @@ function runNow(command) {
         },
         onError: () => toast.error('Không chạy được, thử lại.'),
         onFinish: () => { running.value = null },
+    })
+}
+
+// Ghi lại đúng caption đang có: cách duy nhất biết Meta còn cho đổi caption reel hay không,
+// vì đường POST /{reel_id} không được Meta tài liệu hoá nên họ bỏ lúc nào không báo.
+function probe(reelId) {
+    if (probing.value) return
+    probing.value = reelId
+    router.post('/admin/scheduler/reel-caption-probe', { reel_id: reelId }, {
+        preserveScroll: true,
+        onSuccess: (page) => {
+            const f = page.props.flash || {}
+            f.error ? toast.error(f.error) : toast.success(f.success || 'Ghi thử xong.')
+        },
+        onError: () => toast.error('Không gọi được, thử lại.'),
+        onFinish: () => { probing.value = null },
     })
 }
 
@@ -169,6 +186,7 @@ async function copyCron() {
         <!-- Slot reel -->
         <h2 class="text-base font-bold text-[var(--color-ink)] mb-1">Slot reel Facebook</h2>
         <p class="text-xs text-[var(--color-muted)] mb-3">Reel nào đang hiện link sản phẩm nào — job <span class="font-mono">facebook:sync-reels</span> đọc caption thật 10 phút/lần để đối soát.</p>
+        <p class="text-xs text-[var(--color-muted)] mb-3">Nút <b>Thử ghi</b> ghi lại đúng caption đang có để biết Meta còn cho đổi caption reel không — thành công thì reel không đổi gì, thất bại thì cũng không đổi gì.</p>
         <div class="bg-[var(--color-surface)] rounded-2xl border border-[var(--color-line)] overflow-hidden mb-6">
             <div class="overflow-x-auto">
                 <table class="w-full text-sm">
@@ -178,6 +196,7 @@ async function copyCron() {
                             <th class="text-left px-4 py-2.5">Đang hiện</th>
                             <th class="text-left px-4 py-2.5">Thuê</th>
                             <th class="text-left px-4 py-2.5">Đối soát</th>
+                            <th class="text-right px-4 py-2.5">Ghi thử</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -202,8 +221,14 @@ async function copyCron() {
                                 <p v-else class="text-[var(--color-muted)]">Chưa đối soát</p>
                                 <p v-if="s.sync_error" class="text-red-600 mt-1 break-all">⚠ {{ s.sync_error.slice(0, 160) }}</p>
                             </td>
+                            <td class="px-4 py-3 text-right whitespace-nowrap">
+                                <button @click="probe(s.reel_id)" :disabled="probing !== null"
+                                    class="text-xs font-bold px-3 py-1.5 rounded-lg border border-[var(--color-line)] text-[var(--color-ink)] hover:bg-[var(--color-bg)] disabled:opacity-50 transition">
+                                    {{ probing === s.reel_id ? 'Đang thử…' : 'Thử ghi' }}
+                                </button>
+                            </td>
                         </tr>
-                        <tr v-if="!reelSlots.length"><td colspan="4" class="px-4 py-6 text-center text-[var(--color-muted)]">Chưa có reel nào — cấu hình ở Cấu hình API → Facebook.</td></tr>
+                        <tr v-if="!reelSlots.length"><td colspan="5" class="px-4 py-6 text-center text-[var(--color-muted)]">Chưa có reel nào — cấu hình ở Cấu hình API → Facebook.</td></tr>
                     </tbody>
                 </table>
             </div>
