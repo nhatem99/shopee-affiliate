@@ -280,14 +280,22 @@ class KieuShopeeServiceTest extends TestCase
             && str_contains($request->body(), 'tool-moi'));
     }
 
-    /** Tắt is_active = tạm ngưng dùng cấu hình admin, quay về giá trị trong code. */
-    public function test_inactive_admin_config_is_ignored(): void
+    /**
+     * Tắt is_active (tức admin đang chọn ganma làm nguồn phục vụ khách) KHÔNG được làm mất tham
+     * số admin đã dán. Trước đây chỗ này rơi về giá trị mặc định trong config, mà giá trị đó
+     * đứng yên từ 07-09-2026 — nên suốt ngày 18-09-2026 mọi lượt gọi kieushopee (chế độ mã YTB
+     * gọi cả hai nguồn) đều 404 dù admin đã dán next_action mới vào /admin/api-config.
+     *
+     * is_active trả lời "nguồn nào phục vụ khách" (VoucherSourceResolver), không phải "gọi nguồn
+     * này bằng tham số gì".
+     */
+    public function test_inactive_admin_config_van_duoc_dung(): void
     {
         Http::fake([self::ENDPOINT => Http::response($this->flightBody())]);
         $this->storeAdminParams(['next_action' => 'id-moi-dan-tu-admin'], isActive: false);
 
         $this->fetch();
 
-        Http::assertSent(fn (Request $request) => $request->hasHeader('Next-Action', 'test-next-action'));
+        Http::assertSent(fn (Request $request) => $request->hasHeader('Next-Action', 'id-moi-dan-tu-admin'));
     }
 }

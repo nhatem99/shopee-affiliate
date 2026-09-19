@@ -1,5 +1,5 @@
 <script setup>
-import { ref, watch } from 'vue'
+import { computed, ref, watch } from 'vue'
 import { Head, router } from '@inertiajs/vue3'
 import AdminLayout from '@/Layouts/AdminLayout.vue'
 import { useToast } from '@/composables/useToast'
@@ -7,6 +7,10 @@ import { useToast } from '@/composables/useToast'
 const props = defineProps({
     customerAuthEnabled: { type: Boolean, required: true },
     maintenanceMode: { type: Boolean, required: true },
+    autoMaintenanceEnabled: { type: Boolean, default: false },
+    // { checked_at, ok, message, consecutive_failures, action } — null ở mọi trường khi chưa
+    // kiểm tra lần nào.
+    sourceHealth: { type: Object, default: () => ({}) },
     festiveDecor: { type: Boolean, default: false },
     historyRebuyEnabled: { type: Boolean, default: false },
     fbigWindowAutoSwitch: { type: Boolean, default: false },
@@ -26,6 +30,8 @@ const customerAuthEnabled = ref(props.customerAuthEnabled)
 const maintenanceMode = ref(props.maintenanceMode)
 const savingCustomerAuth = ref(false)
 const savingMaintenance = ref(false)
+const autoMaintenanceEnabled = ref(props.autoMaintenanceEnabled)
+const savingAutoMaintenance = ref(false)
 const festiveDecor = ref(props.festiveDecor)
 const savingFestive = ref(false)
 const historyRebuyEnabled = ref(props.historyRebuyEnabled)
@@ -52,6 +58,7 @@ const savingWelcomeBonusAmount = ref(false)
 // Đồng bộ lại nếu server trả về giá trị khác (ví dụ sau khi lưu xong)
 watch(() => props.customerAuthEnabled, (v) => { customerAuthEnabled.value = v })
 watch(() => props.maintenanceMode, (v) => { maintenanceMode.value = v })
+watch(() => props.autoMaintenanceEnabled, (v) => { autoMaintenanceEnabled.value = v })
 watch(() => props.festiveDecor, (v) => { festiveDecor.value = v })
 watch(() => props.historyRebuyEnabled, (v) => { historyRebuyEnabled.value = v })
 watch(() => props.fbigWindowAutoSwitch, (v) => { fbigWindowAutoSwitch.value = v })
@@ -95,6 +102,45 @@ function toggleMaintenance() {
         onFinish: () => { savingMaintenance.value = false },
     })
 }
+
+function toggleAutoMaintenance() {
+    const next = !autoMaintenanceEnabled.value
+    autoMaintenanceEnabled.value = next
+    savingAutoMaintenance.value = true
+
+    router.post('/admin/settings', { auto_maintenance_enabled: next }, {
+        preserveScroll: true,
+        onSuccess: () => toast.success(next
+            ? 'Đã bật tự bảo trì khi nguồn mã lỗi.'
+            : 'Đã tắt tự bảo trì — nếu trang đang bảo trì tự động thì đã mở lại.'),
+        onError: () => {
+            autoMaintenanceEnabled.value = !next // rollback nếu lưu lỗi
+            toast.error('Không lưu được cài đặt, vui lòng thử lại.')
+        },
+        onFinish: () => { savingAutoMaintenance.value = false },
+    })
+}
+
+// Dòng trạng thái của lượt kiểm tra nguồn gần nhất. Quan trọng nhất là ca "chưa kiểm tra lần
+// nào": công tắc bật mà không có mốc thời gian nghĩa là cron chưa gọi scheduler (xem
+// /admin/scheduler) — tức tính năng này đang không hề chạy dù nút đã gạt.
+const sourceHealthLine = computed(() => {
+    if (!autoMaintenanceEnabled.value) {
+        return 'Đang tắt — nguồn mã chết thì trang vẫn mở, bạn tự bật bảo trì khi phát hiện.'
+    }
+
+    const health = props.sourceHealth || {}
+
+    if (!health.checked_at) {
+        return 'Đã bật nhưng CHƯA kiểm tra lần nào — kiểm tra cron ở trang Lịch chạy (scheduler).'
+    }
+
+    const at = new Date(health.checked_at).toLocaleString('vi-VN')
+
+    return health.ok
+        ? `Nguồn bình thường — kiểm tra lúc ${at}.`
+        : `Nguồn đang lỗi ${health.consecutive_failures} lần liên tiếp — kiểm tra lúc ${at}. ${health.message || ''}`
+})
 
 function toggleFestive() {
     const next = !festiveDecor.value
@@ -340,6 +386,45 @@ function saveCashbackDisplayRate() {
                     <span class="text-[var(--color-ink)] font-medium">
                         {{ maintenanceMode ? 'Đang bảo trì — khách không vào được trang, admin vẫn dùng bình thường.' : 'Đang tắt — trang hoạt động bình thường.' }}
                     </span>
+                </div>
+            </div>
+
+            <div class="bg-[var(--color-surface)] rounded-2xl border border-[var(--color-line)] p-6">
+                <div class="flex items-start justify-between gap-6">
+                    <div class="min-w-0">
+                        <h2 class="font-bold text-[var(--color-ink)] mb-1">🚑 Tự bảo trì khi nguồn mã lỗi</h2>
+                        <p class="text-sm text-[var(--color-muted)] leading-relaxed">
+                            Cứ <b>5 phút</b> hệ thống gọi thử <span class="font-mono text-xs">sansale.kieushopee.com/22</span>.
+                            Lỗi <b>2 lượt liên tiếp</b> (≈10 phút) thì tự bật chế độ bảo trì, nguồn sống lại thì tự tắt.
+                            Kiểm tra riêng kieushopee, <b>không quan tâm đang để nguồn nào</b> ở trang Cấu hình API —
+                            kể cả khi ganma vẫn ra mã được thì kieushopee chết vẫn đóng trang.
+                            Bạn tự tay gạt công tắc bảo trì ở trên thì hệ thống <b>không tắt hộ nữa</b>;
+                            tắt công tắc này thì trang đang bảo trì tự động sẽ được mở lại ngay.
+                        </p>
+                    </div>
+
+                    <button
+                        type="button"
+                        role="switch"
+                        :aria-checked="autoMaintenanceEnabled"
+                        @click="toggleAutoMaintenance"
+                        :disabled="savingAutoMaintenance"
+                        class="relative flex-none w-14 h-8 rounded-full transition-colors duration-200 disabled:opacity-60"
+                        :class="autoMaintenanceEnabled ? 'bg-amber-500' : 'bg-[var(--color-line)]'"
+                    >
+                        <span
+                            class="absolute top-1 left-1 w-6 h-6 rounded-full bg-white shadow-md transition-transform duration-200"
+                            :class="autoMaintenanceEnabled ? 'translate-x-6' : 'translate-x-0'"
+                        ></span>
+                    </button>
+                </div>
+
+                <div class="mt-4 pt-4 border-t border-[var(--color-line)] flex items-start gap-2 text-sm">
+                    <span
+                        class="w-2 h-2 mt-1.5 rounded-full flex-none"
+                        :class="!autoMaintenanceEnabled ? 'bg-[var(--color-muted)]' : (sourceHealth?.ok ? 'bg-[var(--color-brand-green)]' : 'bg-amber-500')"
+                    ></span>
+                    <span class="text-[var(--color-ink)] font-medium">{{ sourceHealthLine }}</span>
                 </div>
             </div>
 

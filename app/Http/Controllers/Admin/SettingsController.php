@@ -7,6 +7,7 @@ use App\Models\Setting;
 use App\Services\CashbackLeaderboardService;
 use App\Services\CashbackService;
 use App\Services\ChatService;
+use App\Services\SourceHealthService;
 use App\Services\VoucherSourceResolver;
 use App\Services\WelcomeBonusService;
 use Illuminate\Http\RedirectResponse;
@@ -21,6 +22,10 @@ class SettingsController extends Controller
         return Inertia::render('Admin/Settings', [
             'customerAuthEnabled' => Setting::getBool('customer_auth_enabled', true),
             'maintenanceMode' => Setting::getBool('maintenance_mode', false),
+            'autoMaintenanceEnabled' => SourceHealthService::enabled(),
+            // Kết quả lượt kiểm tra nguồn gần nhất — không có nó thì công tắc chỉ là cái nút câm,
+            // admin không biết hệ thống có đang thật sự kiểm tra hay cron đã chết từ đời nào.
+            'sourceHealth' => app(SourceHealthService::class)->status(),
             'festiveDecor' => Setting::getBool('festive_decor', false),
             'historyRebuyEnabled' => Setting::getBool('history_rebuy_enabled', false),
             'fbigWindowAutoSwitch' => VoucherSourceResolver::autoSwitchEnabled(),
@@ -46,6 +51,7 @@ class SettingsController extends Controller
         $validated = $request->validate([
             'customer_auth_enabled' => ['sometimes', 'boolean'],
             'maintenance_mode' => ['sometimes', 'boolean'],
+            'auto_maintenance_enabled' => ['sometimes', 'boolean'],
             'festive_decor' => ['sometimes', 'boolean'],
             'history_rebuy_enabled' => ['sometimes', 'boolean'],
             'fbig_window_auto_switch' => ['sometimes', 'boolean'],
@@ -74,6 +80,18 @@ class SettingsController extends Controller
 
         if (array_key_exists('maintenance_mode', $validated)) {
             Setting::set('maintenance_mode', $validated['maintenance_mode'] ? '1' : '0');
+
+            // Gạt tay là giành lại quyền: lần bảo trì này thành của admin, lượt kiểm tra nguồn
+            // kế tiếp không được tắt hộ (và không đóng lại ngay sau khi admin vừa mở).
+            app(SourceHealthService::class)->handOverToAdmin();
+        }
+
+        if (array_key_exists('auto_maintenance_enabled', $validated)) {
+            Setting::set(SourceHealthService::ENABLED_KEY, $validated['auto_maintenance_enabled'] ? '1' : '0');
+
+            if (! $validated['auto_maintenance_enabled']) {
+                app(SourceHealthService::class)->stopAutoMaintenance();
+            }
         }
 
         if (array_key_exists('festive_decor', $validated)) {

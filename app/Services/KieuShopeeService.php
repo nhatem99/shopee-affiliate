@@ -90,11 +90,18 @@ class KieuShopeeService
      * config/services.php vẫn là lưới an toàn: mất bản ghi, chưa chạy migrate, hoặc admin lỡ
      * xoá trắng một ô thì rơi về giá trị mặc định thay vì gửi request rỗng.
      *
+     * KHÔNG lọc theo is_active. `is_active` trả lời câu "nguồn nào đang phục vụ khách"
+     * (VoucherSourceResolver), còn ở đây chỉ cần "gọi nguồn này bằng tham số nào" — mà đang để
+     * ganma thì kieushopee vẫn bị gọi: chế độ mã YTB gọi CẢ HAI nguồn, và lượt kiểm tra sức khoẻ
+     * (SourceHealthService) cũng gọi. Lọc is_active ở đây từng làm mọi lượt đó rơi về giá trị mặc
+     * định trong config — vốn đã cũ 12 ngày — nên nguồn 404 suốt ngày 18-09-2026 dù admin đã dán
+     * ID mới vào DB: hỏng âm thầm, khách vẫn thấy trang chạy bình thường.
+     *
      * @return array{endpoint: string, next_action: string, tool_id: string, action_payload: string}
      */
     private function params(): array
     {
-        $row = ApiConfig::where('platform', self::SOURCE)->where('is_active', true)->first();
+        $row = ApiConfig::where('platform', self::SOURCE)->first();
         $meta = $row->meta ?? [];
 
         $pick = fn (?string $fromDb, string $configKey) => filled($fromDb)

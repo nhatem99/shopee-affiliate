@@ -32,3 +32,15 @@ Schedule::command('facebook:sync-reels')
     ->withoutOverlapping()
     ->description('Đối soát caption reel Facebook với bảng slot')
     ->storeOutput();
+
+// Gọi thử nguồn kieushopee, tự bật chế độ bảo trì khi nó chết (xem SourceHealthService). Công
+// tắc ở Admin > Cài đặt đang tắt thì lệnh thoát ngay, không gọi sang nguồn.
+//
+// 5 phút/lần: nguồn chết là khách vẫn dán link như thường và không có dấu hiệu gì, nên khoảng
+// mù càng ngắn càng tốt; đổi lại phải lỗi 2 lượt liên tiếp mới đóng trang (~10 phút) để một
+// nhịp timeout lẻ không đá khách ra giữa chừng.
+Schedule::command('kieushopee:health')
+    ->everyFiveMinutes()
+    ->withoutOverlapping()
+    ->description('Kiểm tra nguồn kieushopee, tự bật/tắt bảo trì')
+    ->storeOutput();
