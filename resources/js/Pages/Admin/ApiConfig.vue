@@ -462,6 +462,12 @@ async function testConfig(config) {
                                 Tick reel ở danh sách dưới đây là nó vào nhóm luôn.
                                 Đang chọn: <b>{{ editing.meta.target_reel_ids.length }}</b> reel.
                             </p>
+                            <p class="text-xs text-[var(--color-muted)] mb-3">
+                                Nút <b>Thử comment</b> đăng một comment thật lên reel và giữ lại, trả về link
+                                <span class="font-mono">/reel/&#123;id&#125;?comment_id=</span> để bạn mở trên điện thoại.
+                                Đo trên máy thật 08-09: link /reel/ mở được app (iPhone nhảy đúng bình luận, Android dừng ở video),
+                                nhưng <b>link nằm trong bình luận reel thì bấm không được</b> — mở ra để tự kiểm chứng lại.
+                            </p>
 
                             <div v-if="loadingPosts" class="text-sm text-[var(--color-muted)]">Đang tải danh sách reel...</div>
                             <div v-else-if="postsError" class="text-sm text-red-600">{{ postsError }}</div>
@@ -474,13 +480,17 @@ async function testConfig(config) {
                                     class="flex items-start gap-2 p-2 rounded-lg border cursor-pointer hover:bg-[var(--color-peach-soft)] transition">
                                     <input :checked="isReelSelected(reel)" type="checkbox"
                                         class="mt-1 w-4 h-4 accent-[var(--color-accent)] shrink-0" @change="toggleReel(reel)" />
-                                    <div class="min-w-0">
+                                    <div class="min-w-0 flex-1">
                                         <p class="text-sm text-[var(--color-ink)] line-clamp-2">
                                             <span class="inline-block align-middle mr-1.5 px-1.5 py-0.5 rounded-md bg-[var(--color-accent)] text-white text-[10px] font-semibold uppercase tracking-wide">Reel</span>
                                             {{ reel.message || '(Reel không có caption)' }}
                                         </p>
                                         <p class="text-xs text-[var(--color-muted)] mt-0.5 font-mono">{{ reel.id }} · {{ formatPostDate(reel.created_time) }}</p>
                                     </div>
+                                    <button type="button" @click.prevent="probeComment(`https://www.facebook.com/reel/${reel.id}`)" :disabled="probingPost !== null"
+                                        class="shrink-0 text-xs font-bold px-2.5 py-1 rounded-lg border border-[var(--color-line)] text-[var(--color-ink)] bg-[var(--color-surface)] hover:bg-[var(--color-bg)] disabled:opacity-50 transition">
+                                        {{ probingPost === `https://www.facebook.com/reel/${reel.id}` ? 'Đang thử…' : 'Thử comment' }}
+                                    </button>
                                 </label>
                             </div>
 

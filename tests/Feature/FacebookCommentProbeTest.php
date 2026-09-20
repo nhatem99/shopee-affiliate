@@ -67,6 +67,35 @@ class FacebookCommentProbeTest extends TestCase
         );
     }
 
+    public function test_comment_contains_a_real_link_so_clickability_can_be_judged(): void
+    {
+        $config = $this->config();
+        $this->fakePostOk();
+
+        $this->probe()->post($config, self::POST_ID);
+
+        // Không có link trong comment thì mở ra chẳng kiểm chứng được gì — mà "link trong bình
+        // luận có bấm được không" mới là câu hỏi đắt nhất, và với reel thì câu trả lời là KHÔNG.
+        Http::assertSent(fn ($request) => $request->method() !== 'POST'
+            || str_contains((string) $request['message'], url('/')));
+    }
+
+    public function test_reel_target_is_posted_to_its_bare_id_and_returns_a_reel_url(): void
+    {
+        $config = $this->config();
+        $this->fakePostOk();
+
+        $result = $this->probe()->post($config, 'https://www.facebook.com/reel/987654');
+
+        // Graph nhận id trần, không nhận cả link: gọi thẳng bằng chuỗi admin nhập thì URL thành
+        // "/https://www.facebook.com/reel/987654/comments" và request chết.
+        Http::assertSent(fn ($request) => $request->method() !== 'POST'
+            || str_contains($request->url(), '/987654/comments'));
+
+        // Và link trả về phải là dạng /reel/ — dạng duy nhất mở được ứng dụng Facebook.
+        $this->assertSame('https://www.facebook.com/reel/987654?comment_id=444', $result['url']);
+    }
+
     public function test_keeps_the_comment_so_it_can_be_opened_on_a_real_phone(): void
     {
         $config = $this->config();

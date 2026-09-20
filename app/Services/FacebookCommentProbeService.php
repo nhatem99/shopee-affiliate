@@ -31,14 +31,26 @@ class FacebookCommentProbeService
     {
         $service = new FacebookPageService($config->app_id, $config->app_secret);
 
-        // Nói rõ trong chính nội dung comment rằng đây là comment kỹ thuật: nó nằm công khai
-        // trên page thật, khách hàng thấy được cho tới khi admin bấm xoá.
+        // PHẢI có link thật trong nội dung: câu hỏi đắt nhất của phép thử này là "link trong
+        // bình luận có BẤM ĐƯỢC không", và với reel thì đo ngày 08-09-2026 là KHÔNG (Facebook
+        // hiển thị thành text thường). Comment không link thì mở ra chẳng kiểm chứng được gì.
+        // Dùng link trang chủ của chính mình, không dùng link giả — Facebook đối xử với link
+        // theo domain, link giả cho ra kết luận giả.
+        //
+        // Nói rõ đây là comment kỹ thuật: nó nằm công khai trên page thật, khách thấy được cho
+        // tới khi admin bấm xoá.
         $message = implode("\n", [
             '🔧 Kiểm tra kỹ thuật — '.now()->format('H:i d/m/Y'),
+            url('/'),
             'Bình luận này do quản trị viên đăng để kiểm tra hệ thống và sẽ được xoá.',
         ]);
 
-        $posted = $service->postComment($postId, $message);
+        // Phải phân giải y như luồng khách: Graph nhận id trần, không nhận cả link. Gọi thẳng
+        // bằng chuỗi admin nhập thì reel (dán dạng ".../reel/123456") sẽ ra URL Graph vô nghĩa
+        // "/https://www.facebook.com/reel/123456/comments" — mà phép thử này chỉ có giá trị khi
+        // nó đi đúng con đường khách đi.
+        $target = FacebookPostTarget::parse($postId);
+        $posted = $service->postComment($target->graphId, $message);
 
         if ($posted === null) {
             return [
