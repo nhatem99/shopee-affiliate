@@ -24,6 +24,9 @@ class FacebookCommentProbeTest extends TestCase
 
     private const COMMENT_ID = '111222_333_444';
 
+    /** Permalink Graph trả cho comment — actor id trong URL công khai KHÁC page id của Graph. */
+    private const GRAPH_PERMALINK = 'https://www.facebook.com/999888/posts/333?comment_id=444';
+
     private function config(): ApiConfig
     {
         return ApiConfig::create([
@@ -46,7 +49,7 @@ class FacebookCommentProbeTest extends TestCase
     {
         Http::fake(fn ($request) => $request->method() === 'DELETE'
             ? Http::response(['success' => true])
-            : Http::response(['id' => self::COMMENT_ID, 'permalink_url' => 'https://facebook.com/permalink/444']));
+            : Http::response(['id' => self::COMMENT_ID, 'permalink_url' => self::GRAPH_PERMALINK]));
     }
 
     public function test_returns_the_exact_url_a_real_customer_would_get(): void
@@ -58,13 +61,11 @@ class FacebookCommentProbeTest extends TestCase
 
         $this->assertTrue($result['ok']);
 
-        // Cả phép thử này chỉ có nghĩa nếu URL trả ra GIỐNG HỆT URL khách nhận. Dạng
-        // /{page_id}/posts/{story_fbid}?comment_id={id} là thứ ShortLinkController dựng qua
-        // FacebookPostTarget::urlForComment — không phải permalink thô của Graph.
-        $this->assertSame(
-            'https://www.facebook.com/111222/posts/333?comment_id=444',
-            $result['url'],
-        );
+        // Cả phép thử này chỉ có nghĩa nếu URL trả ra GIỐNG HỆT URL khách nhận — tức thứ
+        // FacebookPostTarget::urlForComment dựng, chứ không phải một URL ghép riêng ở đây.
+        // Với bài thường đó là permalink của Graph: page có hai id, tự ghép bằng id Graph thì
+        // Facebook chuyển hướng và rụng mất ?comment_id=.
+        $this->assertSame(self::GRAPH_PERMALINK, $result['url']);
     }
 
     public function test_keeps_the_comment_so_it_can_be_opened_on_a_real_phone(): void
@@ -102,7 +103,7 @@ class FacebookCommentProbeTest extends TestCase
         $config = $this->config();
         Http::fake(fn ($request) => $request->method() === 'DELETE'
             ? Http::response(['error' => ['message' => 'cannot delete']], 400)
-            : Http::response(['id' => self::COMMENT_ID, 'permalink_url' => 'https://facebook.com/permalink/444']));
+            : Http::response(['id' => self::COMMENT_ID, 'permalink_url' => self::GRAPH_PERMALINK]));
 
         $this->probe()->post($config, self::POST_ID);
         $result = $this->probe()->delete($config);

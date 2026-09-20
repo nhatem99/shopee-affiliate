@@ -10,6 +10,7 @@ use App\Services\VoucherRefService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Str;
 use Illuminate\Testing\TestResponse;
 use Tests\TestCase;
 
@@ -78,14 +79,22 @@ class VoucherShortenTest extends TestCase
      * Graph API giả lập: trả comment id ghép từ chính bài được gọi, để test biết comment đã
      * rơi vào bài nào ({page}_{story}_999 y như Facebook thật trả về).
      */
+    /**
+     * Giả lập Graph API sát thực tế ở đúng chỗ dễ sai nhất: permalink của comment mang ACTOR ID
+     * (999888) KHÁC page id trong cấu hình (111222). Page thật có hai id như vậy — đo 20-09-2026
+     * — và tự ghép URL bằng id Graph thì Facebook chuyển hướng, rụng mất ?comment_id=, khách rơi
+     * vào bài chứ không xuống bình luận. Fake trả permalink giống hệt page id sẽ che mất lỗi đó.
+     */
     private function fakeGraphEchoingPostId(): void
     {
         Http::fake(function ($request) {
-            preg_match('#/(\d+_\d+)/comments#', $request->url(), $matches);
+            preg_match('#/(\d+_\d+|\d+)/comments#', $request->url(), $matches);
+            $target = $matches[1] ?? 'x_y';
+            $story = Str::afterLast($target, '_');
 
             return Http::response([
-                'id' => ($matches[1] ?? 'x_y').'_999',
-                'permalink_url' => 'https://www.facebook.com/permalink',
+                'id' => $target.'_999',
+                'permalink_url' => "https://www.facebook.com/999888/posts/{$story}?comment_id=999",
             ]);
         });
     }
@@ -124,21 +133,18 @@ class VoucherShortenTest extends TestCase
     public function test_redirects_through_facebook_comment_when_enabled(): void
     {
         $this->enableCommentRedirect();
-        Http::fake(['graph.facebook.com/*' => Http::response([
-            'id' => self::POST_ID.'_999',
-            'permalink_url' => 'https://www.facebook.com/permalink',
-        ])]);
+        $this->fakeGraphEchoingPostId();
 
         $shortUrl = $this->shorten()->assertOk()->json('short_url');
 
-        // URL canonical /{page_id}/posts/{story_fbid} ghép từ Page ID trong cấu hình, không
-        // dùng permalink_url gốc. Dạng /posts/ (thay cho story.php cũ) là dạng Facebook khai
-        // báo trong universal link/app link nên điện thoại mới có cơ hội mở thẳng app.
-        $this->assertStringContainsString('https://www.facebook.com/111222/posts/333444?', $shortUrl);
+        // Với BÀI THƯỜNG phải dùng nguyên permalink Graph trả về, KHÔNG tự ghép từ page id
+        // trong cấu hình: page có hai id, ghép bằng id Graph thì Facebook chuyển hướng về URL
+        // chuẩn và rụng mất ?comment_id= — khách rơi vào bài, phải tự tìm bình luận.
+        $this->assertStringContainsString('https://www.facebook.com/999888/posts/333444?', $shortUrl);
+        $this->assertStringNotContainsString('/111222/posts/', $shortUrl);
 
-        // Graph API trả comment id đầy đủ dạng {page}_{story}_{comment} = 111222_333444_999;
-        // phần số riêng của comment là ĐOẠN CUỐI. Ghép sai (còn tiền tố story) thì Facebook
-        // bỏ qua param, link chỉ mở tới bài viết chứ không nhảy xuống đúng bình luận.
+        // Phần số riêng của comment là ĐOẠN CUỐI của id Graph trả về. Ghép sai (còn tiền tố
+        // story) thì Facebook bỏ qua param, link chỉ mở tới bài viết.
         $this->assertStringContainsString('comment_id=999', $shortUrl);
         $this->assertStringNotContainsString('comment_id=333444', $shortUrl);
     }
@@ -229,7 +235,7 @@ class VoucherShortenTest extends TestCase
 
         sort($urls);
 
-        $this->assertStringContainsString('/111222/posts/333444?comment_id=', $urls[0]);
+        $this->assertStringContainsString('/999888/posts/333444?comment_id=', $urls[0]);
         $this->assertStringContainsString('/reel/987654?comment_id=', $urls[1]);
     }
 
@@ -241,7 +247,7 @@ class VoucherShortenTest extends TestCase
 
         $shortUrl = $this->shorten()->assertOk()->json('short_url');
 
-        $this->assertSame('111222/posts/999000', $this->postPartOf($shortUrl));
+        $this->assertSame('999888/posts/999000', $this->postPartOf($shortUrl));
     }
 
     /** Cùng sản phẩm bấm nhiều lần trong 20 phút chỉ được đăng đúng 1 comment (chống spam). */
