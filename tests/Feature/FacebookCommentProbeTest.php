@@ -144,15 +144,19 @@ class FacebookCommentProbeTest extends TestCase
         $this->assertNotNull($this->probe()->pending($config));
     }
 
-    public function test_reports_failure_when_facebook_refuses_the_comment(): void
+    public function test_reports_failure_with_the_raw_graph_error(): void
     {
         $config = $this->config();
-        Http::fake(fn () => Http::response(['error' => ['message' => 'no permission']], 403));
+        Http::fake(fn () => Http::response(['error' => ['message' => 'no permission', 'code' => 200]], 403));
 
         $result = $this->probe()->post($config, self::POST_ID);
 
         $this->assertFalse($result['ok']);
         $this->assertNull($this->probe()->pending($config));
+
+        // Phải in nguyên văn lỗi Graph, không đẩy admin đi lục /admin/logs: "thiếu quyền" và
+        // "Meta chặn hẳn endpoint" dẫn tới hai hướng xử lý khác hẳn nhau.
+        $this->assertStringContainsString('no permission', $result['message']);
     }
 
     public function test_delete_says_so_when_there_is_nothing_pending(): void

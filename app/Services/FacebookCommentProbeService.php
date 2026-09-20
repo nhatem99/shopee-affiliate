@@ -4,6 +4,7 @@ namespace App\Services;
 
 use App\Models\ApiConfig;
 use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Str;
 
 /**
  * Nút "Thử comment" ở /admin/api-config: đăng một comment thật lên bài viết và GIỮ LẠI, trả về
@@ -55,7 +56,8 @@ class FacebookCommentProbeService
         if ($posted === null) {
             return [
                 'ok' => false,
-                'message' => 'Không đăng được comment lên bài '.$postId.'. Chi tiết ở /admin/logs (tìm "FacebookPageService").',
+                'message' => 'Không đăng được comment lên '.$postId.'. Graph trả: '
+                    .(Str::limit((string) $service->lastError, 250) ?: '(không có nội dung lỗi — xem /admin/logs, tìm "FacebookPageService")'),
             ];
         }
 

@@ -55,6 +55,8 @@ class FacebookPageService
      */
     public function postComment(string $postId, string $message): ?array
     {
+        $this->lastError = null;
+
         try {
             $response = Http::asForm()->timeout(15)->post(
                 'https://graph.facebook.com/'.self::GRAPH_VERSION."/{$postId}/comments",
@@ -66,6 +68,11 @@ class FacebookPageService
             );
 
             if (! $response->successful()) {
+                // Giữ nguyên văn lỗi để nút thử ở /admin/api-config in thẳng ra được. Chỉ ghi
+                // log thì admin phải mò /admin/logs mới biết vì sao — mà lý do ("thiếu quyền"
+                // với "Meta chặn hẳn endpoint") dẫn tới hai hướng xử lý khác hẳn nhau.
+                $this->lastError = $response->body();
+
                 Log::warning('FacebookPageService: đăng comment thất bại', [
                     'page_id' => $this->pageId,
                     'post_id' => $postId,
@@ -95,6 +102,8 @@ class FacebookPageService
             // full_comment_id chỉ dùng để XOÁ (Graph cần id đầy đủ, không nhận đoạn cuối).
             return ['permalink_url' => $permalink, 'comment_id' => $commentId, 'full_comment_id' => $fullCommentId];
         } catch (\Exception $e) {
+            $this->lastError = $e->getMessage();
+
             Log::warning('FacebookPageService: lỗi khi đăng comment: '.$e->getMessage(), [
                 'page_id' => $this->pageId,
                 'post_id' => $postId,
