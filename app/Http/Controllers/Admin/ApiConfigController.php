@@ -160,9 +160,12 @@ class ApiConfigController extends Controller
 
         $validated = $request->validate([
             'post_id' => ['required', 'string', 'max:128'],
+            // Thử cùng một bài có link và không link để tách "Meta chặn theo loại bài" khỏi
+            // "Meta chặn nội dung có link" — xem FacebookCommentProbeService::post().
+            'with_link' => ['nullable', 'boolean'],
         ]);
 
-        $result = $probe->post($config, $validated['post_id']);
+        $result = $probe->post($config, $validated['post_id'], $validated['with_link'] ?? true);
 
         return response()->json($result, $result['ok'] ? 200 : 422);
     }

@@ -28,23 +28,29 @@ class FacebookCommentProbeService
     private const REMEMBER_HOURS = 24;
 
     /** @return array{ok: bool, message: string, url?: string, post_id?: string} */
-    public function post(ApiConfig $config, string $postId): array
+    public function post(ApiConfig $config, string $postId, bool $withLink = true): array
     {
         $service = new FacebookPageService($config->app_id, $config->app_secret);
 
-        // PHẢI có link thật trong nội dung: câu hỏi đắt nhất của phép thử này là "link trong
-        // bình luận có BẤM ĐƯỢC không", và với reel thì đo ngày 08-09-2026 là KHÔNG (Facebook
-        // hiển thị thành text thường). Comment không link thì mở ra chẳng kiểm chứng được gì.
-        // Dùng link trang chủ của chính mình, không dùng link giả — Facebook đối xử với link
-        // theo domain, link giả cho ra kết luận giả.
+        // Mặc định CÓ link thật trong nội dung: câu hỏi đắt nhất của phép thử này là "link trong
+        // bình luận có BẤM ĐƯỢC không", và comment không link thì mở ra chẳng kiểm chứng được gì.
+        // Dùng link trang chủ của chính mình, không dùng link giả — Facebook đối xử với link theo
+        // domain, link giả cho ra kết luận giả.
+        //
+        // $withLink = false để tách bạch hai nguyên nhân trông giống hệt nhau. Ngày 20-09-2026
+        // MỌI lệnh ghi thất bại (đổi caption reel, comment lên reel) đều chứa link, còn lệnh ghi
+        // thành công duy nhất (comment lên bài thường) thì không — nên chưa thể kết luận Meta
+        // chặn theo LOẠI BÀI hay theo NỘI DUNG CÓ LINK. Hai kết cục khác hẳn: chặn theo loại bài
+        // thì bỏ reel là xong, chặn theo link thì cả luồng đi vòng qua Facebook chết. Thử cùng
+        // một bài theo cả hai kiểu là tách được.
         //
         // Nói rõ đây là comment kỹ thuật: nó nằm công khai trên page thật, khách thấy được cho
         // tới khi admin bấm xoá.
-        $message = implode("\n", [
+        $message = implode("\n", array_filter([
             '🔧 Kiểm tra kỹ thuật — '.now()->format('H:i d/m/Y'),
-            url('/'),
+            $withLink ? url('/') : null,
             'Bình luận này do quản trị viên đăng để kiểm tra hệ thống và sẽ được xoá.',
-        ]);
+        ]));
 
         // Phải phân giải y như luồng khách: Graph nhận id trần, không nhận cả link. Gọi thẳng
         // bằng chuỗi admin nhập thì reel (dán dạng ".../reel/123456") sẽ ra URL Graph vô nghĩa
@@ -53,10 +59,14 @@ class FacebookCommentProbeService
         $target = FacebookPostTarget::parse($postId);
         $posted = $service->postComment($target->graphId, $message);
 
+        // Nhắc rõ comment thử vừa rồi CÓ hay KHÔNG kèm link: đây là phép thử hai biến, đọc kết
+        // quả mà không biết mình vừa thử biến nào thì vô nghĩa.
+        $kind = $withLink ? '(comment CÓ link)' : '(comment KHÔNG link)';
+
         if ($posted === null) {
             return [
                 'ok' => false,
-                'message' => 'Không đăng được comment lên '.$postId.'. Graph trả: '
+                'message' => 'Không đăng được comment lên '.$postId.' '.$kind.'. Graph trả: '
                     .(Str::limit((string) $service->lastError, 250) ?: '(không có nội dung lỗi — xem /admin/logs, tìm "FacebookPageService")'),
             ];
         }
@@ -71,7 +81,7 @@ class FacebookCommentProbeService
 
         return [
             'ok' => true,
-            'message' => 'Đã đăng comment thử và GIỮ LẠI. Mở link bên dưới trên điện thoại (thử cả iPhone lẫn Android), xem có rơi đúng vào bình luận không và link trong đó bấm có ăn không. Xem xong nhớ bấm "Xoá comment thử".',
+            'message' => 'Đã đăng comment thử '.$kind.' và GIỮ LẠI. Mở link bên dưới trên điện thoại (thử cả iPhone lẫn Android), xem có rơi đúng vào bình luận không và link trong đó bấm có ăn không. Xem xong nhớ bấm "Xoá comment thử".',
             'url' => $url,
             'post_id' => $postId,
         ];

@@ -37,6 +37,8 @@ const probingPost = ref(null)
 const deletingProbe = ref(false)
 // Comment thử đang nằm trên page — server nhớ, nên còn sau khi tải lại trang.
 const pendingProbe = ref(null)
+// Comment thử có kèm link hay không — xem công tắc ở form Facebook.
+const probeWithLink = ref(true)
 
 // Hai nguồn lấy mã (kieushopee = mã FB/IG, ganma = mã YouTube). Chúng không dùng App ID/Secret
 // và loại trừ nhau — bật cái này thì server tự tắt cái kia, xem ApiConfigController::store().
@@ -114,7 +116,10 @@ async function probeComment(postId) {
     if (probingPost.value) return
     probingPost.value = postId
     try {
-        const { data } = await axios.post(`/admin/api-config/${editingId.value}/probe-comment`, { post_id: postId })
+        const { data } = await axios.post(`/admin/api-config/${editingId.value}/probe-comment`, {
+            post_id: postId,
+            with_link: probeWithLink.value,
+        })
         pendingProbe.value = { url: data.url, post_id: data.post_id }
         toast.success(data.message)
     } catch (e) {
@@ -468,6 +473,20 @@ async function testConfig(config) {
                                 Đo trên máy thật 08-09: link /reel/ mở được app (iPhone nhảy đúng bình luận, Android dừng ở video),
                                 nhưng <b>link nằm trong bình luận reel thì bấm không được</b> — mở ra để tự kiểm chứng lại.
                             </p>
+
+                            <!-- Tách bạch "Meta chặn ghi lên reel" với "Meta chặn nội dung có link": mọi lệnh
+                                 ghi thất bại ngày 20-09 đều chứa link, lệnh thành công duy nhất thì không. -->
+                            <label class="flex items-start gap-2 mb-3 p-2 rounded-lg border border-[var(--color-line)] cursor-pointer">
+                                <input v-model="probeWithLink" type="checkbox" class="mt-0.5 w-4 h-4 accent-[var(--color-accent)] shrink-0" />
+                                <span class="text-xs text-[var(--color-ink)]">
+                                    Comment thử có kèm <b>link tietkiemvi.com</b>
+                                    <span class="block text-[var(--color-muted)] mt-0.5">
+                                        Bỏ tick để thử comment KHÔNG có link. Thử cùng một reel theo cả hai kiểu thì
+                                        biết được Meta chặn vì reel hay chặn vì nội dung có link — hai ca này dẫn tới
+                                        hai kết cục khác hẳn nhau. Áp dụng cho cả nút ở danh sách bài viết bên dưới.
+                                    </span>
+                                </span>
+                            </label>
 
                             <div v-if="loadingPosts" class="text-sm text-[var(--color-muted)]">Đang tải danh sách reel...</div>
                             <div v-else-if="postsError" class="text-sm text-red-600">{{ postsError }}</div>

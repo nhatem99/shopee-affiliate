@@ -80,6 +80,24 @@ class FacebookCommentProbeTest extends TestCase
             || str_contains((string) $request['message'], url('/')));
     }
 
+    public function test_can_post_the_same_probe_without_a_link(): void
+    {
+        $config = $this->config();
+        $this->fakePostOk();
+
+        $result = $this->probe()->post($config, self::POST_ID, withLink: false);
+
+        // Phép thử hai biến: mọi lệnh ghi thất bại ngày 20-09 đều chứa link, lệnh thành công duy
+        // nhất thì không — nên chưa tách được "Meta chặn theo loại bài" khỏi "chặn nội dung có
+        // link". Thử cùng một bài theo cả hai kiểu mới tách được.
+        Http::assertSent(fn ($request) => $request->method() !== 'POST'
+            || ! str_contains((string) $request['message'], url('/')));
+
+        // Và thông báo phải nói rõ vừa thử kiểu nào — đọc kết quả mà không biết mình thử biến
+        // nào thì phép thử vô nghĩa.
+        $this->assertStringContainsString('KHÔNG link', $result['message']);
+    }
+
     public function test_reel_target_is_posted_to_its_bare_id_and_returns_a_reel_url(): void
     {
         $config = $this->config();
