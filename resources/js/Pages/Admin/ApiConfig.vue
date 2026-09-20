@@ -30,6 +30,14 @@ const facebookReels = ref([])
 const loadingPosts = ref(false)
 const postsError = ref(null)
 
+// Id của config đang mở form sửa. Phải giữ riêng: `editing` là useForm() chứa các field gửi
+// lên khi lưu, KHÔNG có id — nhét id vào đó là gửi kèm một field mà store() không hề khai.
+const editingId = ref(null)
+const probingPost = ref(null)
+const deletingProbe = ref(false)
+// Comment thử đang nằm trên page — server nhớ, nên còn sau khi tải lại trang.
+const pendingProbe = ref(null)
+
 // Hai nguồn lấy mã (kieushopee = mã FB/IG, ganma = mã YouTube). Chúng không dùng App ID/Secret
 // và loại trừ nhau — bật cái này thì server tự tắt cái kia, xem ApiConfigController::store().
 const VOUCHER_SOURCES = ['kieushopee', 'ganma']
@@ -67,6 +75,7 @@ function editConfig(config) {
         },
     })
 
+    editingId.value = config.id
     facebookPosts.value = []
     facebookReels.value = []
     postsError.value = null
@@ -94,11 +103,6 @@ function formatPostDate(iso) {
     return iso ? new Date(iso).toLocaleString('vi-VN') : '—'
 }
 
-const probingPost = ref(null)
-const deletingProbe = ref(false)
-// Comment thử đang nằm trên page — server nhớ, nên còn sau khi tải lại trang.
-const pendingProbe = ref(null)
-
 /**
  * Đăng một comment thật lên bài và GIỮ LẠI, trả về đúng URL khách sẽ nhận.
  *
@@ -110,7 +114,7 @@ async function probeComment(postId) {
     if (probingPost.value) return
     probingPost.value = postId
     try {
-        const { data } = await axios.post(`/admin/api-config/${editing.value.id}/probe-comment`, { post_id: postId })
+        const { data } = await axios.post(`/admin/api-config/${editingId.value}/probe-comment`, { post_id: postId })
         pendingProbe.value = { url: data.url, post_id: data.post_id }
         toast.success(data.message)
     } catch (e) {
@@ -124,7 +128,7 @@ async function deleteProbeComment() {
     if (deletingProbe.value) return
     deletingProbe.value = true
     try {
-        const { data } = await axios.delete(`/admin/api-config/${editing.value.id}/probe-comment`)
+        const { data } = await axios.delete(`/admin/api-config/${editingId.value}/probe-comment`)
         pendingProbe.value = null
         toast.success(data.message)
     } catch (e) {
