@@ -42,9 +42,9 @@ class FacebookPageService
 
     /**
      * Đăng comment rồi trả về ['permalink_url' => ..., 'comment_id' => ...] (null nếu thất bại).
-     * comment_id trả về là phần số riêng của comment (không kèm tiền tố post_id) — dùng để ghép
-     * URL ?comment_id=... cho REEL. Với bài thường thì permalink_url mới là thứ được dùng, vì
-     * URL tự ghép mất ?comment_id= khi Facebook chuyển hướng (xem FacebookPostTarget::urlForComment).
+     * comment_id trả về là phần số riêng của comment (không kèm tiền tố post_id) — dùng để
+     * ghép URL ?comment_id=... ở ShortLinkController, chính xác hơn permalink_url dạng
+     * /{actor_id}/posts/{post_id} với app Facebook trên 1 số thiết bị.
      *
      * Xin luôn `permalink_url` ngay trong response của lệnh POST (Graph API hỗ trợ `fields`
      * trên các endpoint tạo object) để tránh phải gọi thêm 1 request GET riêng — bước GET
@@ -76,10 +76,11 @@ class FacebookPageService
                 return null;
             }
 
-            // Graph trả id comment dạng {story_fbid}_{comment_id} (đo trên page thật 20-09-2026:
-            // "122116116489371579_1803565154397590"), nên phần số riêng của comment là đoạn CUỐI.
-            // Trước đây cắt bằng explode('_', $id, 2)[1] nên còn dính tiền tố story — Facebook
-            // không nhận giá trị đó. Lấy đoạn cuối đúng với cả dạng 3 phần nếu Meta đổi shape.
+            // Graph trả id comment dạng {page_id}_{story_fbid}_{comment_id}, nên phần số riêng
+            // của comment là đoạn CUỐI. Trước đây cắt bằng explode('_', $id, 2)[1] nên còn dính
+            // tiền tố story ("333444_999") — Facebook không nhận giá trị đó, mở link ra chỉ tới
+            // bài viết chứ không nhảy xuống đúng bình luận. Lấy đoạn cuối cũng đúng luôn với
+            // dạng 2 phần {post_id}_{comment_id}.
             $fullCommentId = $response->json('id');
             $commentId = $fullCommentId ? Str::afterLast($fullCommentId, '_') : null;
 

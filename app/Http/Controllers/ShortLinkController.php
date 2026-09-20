@@ -394,10 +394,13 @@ class ShortLinkController extends Controller
     }
 
     /**
-     * URL công khai trỏ tới đúng comment. Dạng URL phụ thuộc loại bài đích và hai loại làm
-     * ngược nhau — reel tự ghép /reel/{id}, bài thường dùng thẳng permalink của Graph; xem
-     * FacebookPostTarget::urlForComment để biết vì sao (tóm tắt: page có hai id, tự ghép bằng
-     * id Graph thì Facebook chuyển hướng và rụng mất ?comment_id=).
+     * Ghép URL công khai trỏ tới đúng comment, thay cho permalink_url dạng
+     * /{actor_id}/posts/{post_id} mà Graph API trả về (actor_id lạ, không mở đúng trên app).
+     *
+     * Dạng URL phụ thuộc loại bài đích — reel thì /reel/{id}, bài thường thì
+     * /{page_id}/posts/{story_fbid}; xem FacebookPostTarget để biết đo trên máy thật thì mỗi
+     * loại được/mất gì (tóm tắt: reel mở được app nhưng link trong bình luận reel không bấm
+     * được, nên hiện phải dùng bài viết thường).
      *
      * Lưu ý: chỉ URL thôi là chưa đủ để mở được app — phía client khách phải CHẠM VÀO THẺ <a>
      * thật thì iOS mới chịu kích hoạt universal link (xem openVoucherLink trong Home.vue).

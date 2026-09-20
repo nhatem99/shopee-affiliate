@@ -25,11 +25,9 @@ namespace App\Services;
  *    caption reel bấm được — chưa kiểm chứng.
  *
  *  • BÀI VIẾT THƯỜNG — "{page_id}_{story_fbid}" đúng như Graph API trả về.
- *    Thường mở bằng trình duyệt chứ không bật app, đổi lại link trong bình luận bấm được — đây
- *    chính là cách "link in first comment" mà Facebook khuyến nghị.
- *    URL công khai KHÔNG tự ghép được: page có hai id, và URL công khai dùng id kiểu mới chứ
- *    không dùng id Graph — xem urlForComment(). $canonicalUrl dựng ở đây chỉ còn là lưới an
- *    toàn cho trường hợp Graph không trả permalink.
+ *    URL công khai là /{page_id}/posts/{story_fbid}. Thường mở bằng trình duyệt chứ không bật
+ *    app, đổi lại link trong bình luận bấm được — đây chính là cách "link in first comment"
+ *    mà Facebook khuyến nghị.
  *
  * Cả hai đều nhận comment qua cùng một endpoint POST /{graphId}/comments, chỉ khác cách ghép
  * URL trả cho khách.
@@ -41,8 +39,6 @@ final readonly class FacebookPostTarget
         public string $graphId,
         /** URL công khai của bài, hoặc null nếu không nhận dạng được dạng nhập. */
         public ?string $canonicalUrl,
-        /** Reel hay bài thường — hai loại dựng URL theo hai cách ngược nhau, xem urlForComment(). */
-        public bool $isReel = false,
     ) {}
 
     public static function parse(string $raw): self
@@ -50,7 +46,7 @@ final readonly class FacebookPostTarget
         $raw = trim($raw);
 
         if (preg_match('#(?:^|/)reel/(\d+)#', $raw, $matches)) {
-            return new self($matches[1], "https://www.facebook.com/reel/{$matches[1]}", true);
+            return new self($matches[1], "https://www.facebook.com/reel/{$matches[1]}");
         }
 
         if (preg_match('#^(\d+)_(\d+)$#', $raw, $matches)) {
@@ -77,38 +73,18 @@ final readonly class FacebookPostTarget
     }
 
     /**
-     * URL mà KHÁCH THẬT nhận được sau khi đăng comment.
+     * URL mà KHÁCH THẬT nhận được sau khi đăng comment, rơi về permalink của Graph khi không
+     * dựng được.
      *
-     * Để ở đây làm một chỗ duy nhất vì có hai nơi cần: luồng khách (ShortLinkController) và nút
-     * thử ở /admin/api-config. Hai nơi tự ghép riêng thì nút thử có thể báo "chạy tốt" trên một
-     * URL khác với URL khách thực sự mở — đúng kiểu phép thử vô dụng nhất.
-     *
-     * HAI LOẠI, HAI THỨ TỰ ƯU TIÊN NGƯỢC NHAU:
-     *
-     *  • BÀI THƯỜNG → dùng permalink Graph trả về, KHÔNG tự ghép.
-     *    Đo trên page thật 20-09-2026: page có HAI id. Graph API dùng 1135866952951524, còn URL
-     *    công khai dùng 122113725549371579 (id kiểu mới của Facebook). Tự ghép bằng id Graph ra
-     *    /1135866952951524/posts/{story} — Facebook vẫn nhận ra bài, nhưng phải chuyển hướng về
-     *    URL chuẩn và RỤNG MẤT ?comment_id= trên đường đi, nên khách rơi vào bài chứ không xuống
-     *    đúng bình luận. Permalink của Graph đã mang sẵn actor id đúng VÀ comment_id.
-     *    Không có cách nào suy ra id kiểu mới từ id Graph, mà hỏi thêm một request nữa chỉ để
-     *    lấy nó thì vừa chậm vừa thừa — Graph đã cho sẵn trong response lúc đăng comment.
-     *
-     *  • REEL → tự ghép /reel/{id}?comment_id=, vì permalink của Graph là dạng /posts/ nên mở ra
-     *    trang bài viết chứ không phải giao diện Reels, mất luôn cái lợi duy nhất của reel là
-     *    bật được ứng dụng Facebook (đo trên máy thật 08-09-2026).
+     * Để ở đây làm một chỗ duy nhất vì có hai nơi cần: luồng khách (ShortLinkController) và
+     * nút thử ở /admin/api-config. Hai nơi tự ghép riêng thì nút thử có thể báo "chạy tốt"
+     * trên một URL khác với URL khách thực sự mở — đúng kiểu phép thử vô dụng nhất.
      *
      * @param  array{comment_id?: ?string, permalink_url: string}  $posted
      */
     public static function urlForComment(string $postId, array $posted): string
     {
-        $target = self::parse($postId);
-        $built = $target->commentUrl($posted['comment_id'] ?? null);
-
-        if ($target->isReel) {
-            return $built ?? $posted['permalink_url'];
-        }
-
-        return $posted['permalink_url'] ?: ($built ?? $posted['permalink_url']);
+        return self::parse($postId)->commentUrl($posted['comment_id'] ?? null)
+            ?? $posted['permalink_url'];
     }
 }
