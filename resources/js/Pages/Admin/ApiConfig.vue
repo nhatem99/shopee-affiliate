@@ -93,6 +93,26 @@ function formatPostDate(iso) {
     return iso ? new Date(iso).toLocaleString('vi-VN') : '—'
 }
 
+const probingPost = ref(null)
+
+/**
+ * Đăng một comment thật lên bài rồi xoá ngay. Nút "Kiểm tra kết nối" chỉ đọc thông tin page nên
+ * không chứng minh được quyền ĐĂNG — mà đó mới là thứ cả chế độ đi vòng qua Facebook dựa vào.
+ * Đáng có nút riêng vì chế độ đổi caption reel đã bị Meta đóng, đường comment là đường còn lại.
+ */
+async function probeComment(postId) {
+    if (probingPost.value) return
+    probingPost.value = postId
+    try {
+        const { data } = await axios.post(`/admin/api-config/${editing.value.id}/probe-comment`, { post_id: postId })
+        toast.success(data.message)
+    } catch (e) {
+        toast.error(e.response?.data?.message || 'Không gọi được, thử lại.')
+    } finally {
+        probingPost.value = null
+    }
+}
+
 /**
  * Ô nhập tay giữ những bài KHÔNG có trong danh sách bài gần đây (bài cũ, hoặc reel — API
  * /posts không trả reels). Tách riêng khỏi các ô tick để hai bên không ghi đè nhau: ô tick
@@ -478,10 +498,14 @@ async function testConfig(config) {
                                     :class="editing.meta.target_post_ids.includes(post.id) ? 'border-[var(--color-accent)] bg-[var(--color-peach-soft)]' : 'border-transparent'"
                                     class="flex items-start gap-2 p-2 rounded-lg border cursor-pointer hover:bg-[var(--color-peach-soft)] transition">
                                     <input v-model="editing.meta.target_post_ids" :value="post.id" type="checkbox" class="mt-1 w-4 h-4 accent-[var(--color-accent)] shrink-0" />
-                                    <div class="min-w-0">
+                                    <div class="min-w-0 flex-1">
                                         <p class="text-sm text-[var(--color-ink)] line-clamp-2">{{ post.message || '(Bài viết không có nội dung text)' }}</p>
                                         <p class="text-xs text-[var(--color-muted)] mt-0.5">{{ formatPostDate(post.created_time) }}</p>
                                     </div>
+                                    <button type="button" @click.prevent="probeComment(post.id)" :disabled="probingPost !== null"
+                                        class="shrink-0 text-xs font-bold px-2.5 py-1 rounded-lg border border-[var(--color-line)] text-[var(--color-ink)] bg-[var(--color-surface)] hover:bg-[var(--color-bg)] disabled:opacity-50 transition">
+                                        {{ probingPost === post.id ? 'Đang thử…' : 'Thử comment' }}
+                                    </button>
                                 </label>
                             </div>
 

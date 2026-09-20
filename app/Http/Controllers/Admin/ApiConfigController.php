@@ -145,6 +145,27 @@ class ApiConfigController extends Controller
     }
 
     /**
+     * Nút "Thử comment" cạnh mỗi bài viết: đăng một comment thật rồi xoá ngay. Tách khỏi
+     * testConnection() vì cái đó chỉ đọc thông tin page, không chứng minh được quyền ĐĂNG —
+     * mà quyền đăng mới là thứ cả chế độ này phụ thuộc vào.
+     */
+    public function probeComment(Request $request, ApiConfig $config): JsonResponse
+    {
+        if ($config->platform !== 'facebook') {
+            return response()->json(['ok' => false, 'message' => 'Config này không phải Facebook.'], 422);
+        }
+
+        $validated = $request->validate([
+            'post_id' => ['required', 'string', 'max:128'],
+        ]);
+
+        $result = (new FacebookPageService($config->app_id, $config->app_secret))
+            ->probeComment($validated['post_id']);
+
+        return response()->json($result, $result['ok'] ? 200 : 422);
+    }
+
+    /**
      * Danh sách bài để admin tick ở form sửa cấu hình Facebook, tách sẵn thành hai nhóm vì hai
      * nhóm dùng vào hai việc khác nhau: bài thường để đăng comment, reel để đổi caption.
      *
@@ -161,11 +182,20 @@ class ApiConfigController extends Controller
         $reels = $service->listReels();
         $reelIds = array_flip(array_column($reels, 'id'));
 
-        // Reel đăng thẳng lên feed thì lọt vào cả /posts. Loại nó khỏi nhóm bài thường để một
-        // reel không hiện hai lần ở hai chỗ với hai ý nghĩa khác nhau.
+        // Reel đăng thẳng lên feed thì lọt vào cả /posts. Loại nó khỏi nhóm bài thường vì hai lý
+        // do: một reel không được hiện hai lần ở hai chỗ với hai ý nghĩa khác nhau, và quan
+        // trọng hơn — comment dưới reel có link BẤM KHÔNG ĐƯỢC, tick nhầm là hỏng âm thầm.
+        //
+        // HAI lớp lọc, vì mỗi lớp bắt được một dạng mà lớp kia bỏ sót:
+        //  • media_type: dạng post id {page_id}_{story_id} với story_id KHÁC video id. Đo trên
+        //    page thật 20-09-2026: story 122115295773371579 ứng với video 1560688535789753 —
+        //    lọc theo id không bắt nổi, và đây là dạng phổ biến.
+        //  • id: dạng {page_id}_{video_id}, bắt được cả khi Graph không trả attachments (token
+        //    thiếu quyền, hoặc Meta đổi shape) nên media_type rơi về mặc định 'status'.
         $posts = array_values(array_filter(
             $service->listRecentPosts(),
-            fn (array $post) => ! isset($reelIds[Str::afterLast($post['id'] ?? '', '_')]),
+            fn (array $post) => ($post['media_type'] ?? 'status') !== 'video'
+                && ! isset($reelIds[Str::afterLast($post['id'] ?? '', '_')]),
         ));
 
         return response()->json([

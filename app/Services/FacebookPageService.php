@@ -92,7 +92,8 @@ class FacebookPageService
                 return null;
             }
 
-            return ['permalink_url' => $permalink, 'comment_id' => $commentId];
+            // full_comment_id chỉ dùng để XOÁ (Graph cần id đầy đủ, không nhận đoạn cuối).
+            return ['permalink_url' => $permalink, 'comment_id' => $commentId, 'full_comment_id' => $fullCommentId];
         } catch (\Exception $e) {
             Log::warning('FacebookPageService: lỗi khi đăng comment: '.$e->getMessage(), [
                 'page_id' => $this->pageId,
@@ -100,6 +101,74 @@ class FacebookPageService
             ]);
 
             return null;
+        }
+    }
+
+    /**
+     * Nút "Thử comment" ở /admin/api-config: đăng một comment thật lên bài viết rồi XOÁ NGAY,
+     * để biết đường comment còn sống hay không mà không để lại gì cho khách nhìn thấy.
+     *
+     * Vì sao cần: chế độ đổi caption reel đã bị Meta đóng (19-09-2026), nên comment dưới bài
+     * viết thường là đường duy nhất còn lại để khách đi qua Facebook. Khác cái reel, endpoint
+     * này CÓ trong tài liệu Meta — nhưng "có tài liệu" không đồng nghĩa "đang chạy", và biết
+     * trước bằng một phép thử 2 giây thì hơn là biết sau qua đơn hàng tụt.
+     *
+     * Không chen bước xác minh đọc lại như probeCaptionWrite: Graph trả thẳng comment id, mà
+     * xoá được chính id đó đã đủ chứng minh comment có thật.
+     *
+     * @return array{ok: bool, message: string}
+     */
+    public function probeComment(string $postId): array
+    {
+        $result = $this->postComment($postId, 'Kiểm tra kỹ thuật '.now()->format('H:i:s').' — sẽ xoá ngay.');
+
+        if ($result === null) {
+            return [
+                'ok' => false,
+                'message' => 'Không đăng được comment lên bài '.$postId.'. Chi tiết ở /admin/logs (tìm "FacebookPageService").',
+            ];
+        }
+
+        $fullId = $result['full_comment_id'] ?? null;
+
+        if (! $fullId || ! $this->deleteComment($fullId)) {
+            // Đăng được nhưng xoá hỏng: đường comment SỐNG (tin tốt), nhưng còn một comment
+            // thật nằm trên page — phải nói rõ để admin vào xoá tay, không nuốt.
+            return [
+                'ok' => true,
+                'message' => 'Đăng comment ĐƯỢC — đường này còn sống. NHƯNG xoá không được, vào page xoá tay comment vừa đăng: '
+                    .($result['permalink_url'] ?? $postId),
+            ];
+        }
+
+        return ['ok' => true, 'message' => 'Đăng comment được và đã xoá sạch — đường comment còn sống, dùng được cho chế độ này.'];
+    }
+
+    /**
+     * Xoá một comment. Chỉ dùng cho phép thử ở /admin/api-config — luồng khách không xoá gì,
+     * comment cũ được dùng lại theo sản phẩm.
+     */
+    public function deleteComment(string $fullCommentId): bool
+    {
+        $this->lastError = null;
+
+        try {
+            $response = Http::timeout(15)->delete(
+                'https://graph.facebook.com/'.self::GRAPH_VERSION."/{$fullCommentId}",
+                ['access_token' => $this->token]
+            );
+
+            if (! $response->successful()) {
+                $this->lastError = $response->body();
+
+                return false;
+            }
+
+            return true;
+        } catch (\Exception $e) {
+            $this->lastError = $e->getMessage();
+
+            return false;
         }
     }
 
@@ -219,14 +288,23 @@ class FacebookPageService
         return [];
     }
 
-    /** Lấy danh sách bài viết gần đây trên page — dùng cho admin chọn bài để nhận comment. */
+    /**
+     * Lấy danh sách bài viết gần đây trên page — dùng cho admin chọn bài để nhận comment.
+     *
+     * Xin kèm `attachments{media_type}` vì reel đăng thẳng lên feed cũng lọt vào edge /posts,
+     * mà comment dưới reel thì Facebook hiển thị link thành text thường, BẤM KHÔNG ĐƯỢC (đo
+     * trên máy thật 08-09-2026). Admin tick nhầm một reel vào ô bài viết là cả luồng đi qua
+     * Facebook hỏng âm thầm: comment vẫn đăng thành công, khách vẫn sang Facebook, chỉ là tới
+     * nơi không bấm được gì. `media_type` là thứ duy nhất phân biệt được hai loại — id không
+     * dùng được vì post id của reel là {page_id}_{story_id}, không chứa video id.
+     */
     public function listRecentPosts(int $limit = 25): array
     {
         try {
             $response = Http::timeout(10)->get(
                 'https://graph.facebook.com/'.self::GRAPH_VERSION."/{$this->pageId}/posts",
                 [
-                    'fields' => 'id,message,created_time,permalink_url',
+                    'fields' => 'id,message,created_time,permalink_url,attachments{media_type}',
                     'limit' => $limit,
                     'access_token' => $this->token,
                 ]
@@ -242,7 +320,14 @@ class FacebookPageService
                 return [];
             }
 
-            return $response->json('data') ?? [];
+            return array_map(function (array $post) {
+                // Dọn phẳng ra một khoá `media_type` để phía gọi không phải lần vào mảng lồng.
+                // Bài chỉ có chữ thì không có attachments nào — coi như 'status'.
+                $post['media_type'] = $post['attachments']['data'][0]['media_type'] ?? 'status';
+                unset($post['attachments']);
+
+                return $post;
+            }, $response->json('data') ?? []);
         } catch (\Exception $e) {
             Log::warning('FacebookPageService: lỗi khi lấy danh sách bài viết: '.$e->getMessage(), [
                 'page_id' => $this->pageId,
