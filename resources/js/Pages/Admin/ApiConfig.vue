@@ -82,6 +82,7 @@ async function loadFacebookPosts(configId) {
         const { data } = await axios.get(`/admin/api-config/${configId}/facebook-posts`)
         facebookPosts.value = data.posts
         facebookReels.value = data.reels ?? []
+        pendingProbe.value = data.pendingProbe ?? null
     } catch (e) {
         postsError.value = e.response?.data?.message || 'Không tải được danh sách bài viết.'
     } finally {
@@ -94,22 +95,44 @@ function formatPostDate(iso) {
 }
 
 const probingPost = ref(null)
+const deletingProbe = ref(false)
+// Comment thử đang nằm trên page — server nhớ, nên còn sau khi tải lại trang.
+const pendingProbe = ref(null)
 
 /**
- * Đăng một comment thật lên bài rồi xoá ngay. Nút "Kiểm tra kết nối" chỉ đọc thông tin page nên
- * không chứng minh được quyền ĐĂNG — mà đó mới là thứ cả chế độ đi vòng qua Facebook dựa vào.
- * Đáng có nút riêng vì chế độ đổi caption reel đã bị Meta đóng, đường comment là đường còn lại.
+ * Đăng một comment thật lên bài và GIỮ LẠI, trả về đúng URL khách sẽ nhận.
+ *
+ * Không xoá ngay vì đăng-rồi-xoá chỉ trả lời được "Graph còn cho đăng không". Câu đắt hơn là
+ * "khách mở link ra có tới đúng bình luận không, link trong đó bấm có ăn không" — chỉ máy thật
+ * trả lời được, nên phải giữ comment lại đủ lâu để admin cầm điện thoại mở thử.
  */
 async function probeComment(postId) {
     if (probingPost.value) return
     probingPost.value = postId
     try {
         const { data } = await axios.post(`/admin/api-config/${editing.value.id}/probe-comment`, { post_id: postId })
+        pendingProbe.value = { url: data.url, post_id: data.post_id }
         toast.success(data.message)
     } catch (e) {
         toast.error(e.response?.data?.message || 'Không gọi được, thử lại.')
     } finally {
         probingPost.value = null
+    }
+}
+
+async function deleteProbeComment() {
+    if (deletingProbe.value) return
+    deletingProbe.value = true
+    try {
+        const { data } = await axios.delete(`/admin/api-config/${editing.value.id}/probe-comment`)
+        pendingProbe.value = null
+        toast.success(data.message)
+    } catch (e) {
+        // Xoá hỏng thì GIỮ NGUYÊN cảnh báo: comment vẫn nằm trên page, ẩn đi là để rác mà
+        // không còn chỗ nào nhắc.
+        toast.error(e.response?.data?.message || 'Không xoá được, thử lại.')
+    } finally {
+        deletingProbe.value = false
     }
 }
 
@@ -489,6 +512,21 @@ async function testConfig(config) {
                                 bình luận" và page cũng đỡ bị Facebook đánh dấu spam.
                                 Đang chọn: <b>{{ editing.meta.target_post_ids.length }}</b> mục.
                             </p>
+
+                            <!-- Comment thử đang nằm CÔNG KHAI trên page: phải đập vào mắt cho tới khi được dọn. -->
+                            <div v-if="pendingProbe" class="mb-3 rounded-xl border border-amber-300 bg-amber-50 px-4 py-3">
+                                <p class="text-sm font-bold text-amber-900">Đang có một comment thử trên page — chưa xoá</p>
+                                <p class="text-xs text-amber-800 mt-1">
+                                    Mở link này <b>trên điện thoại</b> (thử cả iPhone lẫn Android): có rơi đúng vào bình luận không,
+                                    và link trong bình luận bấm có ăn không? Đây đúng là link khách sẽ nhận.
+                                </p>
+                                <a :href="pendingProbe.url" target="_blank" rel="noopener"
+                                    class="block mt-2 font-mono text-xs text-[var(--color-accent)] break-all hover:underline">{{ pendingProbe.url }}</a>
+                                <button type="button" @click.prevent="deleteProbeComment" :disabled="deletingProbe"
+                                    class="mt-2 text-xs font-bold px-3 py-1.5 rounded-lg border border-amber-400 text-amber-900 bg-white hover:bg-amber-100 disabled:opacity-50 transition">
+                                    {{ deletingProbe ? 'Đang xoá…' : 'Xoá comment thử' }}
+                                </button>
+                            </div>
 
                             <div v-if="loadingPosts" class="text-sm text-[var(--color-muted)]">Đang tải danh sách bài viết...</div>
                             <div v-else-if="postsError" class="text-sm text-red-600">{{ postsError }}</div>

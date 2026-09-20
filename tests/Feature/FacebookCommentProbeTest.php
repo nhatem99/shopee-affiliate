@@ -3,7 +3,7 @@
 namespace Tests\Feature;
 
 use App\Models\ApiConfig;
-use App\Services\FacebookPageService;
+use App\Services\FacebookCommentProbeService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Http;
 use Tests\TestCase;
@@ -37,23 +37,59 @@ class FacebookCommentProbeTest extends TestCase
         ]);
     }
 
-    private function service(): FacebookPageService
+    private function probe(): FacebookCommentProbeService
     {
-        $config = $this->config();
-
-        return new FacebookPageService($config->app_id, $config->app_secret);
+        return app(FacebookCommentProbeService::class);
     }
 
-    public function test_posts_a_comment_then_deletes_it(): void
+    private function fakePostOk(): void
     {
         Http::fake(fn ($request) => $request->method() === 'DELETE'
             ? Http::response(['success' => true])
-            : Http::response(['id' => self::COMMENT_ID, 'permalink_url' => 'https://facebook.com/c/444']));
+            : Http::response(['id' => self::COMMENT_ID, 'permalink_url' => 'https://facebook.com/permalink/444']));
+    }
 
-        $result = $this->service()->probeComment(self::POST_ID);
+    public function test_returns_the_exact_url_a_real_customer_would_get(): void
+    {
+        $config = $this->config();
+        $this->fakePostOk();
+
+        $result = $this->probe()->post($config, self::POST_ID);
 
         $this->assertTrue($result['ok']);
-        $this->assertStringContainsString('đã xoá sạch', $result['message']);
+
+        // Cả phép thử này chỉ có nghĩa nếu URL trả ra GIỐNG HỆT URL khách nhận. Dạng
+        // /{page_id}/posts/{story_fbid}?comment_id={id} là thứ ShortLinkController dựng qua
+        // FacebookPostTarget::urlForComment — không phải permalink thô của Graph.
+        $this->assertSame(
+            'https://www.facebook.com/111222/posts/333?comment_id=444',
+            $result['url'],
+        );
+    }
+
+    public function test_keeps_the_comment_so_it_can_be_opened_on_a_real_phone(): void
+    {
+        $config = $this->config();
+        $this->fakePostOk();
+
+        $this->probe()->post($config, self::POST_ID);
+
+        // Không được xoá ngay: câu hỏi "khách mở ra có tới đúng bình luận không" chỉ máy thật
+        // trả lời được, mà comment xoá rồi thì không còn gì để mở.
+        Http::assertNotSent(fn ($request) => $request->method() === 'DELETE');
+        $this->assertNotNull($this->probe()->pending($config));
+    }
+
+    public function test_deletes_only_the_remembered_comment_using_its_full_id(): void
+    {
+        $config = $this->config();
+        $this->fakePostOk();
+        $this->probe()->post($config, self::POST_ID);
+
+        $result = $this->probe()->delete($config);
+
+        $this->assertTrue($result['ok']);
+        $this->assertNull($this->probe()->pending($config));
 
         // Phải xoá bằng id ĐẦY ĐỦ — Graph không nhận đoạn cuối ("444"), gửi nhầm là comment
         // thử nghiệm nằm lại trên page thật mà admin tưởng đã dọn.
@@ -61,29 +97,44 @@ class FacebookCommentProbeTest extends TestCase
             || str_contains($request->url(), self::COMMENT_ID));
     }
 
-    public function test_warns_loudly_when_the_comment_was_posted_but_could_not_be_deleted(): void
+    public function test_keeps_remembering_the_comment_when_deleting_it_fails(): void
     {
+        $config = $this->config();
         Http::fake(fn ($request) => $request->method() === 'DELETE'
             ? Http::response(['error' => ['message' => 'cannot delete']], 400)
-            : Http::response(['id' => self::COMMENT_ID, 'permalink_url' => 'https://facebook.com/c/444']));
+            : Http::response(['id' => self::COMMENT_ID, 'permalink_url' => 'https://facebook.com/permalink/444']));
 
-        $result = $this->service()->probeComment(self::POST_ID);
+        $this->probe()->post($config, self::POST_ID);
+        $result = $this->probe()->delete($config);
 
-        // Vẫn là ok=true vì câu hỏi "đường comment còn sống không" đã có đáp án, nhưng phải nói
-        // rõ còn một comment thật nằm lại — nuốt chuyện này là để rác trên page của khách.
-        $this->assertTrue($result['ok']);
-        $this->assertStringContainsString('xoá không được', $result['message']);
-        $this->assertStringContainsString('https://facebook.com/c/444', $result['message']);
+        $this->assertFalse($result['ok']);
+        $this->assertStringContainsString('xoá tay', $result['message']);
+
+        // Quên đi là comment nằm lại trên page mà không còn chỗ nào nhắc, và nút xoá cũng mất
+        // luôn đối tượng để thử lại.
+        $this->assertNotNull($this->probe()->pending($config));
     }
 
     public function test_reports_failure_when_facebook_refuses_the_comment(): void
     {
+        $config = $this->config();
         Http::fake(fn () => Http::response(['error' => ['message' => 'no permission']], 403));
 
-        $result = $this->service()->probeComment(self::POST_ID);
+        $result = $this->probe()->post($config, self::POST_ID);
 
         $this->assertFalse($result['ok']);
-        Http::assertNotSent(fn ($request) => $request->method() === 'DELETE');
+        $this->assertNull($this->probe()->pending($config));
+    }
+
+    public function test_delete_says_so_when_there_is_nothing_pending(): void
+    {
+        $config = $this->config();
+        Http::fake();
+
+        $result = $this->probe()->delete($config);
+
+        $this->assertFalse($result['ok']);
+        Http::assertNothingSent();
     }
 
     public function test_video_posts_are_kept_out_of_the_normal_post_list(): void

@@ -409,7 +409,6 @@ class ShortLinkController extends Controller
      */
     private function commentUrl(array $posted, string $postId): string
     {
-        return FacebookPostTarget::parse($postId)->commentUrl($posted['comment_id'] ?? null)
-            ?? $posted['permalink_url'];
+        return FacebookPostTarget::urlForComment($postId, $posted);
     }
 }

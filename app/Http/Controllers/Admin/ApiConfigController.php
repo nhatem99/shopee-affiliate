@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Admin;
 use App\Http\Controllers\Controller;
 use App\Models\ApiConfig;
 use App\Services\AccessTradeService;
+use App\Services\FacebookCommentProbeService;
 use App\Services\FacebookPageService;
 use App\Services\GanmaService;
 use App\Services\KieuShopeeService;
@@ -145,11 +146,13 @@ class ApiConfigController extends Controller
     }
 
     /**
-     * Nút "Thử comment" cạnh mỗi bài viết: đăng một comment thật rồi xoá ngay. Tách khỏi
-     * testConnection() vì cái đó chỉ đọc thông tin page, không chứng minh được quyền ĐĂNG —
-     * mà quyền đăng mới là thứ cả chế độ này phụ thuộc vào.
+     * Nút "Thử comment" cạnh mỗi bài viết: đăng một comment thật và GIỮ LẠI, trả về đúng URL
+     * khách sẽ nhận để admin mở trên điện thoại. Tách khỏi testConnection() vì cái đó chỉ đọc
+     * thông tin page, không chứng minh được quyền ĐĂNG — mà quyền đăng mới là thứ cả chế độ
+     * này phụ thuộc vào, và cũng không trả lời được câu đắt hơn: khách mở link ra có tới đúng
+     * bình luận không.
      */
-    public function probeComment(Request $request, ApiConfig $config): JsonResponse
+    public function probeComment(Request $request, ApiConfig $config, FacebookCommentProbeService $probe): JsonResponse
     {
         if ($config->platform !== 'facebook') {
             return response()->json(['ok' => false, 'message' => 'Config này không phải Facebook.'], 422);
@@ -159,8 +162,19 @@ class ApiConfigController extends Controller
             'post_id' => ['required', 'string', 'max:128'],
         ]);
 
-        $result = (new FacebookPageService($config->app_id, $config->app_secret))
-            ->probeComment($validated['post_id']);
+        $result = $probe->post($config, $validated['post_id']);
+
+        return response()->json($result, $result['ok'] ? 200 : 422);
+    }
+
+    /** Xoá comment thử mà nút trên vừa để lại. Chỉ xoá được đúng cái đó — xem FacebookCommentProbeService. */
+    public function deleteProbeComment(ApiConfig $config, FacebookCommentProbeService $probe): JsonResponse
+    {
+        if ($config->platform !== 'facebook') {
+            return response()->json(['ok' => false, 'message' => 'Config này không phải Facebook.'], 422);
+        }
+
+        $result = $probe->delete($config);
 
         return response()->json($result, $result['ok'] ? 200 : 422);
     }
@@ -200,6 +214,8 @@ class ApiConfigController extends Controller
 
         return response()->json([
             'posts' => $posts,
+            // Comment thử còn sót lại từ lần bấm trước, để trang cảnh báo kể cả sau khi tải lại.
+            'pendingProbe' => app(FacebookCommentProbeService::class)->pending($config),
             // Reel dùng field `description` cho caption — đổi tên thành `message` để phía Vue
             // hiển thị hai nhóm bằng cùng một khuôn.
             'reels' => array_map(fn (array $reel) => [

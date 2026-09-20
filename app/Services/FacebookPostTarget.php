@@ -71,4 +71,20 @@ final readonly class FacebookPostTarget
 
         return $this->canonicalUrl.'?'.http_build_query(['comment_id' => $commentId]);
     }
+
+    /**
+     * URL mà KHÁCH THẬT nhận được sau khi đăng comment, rơi về permalink của Graph khi không
+     * dựng được.
+     *
+     * Để ở đây làm một chỗ duy nhất vì có hai nơi cần: luồng khách (ShortLinkController) và
+     * nút thử ở /admin/api-config. Hai nơi tự ghép riêng thì nút thử có thể báo "chạy tốt"
+     * trên một URL khác với URL khách thực sự mở — đúng kiểu phép thử vô dụng nhất.
+     *
+     * @param  array{comment_id?: ?string, permalink_url: string}  $posted
+     */
+    public static function urlForComment(string $postId, array $posted): string
+    {
+        return self::parse($postId)->commentUrl($posted['comment_id'] ?? null)
+            ?? $posted['permalink_url'];
+    }
 }

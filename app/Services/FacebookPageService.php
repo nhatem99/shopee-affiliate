@@ -105,46 +105,6 @@ class FacebookPageService
     }
 
     /**
-     * Nút "Thử comment" ở /admin/api-config: đăng một comment thật lên bài viết rồi XOÁ NGAY,
-     * để biết đường comment còn sống hay không mà không để lại gì cho khách nhìn thấy.
-     *
-     * Vì sao cần: chế độ đổi caption reel đã bị Meta đóng (19-09-2026), nên comment dưới bài
-     * viết thường là đường duy nhất còn lại để khách đi qua Facebook. Khác cái reel, endpoint
-     * này CÓ trong tài liệu Meta — nhưng "có tài liệu" không đồng nghĩa "đang chạy", và biết
-     * trước bằng một phép thử 2 giây thì hơn là biết sau qua đơn hàng tụt.
-     *
-     * Không chen bước xác minh đọc lại như probeCaptionWrite: Graph trả thẳng comment id, mà
-     * xoá được chính id đó đã đủ chứng minh comment có thật.
-     *
-     * @return array{ok: bool, message: string}
-     */
-    public function probeComment(string $postId): array
-    {
-        $result = $this->postComment($postId, 'Kiểm tra kỹ thuật '.now()->format('H:i:s').' — sẽ xoá ngay.');
-
-        if ($result === null) {
-            return [
-                'ok' => false,
-                'message' => 'Không đăng được comment lên bài '.$postId.'. Chi tiết ở /admin/logs (tìm "FacebookPageService").',
-            ];
-        }
-
-        $fullId = $result['full_comment_id'] ?? null;
-
-        if (! $fullId || ! $this->deleteComment($fullId)) {
-            // Đăng được nhưng xoá hỏng: đường comment SỐNG (tin tốt), nhưng còn một comment
-            // thật nằm trên page — phải nói rõ để admin vào xoá tay, không nuốt.
-            return [
-                'ok' => true,
-                'message' => 'Đăng comment ĐƯỢC — đường này còn sống. NHƯNG xoá không được, vào page xoá tay comment vừa đăng: '
-                    .($result['permalink_url'] ?? $postId),
-            ];
-        }
-
-        return ['ok' => true, 'message' => 'Đăng comment được và đã xoá sạch — đường comment còn sống, dùng được cho chế độ này.'];
-    }
-
-    /**
      * Xoá một comment. Chỉ dùng cho phép thử ở /admin/api-config — luồng khách không xoá gì,
      * comment cũ được dùng lại theo sản phẩm.
      */
