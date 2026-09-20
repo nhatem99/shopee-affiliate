@@ -199,6 +199,7 @@ Route::middleware(['auth', 'auth.admin'])->prefix('admin')->name('admin.')->grou
     Route::get('/scheduler', [SchedulerController::class, 'index'])->name('scheduler');
     Route::post('/scheduler/run', [SchedulerController::class, 'run'])->name('scheduler.run');
     Route::post('/scheduler/reel-caption-probe', [SchedulerController::class, 'probeReelCaption'])->name('scheduler.reel-probe');
+    Route::post('/scheduler/reel-caption-restore', [SchedulerController::class, 'restoreReelCaption'])->name('scheduler.reel-restore');
     // Dán lệnh artisan chạy ngay trên web (chỉ lệnh trong danh sách cho phép) — cũng để khỏi SSH.
     Route::get('/console', [ConsoleController::class, 'index'])->name('console');
     Route::post('/console/run', [ConsoleController::class, 'run'])->name('console.run');

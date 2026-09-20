@@ -5,6 +5,7 @@ namespace App\Services;
 use App\Models\ApiConfig;
 use App\Models\FacebookReelSlot;
 use App\Models\ShortLink;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
 
@@ -52,9 +53,20 @@ class FacebookReelSyncService
     }
 
     /**
-     * Kiểm tra đường ĐỔI caption reel còn sống hay không, bằng cách ghi lại ĐÚNG caption đang
-     * có rồi đọc lại xác nhận. Ghi đè bằng chính nội dung cũ nên thành công thì reel không đổi
-     * gì, thất bại thì cũng không đổi gì — chạy lúc nào cũng an toàn.
+     * Kiểm tra đường ĐỔI caption reel còn sống hay không.
+     *
+     * HAI CHẾ ĐỘ, vì có hai giả thuyết khớp với cùng một bộ dữ liệu:
+     *
+     *  • $withLink = true (mặc định): ghi lại ĐÚNG caption đang có rồi đọc lại xác nhận. Thành
+     *    công thì reel không đổi gì, thất bại cũng không đổi gì — chạy lúc nào cũng an toàn.
+     *
+     *  • $withLink = false: ghi một caption tạm KHÔNG CHỨA LINK, tức reel BỊ ĐỔI NỘI DUNG THẬT.
+     *    Cần chế độ này vì mọi caption reel của page đều chứa tietkiemvi.com, nên lần thử nào
+     *    cũng vừa thử "Meta có cho ghi lên reel không" vừa thử "Meta có cho đăng link này
+     *    không" — hai thứ khác hẳn nhau mà không tách ra được. Đo 20-09-2026 trên comment:
+     *    comment CÓ link lên reel bị từ chối code 1. Nếu caption KHÔNG link ghi được thì thứ bị
+     *    chặn là LINK chứ không phải endpoint, và kết luận "Meta đóng API sửa caption" là sai.
+     *    Caption gốc được nhớ lại để khôi phục bằng restoreCaption().
      *
      * Lý do cần nút này thay vì `php artisan facebook:reel-caption`: endpoint POST /{reel_id}
      * với field `description` KHÔNG có trong tài liệu Meta (xem FacebookPageService::updateReelCaption),
@@ -64,7 +76,7 @@ class FacebookReelSyncService
      *
      * @return array{ok: bool, message: string}
      */
-    public function probeCaptionWrite(string $reelId): array
+    public function probeCaptionWrite(string $reelId, bool $withLink = true): array
     {
         $config = ApiConfig::where('platform', 'facebook')->where('is_active', true)->first();
 
@@ -95,10 +107,15 @@ class FacebookReelSyncService
             return ['ok' => false, 'message' => 'Reel này đang không có caption nên không thử ghi đè được — chọn reel khác.'];
         }
 
-        if (! $service->updateReelCaption($reelId, $before)) {
+        // Caption tạm cố ý KHÔNG có link nào, kể cả tên miền trần: Facebook nhận ra
+        // "tietkiemvi.com" không cần http:// đứng trước, nên bỏ mỗi "https://" là chưa đủ.
+        $sending = $withLink ? $before : '🔧 Kiểm tra kỹ thuật — '.now()->format('H:i d/m/Y');
+        $kind = $withLink ? '(caption CÓ link — ghi lại nguyên văn)' : '(caption KHÔNG link — nội dung reel BỊ ĐỔI)';
+
+        if (! $service->updateReelCaption($reelId, $sending)) {
             return [
                 'ok' => false,
-                'message' => 'Meta TỪ CHỐI đổi caption (caption trên reel không đổi). Graph trả: '
+                'message' => 'Meta TỪ CHỐI đổi caption '.$kind.'. Caption trên reel không đổi. Graph trả: '
                     .Str::limit((string) $service->lastError, 200),
             ];
         }
@@ -106,11 +123,65 @@ class FacebookReelSyncService
         // Graph trả {"success":true} được cả khi không đổi gì, nên phải đọc lại mới chắc.
         $after = $service->fetchReelCaption($reelId);
 
-        if ($after !== $before) {
-            return ['ok' => false, 'message' => 'Graph báo thành công nhưng đọc lại thấy caption đã khác — không tin được kết quả ghi.'];
+        if ($after !== $sending) {
+            return ['ok' => false, 'message' => 'Graph báo thành công nhưng đọc lại thấy caption khác thứ vừa gửi — không tin được kết quả ghi.'];
         }
 
-        return ['ok' => true, 'message' => 'Đổi caption vẫn chạy — Meta nhận lệnh ghi và đọc lại khớp nguyên văn.'];
+        if (! $withLink) {
+            // Nhớ caption gốc TRƯỚC khi báo thành công: admin đóng tab ngay sau đó thì reel đang
+            // mang caption kiểm tra kỹ thuật mà không còn gì để lần về nội dung cũ.
+            Cache::put($this->backupKey($reelId), $before, now()->addDays(7));
+
+            return [
+                'ok' => true,
+                'message' => 'GHI ĐƯỢC caption không link — nghĩa là Meta KHÔNG chặn endpoint, thứ bị chặn là LINK trong nội dung. '
+                    .'Caption reel hiện đang là nội dung kiểm tra kỹ thuật, bấm "Khôi phục caption" để trả lại như cũ.',
+            ];
+        }
+
+        return ['ok' => true, 'message' => 'Đổi caption vẫn chạy '.$kind.' — Meta nhận lệnh ghi và đọc lại khớp nguyên văn.'];
+    }
+
+    /**
+     * Trả caption reel về đúng nội dung trước khi bấm thử không-link.
+     *
+     * @return array{ok: bool, message: string}
+     */
+    public function restoreCaption(string $reelId): array
+    {
+        $config = ApiConfig::where('platform', 'facebook')->where('is_active', true)->first();
+        $original = Cache::get($this->backupKey($reelId));
+
+        if (! $config || ! is_string($original) || $original === '') {
+            return ['ok' => false, 'message' => 'Không có caption gốc nào đang lưu cho reel này.'];
+        }
+
+        $service = new FacebookPageService($config->app_id, $config->app_secret);
+
+        if (! $service->updateReelCaption($reelId, $original)) {
+            // KHÔNG xoá bản lưu: còn giữ thì admin còn bấm lại được và trang còn hiện cảnh báo.
+            // Đây đúng là ca dễ xảy ra nhất — caption gốc chứa link, mà link mới là thứ bị chặn.
+            return [
+                'ok' => false,
+                'message' => 'Khôi phục THẤT BẠI, reel vẫn đang mang caption kiểm tra kỹ thuật — nhiều khả năng vì caption gốc có chứa link. '
+                    .'Vào page sửa tay. Graph trả: '.Str::limit((string) $service->lastError, 200),
+            ];
+        }
+
+        Cache::forget($this->backupKey($reelId));
+
+        return ['ok' => true, 'message' => 'Đã trả caption về như cũ.'];
+    }
+
+    /** Caption gốc đang được giữ cho reel này, nếu có — để trang admin hiện nút khôi phục. */
+    public function captionBackup(string $reelId): ?string
+    {
+        return Cache::get($this->backupKey($reelId));
+    }
+
+    private function backupKey(string $reelId): string
+    {
+        return "fb_reel_caption_backup:{$reelId}";
     }
 
     /** @return array{reel_id: string, status: string, product_key: ?string, error: ?string} */

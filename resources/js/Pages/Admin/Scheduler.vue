@@ -16,6 +16,8 @@ const props = defineProps({
 const running = ref(null)
 const refreshing = ref(false)
 const probing = ref(null)
+// Ghi thử kèm link hay không — xem công tắc dưới bảng slot reel.
+const probeWithLink = ref(true)
 
 // Dòng lịch sử nào đang mở output.
 const expanded = ref(new Set())
@@ -47,11 +49,26 @@ function runNow(command) {
 function probe(reelId) {
     if (probing.value) return
     probing.value = reelId
-    router.post('/admin/scheduler/reel-caption-probe', { reel_id: reelId }, {
+    router.post('/admin/scheduler/reel-caption-probe', { reel_id: reelId, with_link: probeWithLink.value }, {
         preserveScroll: true,
         onSuccess: (page) => {
             const f = page.props.flash || {}
             f.error ? toast.error(f.error) : toast.success(f.success || 'Ghi thử xong.')
+        },
+        onError: () => toast.error('Không gọi được, thử lại.'),
+        onFinish: () => { probing.value = null },
+    })
+}
+
+/** Trả caption về nội dung trước khi bấm thử không-link. */
+function restoreCaption(reelId) {
+    if (probing.value) return
+    probing.value = reelId
+    router.post('/admin/scheduler/reel-caption-restore', { reel_id: reelId }, {
+        preserveScroll: true,
+        onSuccess: (page) => {
+            const f = page.props.flash || {}
+            f.error ? toast.error(f.error) : toast.success(f.success || 'Đã khôi phục.')
         },
         onError: () => toast.error('Không gọi được, thử lại.'),
         onFinish: () => { probing.value = null },
@@ -186,7 +203,23 @@ async function copyCron() {
         <!-- Slot reel -->
         <h2 class="text-base font-bold text-[var(--color-ink)] mb-1">Slot reel Facebook</h2>
         <p class="text-xs text-[var(--color-muted)] mb-3">Reel nào đang hiện link sản phẩm nào — job <span class="font-mono">facebook:sync-reels</span> đọc caption thật 10 phút/lần để đối soát.</p>
-        <p class="text-xs text-[var(--color-muted)] mb-3">Nút <b>Thử ghi</b> ghi lại đúng caption đang có để biết Meta còn cho đổi caption reel không — thành công thì reel không đổi gì, thất bại thì cũng không đổi gì.</p>
+        <p class="text-xs text-[var(--color-muted)] mb-2">Nút <b>Thử ghi</b> ghi lại đúng caption đang có để biết Meta còn cho đổi caption reel không — thành công thì reel không đổi gì, thất bại thì cũng không đổi gì.</p>
+
+        <!-- Mọi caption reel của page đều chứa tietkiemvi.com, nên lần thử nào cũng đồng thời thử
+             hai thứ khác hẳn nhau: "Meta có cho ghi lên reel không" và "Meta có cho đăng link này
+             không". Bỏ tick để tách chúng ra. -->
+        <label class="flex items-start gap-2 mb-3 p-2.5 rounded-xl border border-[var(--color-line)] bg-[var(--color-surface)] cursor-pointer max-w-3xl">
+            <input v-model="probeWithLink" type="checkbox" class="mt-0.5 w-4 h-4 accent-[var(--color-accent)] shrink-0" />
+            <span class="text-xs text-[var(--color-ink)]">
+                Ghi thử bằng caption hiện tại (<b>có chứa link</b>)
+                <span class="block text-[var(--color-muted)] mt-0.5">
+                    Bỏ tick để ghi một caption <b>không có link nào</b>. Ghi được nghĩa là Meta không chặn
+                    endpoint, thứ bị chặn là link trong nội dung — và kết luận "Meta đóng API sửa caption" là sai.
+                    <b class="text-amber-700">Lưu ý: kiểu này ĐỔI THẬT nội dung reel</b>, caption gốc được lưu lại
+                    và có nút khôi phục ngay ở dòng tương ứng.
+                </span>
+            </span>
+        </label>
         <div class="bg-[var(--color-surface)] rounded-2xl border border-[var(--color-line)] overflow-hidden mb-6">
             <div class="overflow-x-auto">
                 <table class="w-full text-sm">
@@ -225,6 +258,11 @@ async function copyCron() {
                                 <button @click="probe(s.reel_id)" :disabled="probing !== null"
                                     class="text-xs font-bold px-3 py-1.5 rounded-lg border border-[var(--color-line)] text-[var(--color-ink)] hover:bg-[var(--color-bg)] disabled:opacity-50 transition">
                                     {{ probing === s.reel_id ? 'Đang thử…' : 'Thử ghi' }}
+                                </button>
+                                <!-- Reel đang mang caption kiểm tra kỹ thuật: phải đập vào mắt tới khi dọn xong. -->
+                                <button v-if="s.has_caption_backup" @click="restoreCaption(s.reel_id)" :disabled="probing !== null"
+                                    class="block ml-auto mt-1.5 text-xs font-bold px-3 py-1.5 rounded-lg border border-amber-400 text-amber-900 bg-amber-50 hover:bg-amber-100 disabled:opacity-50 transition">
+                                    Khôi phục caption
                                 </button>
                             </td>
                         </tr>

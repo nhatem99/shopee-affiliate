@@ -24,6 +24,16 @@ class FacebookReelCaptionProbeTest extends TestCase
 
     private const CAPTION = "https://tietkiemvi.com/go/abc\n\n🔥 Áo Hoodie";
 
+    /** Caption vừa được GHI lên Facebook — stub đọc lại trả đúng nó, y như Graph thật. */
+    private ?string $sentCaption = null;
+
+    private function recordSentCaption($request): mixed
+    {
+        $this->sentCaption = (string) $request['description'];
+
+        return Http::response(['success' => true]);
+    }
+
     private function config(array $reels = ['reel/111']): ApiConfig
     {
         return ApiConfig::create([
@@ -52,6 +62,74 @@ class FacebookReelCaptionProbeTest extends TestCase
         // đoán này tự nó phá nội dung reel đang chạy.
         Http::assertSent(fn ($request) => $request->method() !== 'POST'
             || $request['description'] === self::CAPTION);
+    }
+
+    public function test_link_free_probe_sends_a_caption_with_no_link_and_remembers_the_original(): void
+    {
+        $this->config();
+        Http::fake(fn ($request) => $request->method() === 'GET'
+            ? Http::response(['id' => '111', 'description' => $this->sentCaption ?? self::CAPTION])
+            : $this->recordSentCaption($request));
+
+        $result = app(FacebookReelSyncService::class)->probeCaptionWrite('111', withLink: false);
+
+        $this->assertTrue($result['ok']);
+
+        // Caption gửi đi phải sạch link HOÀN TOÀN. Bỏ mỗi "https://" là chưa đủ — Facebook nhận
+        // ra "tietkiemvi.com" không cần scheme đứng trước, nên phép thử sẽ vẫn dính biến cũ.
+        $this->assertStringNotContainsString('tietkiemvi', (string) $this->sentCaption);
+        $this->assertStringNotContainsString('http', (string) $this->sentCaption);
+
+        // Và caption gốc phải được giữ TRƯỚC khi báo thành công: admin đóng tab ngay sau đó thì
+        // reel đang mang caption kiểm tra kỹ thuật mà không còn gì để lần về nội dung cũ.
+        $this->assertSame(self::CAPTION, app(FacebookReelSyncService::class)->captionBackup('111'));
+    }
+
+    public function test_restore_puts_the_original_caption_back(): void
+    {
+        $this->config();
+        Http::fake(fn ($request) => $request->method() === 'GET'
+            ? Http::response(['id' => '111', 'description' => $this->sentCaption ?? self::CAPTION])
+            : $this->recordSentCaption($request));
+
+        $reels = app(FacebookReelSyncService::class);
+        $reels->probeCaptionWrite('111', withLink: false);
+
+        $result = $reels->restoreCaption('111');
+
+        $this->assertTrue($result['ok']);
+        $this->assertSame(self::CAPTION, $this->sentCaption);
+        $this->assertNull($reels->captionBackup('111'));
+    }
+
+    public function test_restore_keeps_the_backup_when_facebook_refuses(): void
+    {
+        $this->config();
+        $this->sentCaption = null;
+        Http::fake(function ($request) {
+            if ($request->method() === 'GET') {
+                return Http::response(['id' => '111', 'description' => $this->sentCaption ?? self::CAPTION]);
+            }
+
+            // Ca dễ xảy ra nhất: caption gốc chứa link, mà link mới là thứ đang bị chặn.
+            if (str_contains((string) $request['description'], 'tietkiemvi')) {
+                return Http::response(['error' => ['message' => 'An unknown error has occurred.', 'code' => 1]], 500);
+            }
+
+            return $this->recordSentCaption($request);
+        });
+
+        $reels = app(FacebookReelSyncService::class);
+        $reels->probeCaptionWrite('111', withLink: false);
+
+        $result = $reels->restoreCaption('111');
+
+        $this->assertFalse($result['ok']);
+        $this->assertStringContainsString('sửa tay', $result['message']);
+
+        // Giữ bản lưu thì admin còn bấm lại được và trang còn hiện cảnh báo; quên đi là reel
+        // nằm lại với caption kiểm tra kỹ thuật mà không còn chỗ nào nhắc.
+        $this->assertSame(self::CAPTION, $reels->captionBackup('111'));
     }
 
     public function test_says_meta_refused_when_the_undocumented_write_endpoint_is_dead(): void

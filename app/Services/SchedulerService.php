@@ -147,6 +147,9 @@ class SchedulerService
             'synced_at' => $slot->synced_at?->toDateTimeString(),
             'synced_human' => self::ago($slot->synced_at),
             'sync_error' => $slot->sync_error,
+            // Có caption gốc đang giữ nghĩa là reel này đang mang caption kiểm tra kỹ thuật —
+            // trang phải hiện nút khôi phục cho tới khi dọn xong.
+            'has_caption_backup' => app(FacebookReelSyncService::class)->captionBackup($slot->reel_id) !== null,
         ])->all();
     }
 
