@@ -41,6 +41,13 @@ class SecurityHeaders
                 // Ảnh sản phẩm đến từ CDN Shopee/Tiki hoặc bất kỳ site nào khách dán link (OpenGraph),
                 // không thể giới hạn về một danh sách domain cố định.
                 "img-src 'self' https: data:",
+                // Video huong dan o /huong-dan nhung tu YouTube/TikTok/Facebook. Thieu dong nay
+                // thi frame-src roi ve default-src 'self' va iframe bi chan sach — o local CSP
+                // tat nen van chay ngon, chi production moi trang trang, rat de tuong da xong.
+                'frame-src https://www.youtube-nocookie.com https://www.youtube.com https://www.tiktok.com https://www.facebook.com',
+                // File video admin tu tai len nam trong public/uploads ('self'); https: cho
+                // truong hop dat file o CDN/hosting khac, blob: cho trinh phat cua trinh duyet.
+                "media-src 'self' https: blob:",
                 "connect-src 'self'",
                 "object-src 'none'",
                 "base-uri 'self'",

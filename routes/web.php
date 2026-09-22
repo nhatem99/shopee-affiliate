@@ -24,6 +24,7 @@ use App\Http\Controllers\Auth\LoginController;
 use App\Http\Controllers\Auth\RegisterController;
 use App\Http\Controllers\BlogController;
 use App\Http\Controllers\ChatController;
+use App\Http\Controllers\GuideController;
 use App\Http\Controllers\NotificationController;
 use App\Http\Controllers\OrderHistoryController;
 use App\Http\Controllers\ProfileController;
@@ -119,6 +120,9 @@ Route::get('/hoan-tien', function (Request $request, CashbackService $cashback, 
     ]);
 })->name('cashback.info');
 
+// Huong dan lay ma — trang cong khai, co URL rieng de dan vao bai dang Facebook/Zalo.
+Route::get('/huong-dan', [GuideController::class, 'index'])->name('guide');
+
 // Blog
 Route::get('/blog', [BlogController::class, 'index'])->name('blog.index');
 Route::get('/blog/{slug}', [BlogController::class, 'show'])->name('blog.show');
@@ -187,6 +191,8 @@ Route::middleware(['auth', 'auth.admin'])->prefix('admin')->name('admin.')->grou
     Route::post('/chats/{conversation}/reply', [AdminChatController::class, 'reply'])->middleware('throttle:chat')->name('chats.reply');
     Route::get('/settings', [SettingsController::class, 'index'])->name('settings');
     Route::post('/settings', [SettingsController::class, 'update'])->name('settings.update');
+    Route::post('/settings/guide-video', [SettingsController::class, 'updateGuideVideo'])->name('settings.guide-video');
+    Route::delete('/settings/guide-video', [SettingsController::class, 'destroyGuideVideo'])->name('settings.guide-video.destroy');
     // Kho mẫu bài đăng để admin copy đi giới thiệu web (nhóm Facebook, Zalo, TikTok...).
     Route::get('/promo', [PromoContentController::class, 'index'])->name('promo');
     Route::post('/promo', [PromoContentController::class, 'update'])->name('promo.update');

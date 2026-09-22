@@ -15,6 +15,8 @@ const props = defineProps({
     historyRebuyEnabled: { type: Boolean, default: false },
     fbigWindowAutoSwitch: { type: Boolean, default: false },
     leaderboardDemo: { type: Boolean, default: true },
+    // { url, fileName, video, maxUploadMb } — xem GuideVideoService::adminState().
+    guideVideo: { type: Object, default: () => ({ url: '', fileName: null, video: null, maxUploadMb: 0 }) },
     communityUrl: { type: String, default: '' },
     messengerUrl: { type: String, default: '' },
     supportChatEnabled: { type: Boolean, default: true },
@@ -40,6 +42,8 @@ const fbigWindowAutoSwitch = ref(props.fbigWindowAutoSwitch)
 const savingFbigAutoSwitch = ref(false)
 const leaderboardDemo = ref(props.leaderboardDemo)
 const savingLeaderboardDemo = ref(false)
+const guideVideoUrl = ref(props.guideVideo?.url ?? '')
+const savingGuideVideo = ref(false)
 const communityUrl = ref(props.communityUrl)
 const savingCommunityUrl = ref(false)
 const messengerUrl = ref(props.messengerUrl)
@@ -63,6 +67,7 @@ watch(() => props.festiveDecor, (v) => { festiveDecor.value = v })
 watch(() => props.historyRebuyEnabled, (v) => { historyRebuyEnabled.value = v })
 watch(() => props.fbigWindowAutoSwitch, (v) => { fbigWindowAutoSwitch.value = v })
 watch(() => props.leaderboardDemo, (v) => { leaderboardDemo.value = v })
+watch(() => props.guideVideo, (v) => { guideVideoUrl.value = v?.url ?? '' })
 watch(() => props.communityUrl, (v) => { communityUrl.value = v })
 watch(() => props.messengerUrl, (v) => { messengerUrl.value = v })
 watch(() => props.supportChatEnabled, (v) => { supportChatEnabled.value = v })
@@ -207,6 +212,78 @@ function toggleLeaderboardDemo() {
             toast.error('Không lưu được cài đặt, vui lòng thử lại.')
         },
         onFinish: () => { savingLeaderboardDemo.value = false },
+    })
+}
+
+// --- Video hướng dẫn lấy mã (/huong-dan) — xem GuideVideoService ---
+// Một nguồn sống tại một thời điểm: lưu link thì file cũ bị xoá, tải file thì link cũ bị xoá.
+// Nhãn nói rõ đang dùng nguồn nào để admin không phải đoán sau khi đổi qua đổi lại.
+const guideVideoLabel = computed(() => {
+    const provider = props.guideVideo?.video?.provider
+
+    if (!provider) return 'Chưa đặt video — trang /huong-dan chỉ có phần hướng dẫn bằng chữ.'
+
+    if (provider === 'upload') return `Đang dùng file tải lên: ${props.guideVideo.fileName}`
+
+    return {
+        youtube: 'Đang dùng link YouTube.',
+        tiktok: 'Đang dùng link TikTok.',
+        facebook: 'Đang dùng link Facebook.',
+        external: 'Đang dùng link file video bên ngoài.',
+    }[provider] ?? 'Đang dùng link video.'
+})
+
+function saveGuideVideoUrl() {
+    savingGuideVideo.value = true
+
+    router.post('/admin/settings/guide-video', { video_url: guideVideoUrl.value.trim() }, {
+        preserveScroll: true,
+        onSuccess: () => toast.success(guideVideoUrl.value.trim()
+            ? 'Đã lưu link video — mở /huong-dan xem thử.'
+            : 'Đã gỡ video khỏi trang hướng dẫn.'),
+        onError: (errors) => toast.error(errors.video_url || 'Không lưu được link, vui lòng thử lại.'),
+        onFinish: () => { savingGuideVideo.value = false },
+    })
+}
+
+// Chọn file xong là tải lên luôn, cố ý không có nút "Lưu" riêng: ô chọn file không giữ lại lựa
+// chọn sau khi trang tải lại, nên một nút Lưu rời chỉ thêm một chỗ để quên bấm.
+function uploadGuideVideo(event) {
+    const input = event.target
+    const file = input.files?.[0]
+
+    if (!file) return
+
+    savingGuideVideo.value = true
+
+    router.post('/admin/settings/guide-video', { video_file: file }, {
+        preserveScroll: true,
+        forceFormData: true,
+        onSuccess: () => toast.success('Đã tải video lên — mở /huong-dan xem thử.'),
+        // File nặng hơn post_max_size chết ở tầng PHP trước khi vào validate, nên không phải lúc
+        // nào cũng có errors.video_file — câu dự phòng phải nhắc luôn khả năng file quá nặng.
+        onError: (errors) => toast.error(errors.video_file
+            || `Không tải lên được — thử file nhẹ hơn ${props.guideVideo?.maxUploadMb ?? 0} MB.`),
+        onFinish: () => {
+            savingGuideVideo.value = false
+            // Reset để lần sau chọn lại ĐÚNG file đó vẫn bắn ra change (lần trước lỗi thì phải
+            // thử lại được ngay, không phải đi chọn file khác rồi chọn về).
+            input.value = ''
+        },
+    })
+}
+
+function removeGuideVideo() {
+    savingGuideVideo.value = true
+
+    router.delete('/admin/settings/guide-video', {
+        preserveScroll: true,
+        onSuccess: () => {
+            guideVideoUrl.value = ''
+            toast.success('Đã gỡ video khỏi trang hướng dẫn.')
+        },
+        onError: () => toast.error('Không gỡ được, vui lòng thử lại.'),
+        onFinish: () => { savingGuideVideo.value = false },
     })
 }
 
@@ -689,6 +766,76 @@ function saveCashbackDisplayRate() {
                             ? `Đang tặng ${Number(welcomeBonusAmount).toLocaleString('vi-VN')} đ cho mỗi tài khoản mới.`
                             : 'Đang tắt — tài khoản mới không được thưởng.' }}
                     </span>
+                </div>
+            </div>
+
+            <div class="bg-[var(--color-surface)] rounded-2xl border border-[var(--color-line)] p-6">
+                <h2 class="font-bold text-[var(--color-ink)] mb-1">🎬 Video hướng dẫn lấy mã</h2>
+                <p class="text-sm text-[var(--color-muted)] leading-relaxed mb-4">
+                    Hiện ở đầu trang công khai
+                    <a href="/huong-dan" target="_blank" rel="noopener" class="font-mono text-xs text-[var(--color-accent)] underline underline-offset-2">/huong-dan</a>
+                    — dán link đó vào bài đăng Facebook/Zalo hoặc gửi cho khách đang bí ở bước kích hoạt mã.
+                    Chọn <strong class="text-[var(--color-ink)]">một trong hai</strong> cách bên dưới:
+                    đặt cách này thì cách kia tự bị gỡ. Để trống cả hai thì trang vẫn chạy, chỉ còn phần hướng dẫn bằng chữ.
+                </p>
+
+                <div class="mb-5 flex items-center gap-2 text-sm">
+                    <span class="w-2 h-2 rounded-full flex-none" :class="guideVideo?.video ? 'bg-[var(--color-brand-green)]' : 'bg-[var(--color-muted)]'"></span>
+                    <span class="text-[var(--color-ink)] font-medium min-w-0 break-words">{{ guideVideoLabel }}</span>
+                </div>
+
+                <label class="block text-xs font-bold text-[var(--color-ink)] uppercase tracking-wide mb-2">Cách 1 — dán link</label>
+                <div class="flex flex-col sm:flex-row gap-2">
+                    <input
+                        v-model="guideVideoUrl"
+                        type="url"
+                        placeholder="https://www.youtube.com/watch?v=..."
+                        @keydown.enter="saveGuideVideoUrl"
+                        class="flex-1 min-w-0 px-4 py-2.5 rounded-xl border border-[var(--color-line)] bg-[var(--color-bg)] text-sm text-[var(--color-ink)] focus:outline-none focus:border-[var(--color-accent)]"
+                    />
+                    <button
+                        type="button"
+                        @click="saveGuideVideoUrl"
+                        :disabled="savingGuideVideo"
+                        class="btn-fire px-6 py-2.5 rounded-xl text-sm whitespace-nowrap disabled:opacity-60"
+                    >{{ savingGuideVideo ? 'Đang lưu...' : 'Lưu link' }}</button>
+                </div>
+                <p class="text-xs text-[var(--color-muted)] leading-relaxed mt-2">
+                    Nhận YouTube (kể cả Shorts), TikTok dạng đầy đủ <span class="font-mono">tiktok.com/@ten/video/...</span>,
+                    Facebook, hoặc link <span class="font-mono">.mp4</span> trực tiếp.
+                    Link TikTok rút gọn <span class="font-mono">vt.tiktok.com</span> không dùng được — mở ra rồi copy lại link đầy đủ trên thanh địa chỉ.
+                </p>
+
+                <div class="mt-5 pt-5 border-t border-[var(--color-line)]">
+                    <label class="block text-xs font-bold text-[var(--color-ink)] uppercase tracking-wide mb-2">Cách 2 — tải file lên</label>
+                    <input
+                        type="file"
+                        accept="video/mp4,video/webm,video/quicktime"
+                        :disabled="savingGuideVideo"
+                        @change="uploadGuideVideo"
+                        class="w-full text-sm text-[var(--color-ink)] file:mr-3 file:px-4 file:py-2 file:rounded-xl file:border-0 file:text-sm file:font-semibold file:bg-[var(--color-peach-soft)] file:text-[var(--color-accent)] disabled:opacity-60"
+                    />
+                    <p class="text-xs text-[var(--color-muted)] leading-relaxed mt-2">
+                        MP4, WebM hoặc MOV — tối đa <strong class="text-[var(--color-ink)]">{{ guideVideo?.maxUploadMb ?? 0 }} MB</strong>
+                        (trần thật của máy chủ này, đã tính cả giới hạn PHP). Chọn file xong là tải lên luôn, không cần bấm Lưu.
+                        File nằm trong <span class="font-mono">public/uploads</span> nên mỗi lượt xem đều ăn băng thông VPS —
+                        video dài thì dùng Cách 1 sẽ nhẹ hơn.
+                    </p>
+                </div>
+
+                <div v-if="guideVideo?.video" class="mt-5 pt-5 border-t border-[var(--color-line)] flex flex-wrap items-center gap-3">
+                    <a
+                        href="/huong-dan"
+                        target="_blank"
+                        rel="noopener"
+                        class="text-sm font-semibold text-[var(--color-accent)] underline underline-offset-2"
+                    >Xem thử trang hướng dẫn →</a>
+                    <button
+                        type="button"
+                        @click="removeGuideVideo"
+                        :disabled="savingGuideVideo"
+                        class="ml-auto text-sm font-semibold text-[#c00000] underline underline-offset-2 disabled:opacity-60"
+                    >Gỡ video</button>
                 </div>
             </div>
 

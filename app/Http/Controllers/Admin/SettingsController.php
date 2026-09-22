@@ -7,11 +7,13 @@ use App\Models\Setting;
 use App\Services\CashbackLeaderboardService;
 use App\Services\CashbackService;
 use App\Services\ChatService;
+use App\Services\GuideVideoService;
 use App\Services\SourceHealthService;
 use App\Services\VoucherSourceResolver;
 use App\Services\WelcomeBonusService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Validation\ValidationException;
 use Inertia\Inertia;
 use Inertia\Response;
 
@@ -21,6 +23,8 @@ class SettingsController extends Controller
     {
         return Inertia::render('Admin/Settings', [
             'customerAuthEnabled' => Setting::getBool('customer_auth_enabled', true),
+            // Video hướng dẫn lấy mã ở trang công khai /huong-dan — xem GuideVideoService.
+            'guideVideo' => app(GuideVideoService::class)->adminState(),
             'maintenanceMode' => Setting::getBool('maintenance_mode', false),
             'autoMaintenanceEnabled' => SourceHealthService::enabled(),
             // Kết quả lượt kiểm tra nguồn gần nhất — không có nó thì công tắc chỉ là cái nút câm,
@@ -138,5 +142,62 @@ class SettingsController extends Controller
         }
 
         return back()->with('success', 'Đã lưu cài đặt.');
+    }
+
+    /**
+     * Video hướng dẫn lấy mã ở trang công khai /huong-dan.
+     *
+     * Tách khỏi update() vì đây là request multipart (có file đính kèm), còn mọi ô cài đặt khác
+     * trong trang đang POST từng field JSON một.
+     *
+     * Gửi file thì file thắng, không gửi file mà ô link rỗng thì coi như gỡ video — khớp với
+     * GuideVideoService: một nguồn sống tại một thời điểm.
+     */
+    public function updateGuideVideo(Request $request, GuideVideoService $guideVideo): RedirectResponse
+    {
+        $request->validate([
+            'video_url' => ['nullable', 'string', 'max:2000'],
+            // Cố ý KHÔNG nhận mọi thứ trình duyệt gọi là video: file này nằm trên chính tên miền
+            // của mình và được phát cho khách, nên chỉ nhận đúng mấy định dạng <video> mở được.
+            'video_file' => ['nullable', 'file', 'mimetypes:video/mp4,video/webm,video/quicktime,video/x-m4v', 'max:'.GuideVideoService::MAX_FILE_KB],
+        ], [
+            'video_file.mimetypes' => 'Chỉ nhận file MP4, WebM hoặc MOV.',
+            'video_file.max' => 'File quá nặng — tối đa '.$guideVideo->maxUploadMb().' MB.',
+        ]);
+
+        if ($request->hasFile('video_file')) {
+            $guideVideo->storeFile($request->file('video_file'));
+
+            return back()->with('success', 'Đã tải video lên — xem thử ở trang /huong-dan.');
+        }
+
+        $url = trim((string) $request->input('video_url'));
+
+        if ($url === '') {
+            $guideVideo->clear();
+
+            return back()->with('success', 'Đã gỡ video — trang /huong-dan chỉ còn phần hướng dẫn bằng chữ.');
+        }
+
+        // Chặn ở đây thay vì để khách phát hiện hộ: link không nhận dạng được mà vẫn lưu thì
+        // trang /huong-dan chỉ hiện một khung trắng, còn admin thì tưởng đã xong.
+        if ($guideVideo->parse($url) === null) {
+            throw ValidationException::withMessages([
+                'video_url' => 'Link này không nhúng được. Nhận link YouTube (kể cả Shorts), '
+                    .'TikTok dạng đầy đủ (tiktok.com/@ten/video/...), Facebook, hoặc link .mp4 trực tiếp. '
+                    .'Link TikTok rút gọn (vt.tiktok.com) thì mở ra rồi copy lại link đầy đủ trên thanh địa chỉ.',
+            ]);
+        }
+
+        $guideVideo->saveUrl($url);
+
+        return back()->with('success', 'Đã lưu link video — xem thử ở trang /huong-dan.');
+    }
+
+    public function destroyGuideVideo(GuideVideoService $guideVideo): RedirectResponse
+    {
+        $guideVideo->clear();
+
+        return back()->with('success', 'Đã gỡ video — trang /huong-dan chỉ còn phần hướng dẫn bằng chữ.');
     }
 }
