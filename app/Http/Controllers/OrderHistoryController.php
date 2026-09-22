@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\Commission;
 use App\Models\ShopeeOrder;
 use App\Services\CashbackService;
+use App\Services\MembershipTierService;
 use Carbon\Carbon;
 use DateTimeInterface;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
@@ -31,14 +32,20 @@ use Inertia\Response;
  */
 class OrderHistoryController extends Controller
 {
-    public function __construct(private CashbackService $cashback) {}
+    public function __construct(private CashbackService $cashback, private MembershipTierService $tiers) {}
 
     public function index(Request $request): Response
     {
         abort_if($request->user()->isAdmin(), 403, 'Trang này dành cho khách hàng.');
 
         $user = $request->user();
-        $rate = $this->cashback->rate();
+
+        // Tỉ lệ THỰC NHẬN của chính khách này = tỉ lệ nền + thưởng hạng của họ. Trang này giải
+        // thích từng khoản tiền, nên phải dùng đúng con số đã (hoặc sẽ) được đem nhân — lấy tỉ
+        // lệ nền là khách hạng Vàng thấy ước tính thấp hơn số thật mà không hiểu vì sao.
+        $bonus = $this->tiers->bonusForUser($user);
+        $baseRate = $this->cashback->rate();
+        $rate = $baseRate > 0 ? min(100.0, $baseRate + $bonus) : 0.0;
 
         $orders = $this->groupedOrders($user->id);
         $commissions = $this->commissionsFor($user->id, $orders);
@@ -61,6 +68,12 @@ class OrderHistoryController extends Controller
                     ->count('order_id'),
             ],
             'cashbackRate' => $rate,
+            // Có phần thưởng hạng thì nói rõ tỉ lệ trên đã gồm nó — không thì khách đối chiếu
+            // với con số quảng bá ở trang chủ sẽ thấy lệch và tưởng có nhầm lẫn.
+            'tierBonus' => $bonus > 0 ? [
+                'label' => $this->tiers->definition($user->tier)['label'],
+                'bonus' => $bonus,
+            ] : null,
         ]);
     }
 

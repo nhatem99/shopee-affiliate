@@ -29,6 +29,9 @@ class CashbackService
      */
     public const DISPLAY_RATE_KEY = 'cashback_display_rate';
 
+    /** Hạng thành viên cộng thêm điểm phần trăm vào tỉ lệ trên — xem MembershipTierService. */
+    public function __construct(private MembershipTierService $tiers) {}
+
     /**
      * @return array{created: int, updated: int, revoked: int, rate: float, orders: int}
      */
@@ -59,14 +62,25 @@ class CashbackService
 
         $summary['orders'] = $orders->count();
 
-        foreach ($orders as $order) {
-            $amount = round(((float) $order->net_total) * $rate / 100, 2);
+        // Hạng của từng khách lấy MỘT lần cho cả vòng lặp: một người thường có nhiều đơn trong
+        // cùng lượt chạy, tra hạng trong vòng lặp là N+1 ngay giữa khâu ghi tiền.
+        $bonuses = $this->tiers->bonusRatesFor(
+            $orders->pluck('user_id')->map(fn ($id) => (int) $id)->unique()->values()->all()
+        );
 
-            if ($amount <= 0) {
+        foreach ($orders as $order) {
+            if ((float) $order->net_total <= 0) {
                 continue;
             }
 
-            $this->award($order->order_id, (int) $order->user_id, $amount, $summary);
+            $this->award(
+                $order->order_id,
+                (int) $order->user_id,
+                (float) $order->net_total,
+                $rate,
+                $bonuses[(int) $order->user_id] ?? 0.0,
+                $summary,
+            );
         }
 
         // Bảng xếp hạng công khai đọc từ cache — vừa ghi/thu hồi tiền xong thì phải xoá, không
@@ -110,12 +124,27 @@ class CashbackService
      * tức đã qua cửa sổ hoàn trả và hoa hồng chắc chắn về. Đơn chưa hoàn thành không bao giờ đi
      * tới hàm này — đó là điểm chặn duy nhất giữa "đơn còn huỷ được" và "khách rút được tiền".
      *
+     * @param  float  $bonus  điểm phần trăm thưởng theo hạng thành viên, chỉ áp cho khoản GHI MỚI
      * @param  array<string, int|float>  $summary
      */
-    private function award(string $orderId, int $userId, float $amount, array &$summary): void
+    private function award(string $orderId, int $userId, float $netTotal, float $rate, float $bonus, array &$summary): void
     {
-        DB::transaction(function () use ($orderId, $userId, $amount, &$summary) {
+        DB::transaction(function () use ($orderId, $userId, $netTotal, $rate, $bonus, &$summary) {
             $commission = Commission::where('order_id', $orderId)->lockForUpdate()->first();
+
+            // Khoản đã ghi giữ nguyên phần thưởng hạng của LÚC GHI (cột tier_bonus_rate), không
+            // lấy hạng hiện tại: sync() tính lại toàn bộ đơn ở mỗi lượt chạy, nên đọc hạng hiện
+            // tại là mỗi lần khách lên hạng thì tiền của các quý cũ tự phình theo. NULL = khoản
+            // ghi từ trước khi có tính năng hạng, đọc ra 0 nên số tiền cũ đứng yên.
+            $bonus = $commission !== null ? (float) ($commission->tier_bonus_rate ?? 0) : $bonus;
+
+            // Cộng ĐIỂM phần trăm vào tỉ lệ nền, chặn trần 100%: tỉ lệ nền là phần hoa hồng ròng
+            // chia lại, trả quá 100% là trả nhiều hơn số Shopee đưa cho mình.
+            $amount = round($netTotal * min(100.0, $rate + $bonus) / 100, 2);
+
+            if ($amount <= 0) {
+                return;
+            }
 
             if ($commission === null) {
                 Commission::create([
@@ -123,6 +152,7 @@ class CashbackService
                     'affiliate_link_id' => null,
                     'order_id' => $orderId,
                     'amount' => $amount,
+                    'tier_bonus_rate' => $bonus,
                     'status' => 'approved',
                     'confirmed_at' => now(),
                 ]);

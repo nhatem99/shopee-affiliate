@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\PayoutAccount;
 use App\Models\User;
+use App\Services\MembershipTierService;
 use App\Services\WalletHistoryService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -17,7 +18,7 @@ class ProfileController extends Controller
 {
     public const MIN_WITHDRAWAL = 10000;
 
-    public function show(Request $request): Response
+    public function show(Request $request, MembershipTierService $tiers): Response
     {
         $this->ensureNotAdmin($request);
 
@@ -43,6 +44,10 @@ class ProfileController extends Controller
                 // không rút được một mình — xem WithdrawalController.
                 'hasRealCashback' => $user->hasRealCashback(),
             ],
+            // Hạng thành viên + tiến độ lên hạng của quý này. null = chương trình đang tắt,
+            // thẻ hạng ở Tổng quan tự biến mất. Đây là nơi trang /hoan-tien hứa là sẽ "theo dõi
+            // được tiến độ nâng hạng", nên nó phải có thật ở đây.
+            'tier' => $tiers->enabled() ? $tiers->progressFor($user) : null,
             'withdrawals' => $user->withdrawals()->latest()->get()->map(fn ($w) => [
                 'id' => $w->id,
                 'provider' => $w->provider,

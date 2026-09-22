@@ -33,6 +33,15 @@ Schedule::command('facebook:sync-reels')
     ->description('Đối soát caption reel Facebook với bảng slot')
     ->storeOutput();
 
+// Xét hạng thành viên theo tiền hoàn quý trước (xem MembershipTierService). Hạng chỉ ĐỔI khi
+// sang quý mới, nhưng lệnh chạy hàng ngày vì hoa hồng của quý trước còn về muộn theo từng đợt
+// nhập báo cáo — lý do đầy đủ nằm ở đầu lớp RefreshMembershipTiers.
+Schedule::command('tiers:refresh')
+    ->dailyAt('00:20')
+    ->withoutOverlapping()
+    ->description('Xét hạng thành viên theo tiền hoàn quý trước')
+    ->storeOutput();
+
 // Gọi thử nguồn kieushopee, tự bật chế độ bảo trì khi nó chết (xem SourceHealthService). Công
 // tắc ở Admin > Cài đặt đang tắt thì lệnh thoát ngay, không gọi sang nguồn.
 //

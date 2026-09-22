@@ -3,10 +3,12 @@ import { Head, Link } from '@inertiajs/vue3'
 import AppLayout from '@/Layouts/AppLayout.vue'
 import CashbackExplainer from '@/Components/CashbackExplainer.vue'
 import CashbackLeaderboard from '@/Components/CashbackLeaderboard.vue'
+import MembershipTiers from '@/Components/MembershipTiers.vue'
 import { useCashback } from '@/composables/useCashback'
 
 defineProps({
     leaderboard: { type: Object, default: null },
+    membershipTiers: { type: Object, default: null },
 })
 
 // Trang riêng cho phần giải thích hoàn tiền, dùng lại đúng component đang nằm ở trang chủ.
@@ -27,6 +29,10 @@ const { cashbackRate } = useCashback()
     </Head>
     <AppLayout>
         <CashbackExplainer />
+
+        <!-- Bảng hạng đặt ngay sau phần giải thích: người đọc tới đây đã tin là có tiền thật,
+             câu hỏi kế tiếp là "được bao nhiêu" — đúng thứ bảng này trả lời. -->
+        <MembershipTiers v-if="membershipTiers" v-bind="membershipTiers" />
 
         <!-- Cùng bảng vàng với trang chủ: trang này là nơi bài đăng Facebook/Zalo trỏ tới, khách
              mới vào thẳng đây phải thấy được bằng chứng có người đang nhận tiền thật. -->

@@ -2,6 +2,7 @@
 import { ref, computed } from 'vue'
 import { Head, Link, useForm } from '@inertiajs/vue3'
 import AccountLayout from '@/Layouts/AccountLayout.vue'
+import MembershipTierProgress from '@/Components/MembershipTierProgress.vue'
 import { useToast } from '@/composables/useToast'
 
 const toast = useToast()
@@ -12,6 +13,9 @@ const props = defineProps({
     balance: Object,
     withdrawals: Array,
     minWithdrawal: Number,
+    // Hạng thành viên + tiến độ lên hạng của quý này. null = admin tắt chương trình hạng (hoặc
+    // tỉ lệ hoàn tiền = 0), lúc đó thẻ hạng biến mất khỏi trang này.
+    tier: { type: Object, default: null },
 })
 
 function vnd(n) {
@@ -157,6 +161,10 @@ const providerLabels = { momo: 'MoMo', zalopay: 'ZaloPay' }
                     Gửi yêu cầu xong, bên mình duyệt rồi chuyển tay về ví của bạn — không phải tự động, nên bạn chờ một chút nhé.
                 </p>
             </div>
+
+            <!-- Hạng thành viên. Đặt ngay dưới số dư vì nó nói về cùng một thứ — tiền hoàn —
+                 và là nơi trang /hoan-tien đã hứa là "theo dõi được tiến độ nâng hạng". -->
+            <MembershipTierProgress v-if="tier" :tier="tier" />
 
             <!-- Ví rỗng và chưa từng rút: chỉ đường thay vì để khách nhìn số 0 rồi thoát. Đây là
                  điểm rơi lớn nhất của nhóm khách đã chịu đăng ký — họ vào xem ví ngay sau khi đăng

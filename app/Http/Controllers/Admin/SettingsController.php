@@ -8,6 +8,7 @@ use App\Services\CashbackLeaderboardService;
 use App\Services\CashbackService;
 use App\Services\ChatService;
 use App\Services\GuideVideoService;
+use App\Services\MembershipTierService;
 use App\Services\SourceHealthService;
 use App\Services\VoucherSourceResolver;
 use App\Services\WelcomeBonusService;
@@ -39,6 +40,7 @@ class SettingsController extends Controller
             'supportChatEnabled' => ChatService::enabled(),
             'cashbackRate' => (float) Setting::get(CashbackService::RATE_KEY, 0),
             'welcomeBonusEnabled' => Setting::getBool(WelcomeBonusService::ENABLED_KEY, true),
+            'membershipTierEnabled' => Setting::getBool(MembershipTierService::ENABLED_KEY, true),
             'welcomeBonusAmount' => (float) Setting::get(WelcomeBonusService::AMOUNT_KEY, WelcomeBonusService::DEFAULT_AMOUNT),
             // Trả về null (không phải 0) khi chưa đặt, để ô nhập hiện trống = "theo tỉ lệ thực".
             'cashbackDisplayRate' => Setting::get(CashbackService::DISPLAY_RATE_KEY) !== null
@@ -66,8 +68,16 @@ class SettingsController extends Controller
             'cashback_rate' => ['sometimes', 'numeric', 'min:0', 'max:100'],
             'cashback_display_rate' => ['sometimes', 'nullable', 'numeric', 'min:0', 'max:100'],
             'welcome_bonus_enabled' => ['sometimes', 'boolean'],
+            'membership_tier_enabled' => ['sometimes', 'boolean'],
             'welcome_bonus_amount' => ['sometimes', 'integer', 'min:0', 'max:1000000'],
         ]);
+
+        // Tắt là ngừng cộng thưởng hạng cho các khoản GHI MỚI và ẩn toàn bộ khối hạng trên
+        // trang khách. Tiền đã ghi giữ nguyên — cột tier_bonus_rate của từng khoản đóng băng
+        // phần thưởng của lúc ghi, nên không có chuyện gạt công tắc rồi ví khách tụt xuống.
+        if (array_key_exists('membership_tier_enabled', $validated)) {
+            Setting::set(MembershipTierService::ENABLED_KEY, $validated['membership_tier_enabled'] ? '1' : '0');
+        }
 
         if (array_key_exists('welcome_bonus_enabled', $validated)) {
             Setting::set(WelcomeBonusService::ENABLED_KEY, $validated['welcome_bonus_enabled'] ? '1' : '0');

@@ -14,6 +14,10 @@ use Spatie\Permission\Traits\HasRoles;
 
 // 'role' cố tình không nằm trong danh sách này — chỉ được gán qua forceFill() ở nơi đáng
 // tin cậy (seeder), tránh khả năng leo quyền nếu sau này có code update($request->all()).
+//
+// 'tier' (hạng thành viên) cũng vậy, cùng một lý do ở một mặt khác: hạng cộng thêm tới 5 điểm
+// phần trăm vào tiền hoàn của mỗi đơn, nên nó là quyền lợi bằng tiền chứ không phải thuộc tính
+// hồ sơ. Chỉ MembershipTierService::store() được đổi.
 #[Fillable(['name', 'email', 'password', 'phone', 'google_id', 'wallet_balance'])]
 #[Hidden(['password', 'remember_token'])]
 class User extends Authenticatable
@@ -92,6 +96,7 @@ class User extends Authenticatable
             'wallet_balance' => 'decimal:2',
             'banned_at' => 'datetime',
             'last_seen_at' => 'datetime',
+            'tier_updated_at' => 'datetime',
         ];
     }
 

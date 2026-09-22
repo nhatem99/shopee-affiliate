@@ -11,6 +11,10 @@ defineProps({
     orders: Object,
     summary: Object,
     cashbackRate: { type: Number, default: 0 },
+    // Phần thưởng hạng thành viên đã nằm SẴN trong cashbackRate ở trên. Gửi kèm để nói rõ ra,
+    // vì nếu không thì tỉ lệ ở trang này cao hơn con số quảng bá ngoài trang chủ mà không ai
+    // giải thích — khách sẽ nghĩ là nhầm lẫn chứ không nghĩ là mình được thêm.
+    tierBonus: { type: Object, default: null },
 })
 
 function vnd(n) {
@@ -148,7 +152,8 @@ const statusMeta = {
             </div>
 
             <p v-if="cashbackRate > 0" class="text-xs text-[var(--color-muted)] mt-6 text-center">
-                Số tiền hoàn được tính trên hoa hồng thực nhận của đơn, theo tỉ lệ {{ cashbackRate }}%.
+                Số tiền hoàn được tính trên hoa hồng thực nhận của đơn, theo tỉ lệ {{ cashbackRate }}%<!--
+                --><template v-if="tierBonus">, đã gồm <b class="text-[var(--color-ink)]">+{{ tierBonus.bonus }}%</b> đặc quyền hạng {{ tierBonus.label }}</template>.
                 Số "dự kiến" có thể đổi khi Shopee chốt lại hoa hồng cuối cùng.
             </p>
 

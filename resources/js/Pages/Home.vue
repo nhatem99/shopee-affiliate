@@ -10,6 +10,7 @@ import RestockSchedule from '@/Components/RestockSchedule.vue'
 import CashbackExplainer from '@/Components/CashbackExplainer.vue'
 import CashbackLeaderboard from '@/Components/CashbackLeaderboard.vue'
 import HowItWorksSteps from '@/Components/HowItWorksSteps.vue'
+import MembershipTiers from '@/Components/MembershipTiers.vue'
 import { useToast } from '@/composables/useToast'
 import { useCashback } from '@/composables/useCashback'
 import { useFestive } from '@/composables/useFestive'
@@ -32,6 +33,9 @@ const props = defineProps({
     facebookMode: { type: String, default: 'comment' },
     // Bảng vàng hoàn tiền tháng này — server chỉ gửi khi chương trình đang bật (null khi tắt).
     leaderboard: { type: Object, default: null },
+    // Bảng hạng thành viên + tiến độ của chính khách này — null khi admin tắt chương trình hạng
+    // hoặc khi tỉ lệ hoàn tiền đang là 0 (xem MembershipTierService::enabled).
+    membershipTiers: { type: Object, default: null },
 })
 
 // Nơi khách phải bấm sau khi Facebook mở ra — dùng lại ở nhiều câu hướng dẫn nên gom một chỗ.
@@ -1092,6 +1096,11 @@ onUnmounted(() => {
              Bản RÚT GỌN: chỉ giữ hai cột ✓/✕ rồi dẫn sang /hoan-tien. Bản đầy đủ dài 3-4 màn
              hình điện thoại, đẩy mục mã gợi ý và FAQ xuống quá sâu. -->
         <CashbackExplainer v-if="cashbackOn" compact />
+
+        <!-- Hạng thành viên: đứng ngay dưới khối hoàn tiền rút gọn, vì nó trả lời câu hỏi kế
+             tiếp của người vừa đọc xong "có được hoàn không" — hoàn bao nhiêu, và mua nhiều thì
+             có hơn gì không. Khách đã đăng nhập còn thấy luôn hạng của mình ở đây. -->
+        <MembershipTiers v-if="membershipTiers" v-bind="membershipTiers" />
 
         <!-- Mã giảm giá gợi ý -->
         <section v-if="vouchers.length" class="py-16 px-4 bg-[var(--color-bg)]">

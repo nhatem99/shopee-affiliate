@@ -8,7 +8,7 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 #[Fillable([
-    'user_id', 'affiliate_link_id', 'type', 'amount', 'status', 'order_id',
+    'user_id', 'affiliate_link_id', 'type', 'amount', 'tier_bonus_rate', 'status', 'order_id',
     'confirmed_at', 'paid_at',
 ])]
 class Commission extends Model
@@ -25,6 +25,9 @@ class Commission extends Model
     {
         return [
             'amount' => 'decimal:2',
+            // Phần thưởng hạng đã dùng để tính khoản này, đóng băng lúc ghi — xem
+            // MembershipTierService và CashbackService::award.
+            'tier_bonus_rate' => 'decimal:2',
             'confirmed_at' => 'datetime',
             'paid_at' => 'datetime',
         ];

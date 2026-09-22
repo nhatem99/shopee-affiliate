@@ -25,6 +25,7 @@ const props = defineProps({
     cashbackDisplayRate: { type: Number, default: null },
     welcomeBonusEnabled: { type: Boolean, default: true },
     welcomeBonusAmount: { type: Number, default: 5000 },
+    membershipTierEnabled: { type: Boolean, default: true },
 })
 
 const toast = useToast()
@@ -58,6 +59,8 @@ const welcomeBonusEnabled = ref(props.welcomeBonusEnabled)
 const savingWelcomeBonus = ref(false)
 const welcomeBonusAmount = ref(props.welcomeBonusAmount)
 const savingWelcomeBonusAmount = ref(false)
+const membershipTierEnabled = ref(props.membershipTierEnabled)
+const savingMembershipTier = ref(false)
 
 // Đồng bộ lại nếu server trả về giá trị khác (ví dụ sau khi lưu xong)
 watch(() => props.customerAuthEnabled, (v) => { customerAuthEnabled.value = v })
@@ -75,6 +78,7 @@ watch(() => props.cashbackRate, (v) => { cashbackRate.value = v })
 watch(() => props.cashbackDisplayRate, (v) => { cashbackDisplayRate.value = v ?? '' })
 watch(() => props.welcomeBonusEnabled, (v) => { welcomeBonusEnabled.value = v })
 watch(() => props.welcomeBonusAmount, (v) => { welcomeBonusAmount.value = v })
+watch(() => props.membershipTierEnabled, (v) => { membershipTierEnabled.value = v })
 
 function toggleCustomerAuth() {
     const next = !customerAuthEnabled.value
@@ -355,6 +359,26 @@ function toggleWelcomeBonus() {
         },
         onError: () => toast.error('Không lưu được, vui lòng thử lại.'),
         onFinish: () => { savingWelcomeBonus.value = false },
+    })
+}
+
+// Không gọi sync() sau khi gạt như ô tỉ lệ hoàn tiền: phần thưởng hạng của mỗi khoản đã được
+// đóng băng lúc ghi (cột tier_bonus_rate), nên bật/tắt chỉ đổi các khoản ghi MỚI — tiền đã vào
+// ví khách không bao giờ tụt vì một cú gạt công tắc.
+function toggleMembershipTier() {
+    const next = !membershipTierEnabled.value
+    savingMembershipTier.value = true
+
+    router.post('/admin/settings', { membership_tier_enabled: next }, {
+        preserveScroll: true,
+        onSuccess: () => {
+            membershipTierEnabled.value = next
+            toast.success(next
+                ? 'Đã bật hạng thành viên — khách hạng cao được cộng thêm % vào tiền hoàn.'
+                : 'Đã tắt — đơn ghi từ giờ không cộng thưởng hạng, tiền đã vào ví giữ nguyên.')
+        },
+        onError: () => toast.error('Không lưu được, vui lòng thử lại.'),
+        onFinish: () => { savingMembershipTier.value = false },
     })
 }
 
@@ -765,6 +789,44 @@ function saveCashbackDisplayRate() {
                         {{ welcomeBonusEnabled && Number(welcomeBonusAmount) > 0
                             ? `Đang tặng ${Number(welcomeBonusAmount).toLocaleString('vi-VN')} đ cho mỗi tài khoản mới.`
                             : 'Đang tắt — tài khoản mới không được thưởng.' }}
+                    </span>
+                </div>
+            </div>
+
+            <div class="bg-[var(--color-surface)] rounded-2xl border border-[var(--color-line)] p-6">
+                <div class="flex items-start justify-between gap-6">
+                    <div class="min-w-0">
+                        <h2 class="font-bold text-[var(--color-ink)] mb-1">🏅 Hạng thành viên &amp; Đặc quyền</h2>
+                        <p class="text-sm text-[var(--color-muted)] leading-relaxed">
+                            Khách mua càng nhiều, hạng càng cao, tỉ lệ hoàn tiền được cộng thêm tới
+                            <strong class="text-[var(--color-ink)]">+5 điểm phần trăm</strong>
+                            (Tân binh +0% · Đồng +1% · Bạc +2% · Vàng +3% · Bạch kim +4% · Kim cương +5%).
+                            Hạng xét theo <strong class="text-[var(--color-ink)]">tiền hoàn đã duyệt của quý trước</strong>
+                            và tự cập nhật đầu mỗi quý — lệnh <code>tiers:refresh</code> chạy hàng ngày, xem ở mục Tác vụ nền.
+                            Tắt hoàn tiền (tỉ lệ = 0) thì khối hạng cũng tự ẩn khỏi trang khách.
+                        </p>
+                    </div>
+                    <button
+                        type="button"
+                        role="switch"
+                        :aria-checked="membershipTierEnabled"
+                        :disabled="savingMembershipTier"
+                        @click="toggleMembershipTier"
+                        class="relative inline-flex h-7 w-12 flex-none items-center rounded-full transition-colors disabled:opacity-60"
+                        :class="membershipTierEnabled ? 'bg-[var(--color-brand-green)]' : 'bg-[var(--color-line)]'"
+                    >
+                        <span class="inline-block h-5 w-5 rounded-full bg-white shadow transition-transform" :class="membershipTierEnabled ? 'translate-x-6' : 'translate-x-1'"></span>
+                    </button>
+                </div>
+
+                <div class="mt-4 pt-4 border-t border-[var(--color-line)] flex items-center gap-2 text-sm">
+                    <span class="w-2 h-2 rounded-full flex-none" :class="membershipTierEnabled && Number(cashbackRate) > 0 ? 'bg-[var(--color-brand-green)]' : 'bg-[var(--color-muted)]'"></span>
+                    <span class="text-[var(--color-ink)] font-medium">
+                        {{ !membershipTierEnabled
+                            ? 'Đang tắt — mọi khách nhận đúng tỉ lệ nền.'
+                            : (Number(cashbackRate) > 0
+                                ? `Đang chạy — khách hạng Kim cương nhận tới ${Math.min(100, Number(cashbackRate) + 5)}% hoa hồng ròng.`
+                                : 'Đã bật nhưng chưa chạy: tỉ lệ hoàn tiền đang là 0.') }}
                     </span>
                 </div>
             </div>
