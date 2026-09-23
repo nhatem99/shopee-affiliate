@@ -62,11 +62,12 @@ const platformLabels = { shopee: 'Shopee', lazada: 'Lazada', tiki: 'Tiki', tikto
                 </div>
 
                 <!-- Pagination -->
-                <div class="flex justify-center gap-2 mt-8">
+                <div v-if="links?.last_page > 1" class="flex items-center justify-center gap-2 mt-8 text-sm">
                     <Link v-if="links.prev_page_url" :href="links.prev_page_url"
                         class="px-4 py-2 rounded-xl border border-[var(--color-line)] text-sm font-semibold text-[var(--color-ink)] hover:border-[var(--color-accent)] hover:text-[var(--color-accent)] transition">
                         ← Trước
                     </Link>
+                    <span class="text-[var(--color-muted)]">Trang {{ links.current_page }}/{{ links.last_page }}</span>
                     <Link v-if="links.next_page_url" :href="links.next_page_url"
                         class="px-4 py-2 rounded-xl border border-[var(--color-line)] text-sm font-semibold text-[var(--color-ink)] hover:border-[var(--color-accent)] hover:text-[var(--color-accent)] transition">
                         Tiếp →

@@ -37,6 +37,9 @@ class WithdrawalController extends Controller
         return Inertia::render('Admin/Withdrawals', [
             'withdrawals' => $withdrawals,
             'filters' => $request->only('status'),
+            'statusCounts' => Withdrawal::selectRaw('status, count(*) as count')
+                ->groupBy('status')
+                ->pluck('count', 'status'),
         ]);
     }
 

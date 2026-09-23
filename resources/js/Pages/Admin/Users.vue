@@ -227,9 +227,9 @@ function confirmRole() {
                         <td class="px-4 py-3 text-right tabular-nums text-[var(--color-accent)]">{{ u.pending_estimate === null ? '—' : vnd(u.pending_estimate) }}</td>
                         <td class="px-4 py-3 text-right tabular-nums font-semibold text-[var(--color-brand-green)]">{{ vnd(u.available_balance) }}</td>
                         <td class="px-4 py-3">
-                            <span v-if="u.banned_at" class="px-2 py-1 rounded-full text-xs font-semibold bg-red-100 text-red-600">Bị khoá</span>
-                            <span v-else-if="u.role === 'admin'" class="px-2 py-1 rounded-full text-xs font-semibold bg-purple-100 text-purple-700">Quản trị</span>
-                            <span v-else class="px-2 py-1 rounded-full text-xs font-semibold bg-green-100 text-green-700">Hoạt động</span>
+                            <span v-if="u.banned_at" class="px-2 py-1 rounded-full text-xs font-semibold bg-red-100 text-red-600 dark:bg-red-900/40 dark:text-red-300">Bị khoá</span>
+                            <span v-else-if="u.role === 'admin'" class="px-2 py-1 rounded-full text-xs font-semibold bg-purple-100 text-purple-700 dark:bg-purple-900/40 dark:text-purple-300">Quản trị</span>
+                            <span v-else class="px-2 py-1 rounded-full text-xs font-semibold bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300">Hoạt động</span>
                             <p v-if="u.banned_at && u.banned_reason" class="text-xs text-red-500 mt-1">{{ u.banned_reason }}</p>
                         </td>
                         <td class="px-4 py-3 whitespace-nowrap">

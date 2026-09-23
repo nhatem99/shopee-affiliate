@@ -40,16 +40,21 @@ const items = computed(() => [
             v-for="item in items"
             :key="item.href"
             :href="item.href"
-            class="flex-1 flex flex-col items-center justify-center py-3 gap-0.5 text-[10.5px] font-semibold transition min-w-0 px-0.5"
+            class="flex-1 flex flex-col items-center justify-center py-2 gap-0.5 text-[10.5px] font-semibold transition min-w-0 px-0.5"
             :class="current === item.href ? 'text-[var(--color-accent)] dark:drop-shadow-[0_0_8px_rgba(var(--color-accent-rgb),0.5)]' : 'text-[var(--color-muted)]'"
         >
-            <span class="text-xl">{{ item.icon }}</span>
-            <!-- whitespace-nowrap: có tới 6 mục khi khách vừa đăng nhập vừa bật hoàn tiền
-                 (Trang chủ/Mã giảm giá/Flash Sale/Lịch sử/Đơn hàng/Tài khoản) — "Mã giảm
-                 giá" từng vỡ xuống 2 dòng ở đó, đẩy lệch icon so với các mục còn lại. Ép
-                 một dòng + thu cỡ chữ (text-[10.5px]) thay vì rút ngắn chữ, để nhãn khớp
-                 với nav desktop và H1 của từng trang. -->
-            <span class="whitespace-nowrap">{{ item.label }}</span>
+            <span
+                class="flex flex-col items-center justify-center gap-0.5 px-3 py-1 rounded-xl transition-colors"
+                :class="current === item.href ? 'bg-[var(--color-peach-soft)]' : ''"
+            >
+                <span class="text-xl">{{ item.icon }}</span>
+                <!-- whitespace-nowrap: có tới 6 mục khi khách vừa đăng nhập vừa bật hoàn tiền
+                     (Trang chủ/Mã giảm giá/Flash Sale/Lịch sử/Đơn hàng/Tài khoản) — "Mã giảm
+                     giá" từng vỡ xuống 2 dòng ở đó, đẩy lệch icon so với các mục còn lại. Ép
+                     một dòng + thu cỡ chữ (text-[10.5px]) thay vì rút ngắn chữ, để nhãn khớp
+                     với nav desktop và H1 của từng trang. -->
+                <span class="whitespace-nowrap">{{ item.label }}</span>
+            </span>
         </Link>
     </nav>
 </template>

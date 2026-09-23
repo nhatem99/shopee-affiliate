@@ -98,6 +98,10 @@
         transform: none;
         cursor: not-allowed;
     }
+    .btn-fire:focus-visible {
+        outline: 3px solid rgba(var(--color-accent-rgb), .6);
+        outline-offset: 2px;
+    }
 
     /* Chữ gradient cam dùng cho tiêu đề nhấn mạnh */
     .text-fire {
@@ -235,6 +239,7 @@
 /* Người tắt hiệu ứng chuyển động ở hệ điều hành: giữ hình, bỏ chuyển động. */
 @media (prefers-reduced-motion: reduce) {
     .festive-float, .festive-sway, .festive-twinkle, .festive-glow, .festive-drift { animation: none !important; }
+    .animate-pulse-ring { animation: none !important; box-shadow: 0 0 0 2px rgba(250, 204, 21, .95), 0 0 16px 3px rgba(250, 204, 21, .55); }
 }
 
 /* Thanh chữ chạy ngang cho khách chưa đăng nhập (Components/CashbackMarquee.vue).

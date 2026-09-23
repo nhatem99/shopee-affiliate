@@ -34,6 +34,9 @@ class OrderController extends Controller
         return Inertia::render('Admin/Orders', [
             'orders' => $orders,
             'filters' => $request->only('status'),
+            'statusCounts' => Commission::selectRaw('status, count(*) as count')
+                ->groupBy('status')
+                ->pluck('count', 'status'),
         ]);
     }
 

@@ -63,17 +63,19 @@ function save() {
     }
 }
 
+const deleting = ref(null)
+
 function destroy(id) {
     router.delete(`/admin/vouchers/${id}`, {
-        onSuccess: () => toast.success('Đã xóa voucher'),
+        onSuccess: () => { deleting.value = null; toast.success('Đã xóa voucher') },
     })
 }
 
 const sourceLabels = { facebook: 'Facebook', youtube: 'YouTube', manual: 'Thủ công' }
 const sourceColors = {
-    facebook: 'bg-blue-100 text-blue-700',
-    youtube: 'bg-red-100 text-red-700',
-    manual: 'bg-gray-100 text-gray-600',
+    facebook: 'bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300',
+    youtube: 'bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300',
+    manual: 'bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-300',
 }
 const platformLabels = { shopee: 'Shopee', lazada: 'Lazada', tiki: 'Tiki', tiktok: 'TikTok', all: 'Tất cả' }
 
@@ -132,7 +134,7 @@ function discountText(v) {
                         </td>
                         <td class="px-5 py-3 flex gap-3">
                             <button @click="openEdit(v)" class="text-xs font-semibold text-[var(--color-accent)] hover:underline">Sửa</button>
-                            <button @click="destroy(v.id)" class="text-xs font-semibold text-red-500 hover:underline">Xóa</button>
+                            <button @click="deleting = v" class="text-xs font-semibold text-red-500 hover:underline">Xóa</button>
                         </td>
                     </tr>
                     <tr v-if="!vouchers?.length">
@@ -227,6 +229,28 @@ function discountText(v) {
                         </button>
                     </div>
                 </form>
+            </div>
+        </div>
+
+        <!-- Xác nhận xóa voucher -->
+        <div v-if="deleting" class="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+            <div class="bg-[var(--color-surface)] rounded-2xl p-6 w-full max-w-md">
+                <h2 class="font-extrabold text-[var(--color-ink)] mb-1">Xóa voucher</h2>
+                <p class="text-xs text-[var(--color-muted)] mb-5">
+                    Mã <span class="font-mono font-bold text-[var(--color-accent)]">{{ deleting.code }}</span>
+                    {{ deleting.is_active ? '— voucher này đang bật, khách có thể đang xem hoặc dùng.' : '' }}
+                    Hành động này không thể hoàn tác.
+                </p>
+                <div class="flex gap-3">
+                    <button @click="destroy(deleting.id)"
+                        class="flex-1 bg-red-500 hover:bg-red-600 text-white font-semibold py-2.5 rounded-xl text-sm transition">
+                        Xóa voucher
+                    </button>
+                    <button type="button" @click="deleting = null"
+                        class="px-6 bg-[var(--color-peach-soft)] text-[var(--color-ink)] font-semibold py-2.5 rounded-xl text-sm hover:bg-[var(--color-peach)] transition">
+                        Hủy
+                    </button>
+                </div>
             </div>
         </div>
     </AdminLayout>

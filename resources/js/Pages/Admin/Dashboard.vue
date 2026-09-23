@@ -1,6 +1,6 @@
 ﻿<script setup>
 import { computed } from 'vue'
-import { Head, router } from '@inertiajs/vue3'
+import { Head, Link, router } from '@inertiajs/vue3'
 import AdminLayout from '@/Layouts/AdminLayout.vue'
 
 const props = defineProps({
@@ -39,9 +39,9 @@ function setRange(r) {
 }
 
 const statusColors = {
-    pending: 'bg-yellow-100 text-yellow-700',
-    approved: 'bg-green-100 text-green-700',
-    paid: 'bg-blue-100 text-blue-700',
+    pending: 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/40 dark:text-yellow-300',
+    approved: 'bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300',
+    paid: 'bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300',
 }
 </script>
 
@@ -161,7 +161,10 @@ const statusColors = {
 
         <!-- Recent orders table -->
         <div class="bg-[var(--color-surface)] rounded-2xl border border-[var(--color-line)] p-6">
-            <h2 class="font-extrabold text-[var(--color-ink)] mb-4">Đơn hàng gần đây</h2>
+            <div class="flex items-center justify-between mb-4">
+                <h2 class="font-extrabold text-[var(--color-ink)]">Đơn hàng gần đây</h2>
+                <Link href="/admin/orders" class="text-sm font-semibold text-[var(--color-accent)] hover:underline">Xem tất cả →</Link>
+            </div>
             <div class="overflow-x-auto">
                 <table class="w-full text-sm">
                     <thead>

@@ -1,4 +1,5 @@
 <script setup>
+import { ref } from 'vue'
 import { router, useForm, Head } from '@inertiajs/vue3'
 import AdminLayout from '@/Layouts/AdminLayout.vue'
 import { useToast } from '@/composables/useToast'
@@ -21,9 +22,11 @@ function add() {
     })
 }
 
+const unblocking = ref(null)
+
 function destroy(id) {
     router.delete(`/admin/blocked-ips/${id}`, {
-        onSuccess: () => toast.success('Đã bỏ chặn'),
+        onSuccess: () => { unblocking.value = null; toast.success('Đã bỏ chặn') },
     })
 }
 </script>
@@ -72,7 +75,7 @@ function destroy(id) {
                         <td class="px-5 py-3 text-[var(--color-muted)]">{{ b.note || '—' }}</td>
                         <td class="px-5 py-3 text-[var(--color-muted)] text-xs">{{ new Date(b.created_at).toLocaleDateString('vi-VN') }}</td>
                         <td class="px-5 py-3">
-                            <button @click="destroy(b.id)" class="text-xs font-semibold text-red-500 hover:underline">Bỏ chặn</button>
+                            <button @click="unblocking = b" class="text-xs font-semibold text-red-500 hover:underline">Bỏ chặn</button>
                         </td>
                     </tr>
                     <tr v-if="!blockedIps?.length">
@@ -80,6 +83,28 @@ function destroy(id) {
                     </tr>
                 </tbody>
             </table>
+        </div>
+
+        <!-- Xác nhận bỏ chặn -->
+        <div v-if="unblocking" class="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+            <div class="bg-[var(--color-surface)] rounded-2xl p-6 w-full max-w-md">
+                <h2 class="font-extrabold text-[var(--color-ink)] mb-1">Bỏ chặn IP</h2>
+                <p class="text-xs text-[var(--color-muted)] mb-5">
+                    <span class="font-mono font-bold text-[var(--color-ink)]">{{ unblocking.ip_address }}</span>
+                    {{ unblocking.note ? `— ${unblocking.note}` : '' }}
+                    sẽ truy cập được lại ngay sau khi bỏ chặn.
+                </p>
+                <div class="flex gap-3">
+                    <button @click="destroy(unblocking.id)"
+                        class="flex-1 bg-red-500 hover:bg-red-600 text-white font-semibold py-2.5 rounded-xl text-sm transition">
+                        Bỏ chặn
+                    </button>
+                    <button type="button" @click="unblocking = null"
+                        class="px-6 bg-[var(--color-peach-soft)] text-[var(--color-ink)] font-semibold py-2.5 rounded-xl text-sm hover:bg-[var(--color-peach)] transition">
+                        Hủy
+                    </button>
+                </div>
+            </div>
         </div>
     </AdminLayout>
 </template>

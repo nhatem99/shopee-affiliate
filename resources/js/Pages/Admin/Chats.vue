@@ -9,6 +9,7 @@ import { useToast } from '@/composables/useToast'
 const props = defineProps({
     conversations: Object, // paginator
     active: { type: Object, default: null },
+    filters: { type: Object, default: () => ({}) },
 })
 
 const toast = useToast()
@@ -17,6 +18,17 @@ const composer = ref(null)
 
 const items = computed(() => props.conversations?.data ?? [])
 const messages = computed(() => props.active?.messages ?? [])
+
+const search = ref(props.filters?.q || '')
+watch(() => props.filters, (f) => { search.value = f?.q || '' })
+
+function applySearch() {
+    router.get('/admin/chats', { q: search.value || undefined }, { preserveState: true, replace: true })
+}
+
+function chatHref(id) {
+    return search.value ? `/admin/chats/${id}?q=${encodeURIComponent(search.value)}` : `/admin/chats/${id}`
+}
 
 // Cùng cách làm với trang chat của khách (xem Chat.vue): không WebSocket, chỉ xin lại đúng mấy
 // prop này. Nhịp thưa hơn bên khách vì admin thường mở tab này cả ngày.
@@ -114,10 +126,16 @@ function askNotify() {
                     Khách đang nhắn
                 </div>
 
+                <form @submit.prevent="applySearch" class="px-4 py-3 border-b border-[var(--color-line)] flex gap-2">
+                    <input v-model="search" type="search" placeholder="Tên hoặc email khách…"
+                        class="flex-1 min-w-0 border border-[var(--color-line)] rounded-lg px-3 py-2 text-xs bg-[var(--color-bg)] text-[var(--color-ink)] focus:outline-none focus:border-[var(--color-accent)]" />
+                    <button type="submit" class="flex-none px-3 py-2 bg-[var(--color-accent)] hover:bg-[var(--color-accent-deep)] text-white rounded-lg text-xs font-semibold transition">Tìm</button>
+                </form>
+
                 <ul v-if="items.length" class="divide-y divide-[var(--color-line)] max-h-[70vh] overflow-y-auto">
                     <li v-for="c in items" :key="c.id">
                         <Link
-                            :href="`/admin/chats/${c.id}`"
+                            :href="chatHref(c.id)"
                             preserve-scroll
                             class="block px-4 py-3 hover:bg-[var(--color-peach-soft)] transition-colors"
                             :class="active?.id === c.id ? 'bg-[var(--color-peach-soft)]' : ''"
@@ -135,7 +153,7 @@ function askNotify() {
                     </li>
                 </ul>
                 <p v-else class="px-4 py-10 text-center text-sm text-[var(--color-muted)]">
-                    Chưa có ai nhắn tin.
+                    {{ filters?.q ? 'Không tìm thấy khách nào khớp.' : 'Chưa có ai nhắn tin.' }}
                 </p>
 
                 <div v-if="conversations?.last_page > 1" class="flex items-center justify-center gap-2 text-xs px-4 py-3 border-t border-[var(--color-line)]">

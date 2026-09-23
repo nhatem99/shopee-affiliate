@@ -50,15 +50,16 @@ function submitEmail() {
                 <div>
                     <label class="block text-sm font-semibold text-[var(--color-ink)] mb-1">Email</label>
                     <input v-model="emailForm.email" type="email" required
-                        class="w-full border border-[var(--color-line)] rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-[var(--color-accent)] transition"
+                        class="w-full border border-[var(--color-line)] rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-[var(--color-accent)] focus:ring-2 focus:ring-[var(--color-peach)] transition"
                         placeholder="you@example.com" />
                     <p v-if="emailForm.errors.email" class="text-red-500 text-xs mt-1">{{ emailForm.errors.email }}</p>
                 </div>
                 <div>
                     <label class="block text-sm font-semibold text-[var(--color-ink)] mb-1">Mật khẩu</label>
                     <input v-model="emailForm.password" type="password" required
-                        class="w-full border border-[var(--color-line)] rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-[var(--color-accent)] transition"
+                        class="w-full border border-[var(--color-line)] rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-[var(--color-accent)] focus:ring-2 focus:ring-[var(--color-peach)] transition"
                         placeholder="••••••••" />
+                    <p v-if="emailForm.errors.password" class="text-red-500 text-xs mt-1">{{ emailForm.errors.password }}</p>
                 </div>
                 <button type="submit" :disabled="emailForm.processing"
                     class="btn-fire w-full py-3 rounded-xl">

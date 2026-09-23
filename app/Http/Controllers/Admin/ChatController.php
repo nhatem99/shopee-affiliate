@@ -23,11 +23,12 @@ class ChatController extends Controller
 {
     public function __construct(private readonly ChatService $chat) {}
 
-    public function index(): Response
+    public function index(Request $request): Response
     {
         return Inertia::render('Admin/Chats', [
-            'conversations' => $this->conversations(),
+            'conversations' => $this->conversations($request->input('q')),
             'active' => null,
+            'filters' => $request->only('q'),
         ]);
     }
 
@@ -50,7 +51,8 @@ class ChatController extends Controller
         $conversation->load('user');
 
         return Inertia::render('Admin/Chats', [
-            'conversations' => $this->conversations(),
+            'conversations' => $this->conversations($request->input('q')),
+            'filters' => $request->only('q'),
             'active' => [
                 'id' => $conversation->id,
                 'user' => [
@@ -87,12 +89,15 @@ class ChatController extends Controller
      * Danh sách bên trái. Hội thoại có tin mới lên đầu; hội thoại rỗng (khách bấm vào trang chat
      * rồi thoát, chưa gõ gì) bị loại — nó không phải một việc cần làm.
      */
-    private function conversations(): LengthAwarePaginator
+    private function conversations(?string $q = null): LengthAwarePaginator
     {
         return ChatConversation::with(['user', 'latestMessage'])
             ->whereNotNull('last_message_at')
+            ->when($q, fn ($query) => $query->whereHas('user', fn ($u) => $u->where('name', 'like', "%{$q}%")
+                ->orWhere('email', 'like', "%{$q}%")))
             ->orderByDesc('last_message_at')
             ->paginate(30)
+            ->withQueryString()
             ->through(fn (ChatConversation $c) => [
                 'id' => $c->id,
                 'name' => $c->user?->name ?? 'Tài khoản đã xoá',

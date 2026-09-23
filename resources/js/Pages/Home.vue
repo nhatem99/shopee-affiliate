@@ -784,7 +784,11 @@ onUnmounted(() => {
                     <div v-else class="rounded-3xl p-6 md:p-8 bg-gradient-to-br from-[var(--color-peach)] via-[var(--color-peach-soft)] to-[var(--color-green-soft)] border border-[var(--color-line)] text-center">
                         <p class="text-2xl mb-2">📱</p>
                         <p class="font-semibold text-[var(--color-ink)]">Chức năng lấy mã chỉ dùng được trên điện thoại.</p>
-                        <p class="text-sm text-[var(--color-muted)] mt-1">Vui lòng mở tietkiemvi.com bằng trình duyệt trên điện thoại.</p>
+                        <p class="text-sm text-[var(--color-muted)] mt-1">Shopee chỉ áp mã khi bấm từ điện thoại. Vui lòng mở tietkiemvi.com bằng trình duyệt trên điện thoại để dán link nhé.</p>
+                        <div class="flex items-center justify-center gap-3 mt-4">
+                            <Link href="/ma-giam-gia" class="px-4 py-2 rounded-xl text-sm font-semibold bg-[var(--color-surface)] border border-[var(--color-line)] text-[var(--color-ink)] hover:border-[var(--color-accent)] hover:text-[var(--color-accent)] transition">Xem mã giảm giá</Link>
+                            <Link href="/flashsale" class="px-4 py-2 rounded-xl text-sm font-semibold bg-[var(--color-surface)] border border-[var(--color-line)] text-[var(--color-ink)] hover:border-[var(--color-accent)] hover:text-[var(--color-accent)] transition">Xem Flash Sale</Link>
+                        </div>
                     </div>
 
                     <!-- Dải xác nhận cho khách ĐÃ đăng nhập, dính theo ô dán link. Bắt buộc gói
@@ -1168,13 +1172,15 @@ onUnmounted(() => {
                     >
                         <button
                             @click="openFaq = openFaq === i ? null : i"
+                            :aria-expanded="openFaq === i"
+                            :aria-controls="`faq-panel-${i}`"
                             class="w-full px-6 py-4 text-left flex justify-between items-center font-semibold text-[var(--color-ink)] text-sm"
                         >
                             {{ faq.q }}
                             <span class="text-[var(--color-muted)] ml-4 transition-transform" :class="openFaq === i ? 'rotate-180' : ''">▾</span>
                         </button>
                         <Transition name="fade-up">
-                            <div v-if="openFaq === i" class="px-6 pb-4 text-sm text-[var(--color-muted)] leading-relaxed">
+                            <div v-if="openFaq === i" :id="`faq-panel-${i}`" class="px-6 pb-4 text-sm text-[var(--color-muted)] leading-relaxed">
                                 {{ faq.a }}
                             </div>
                         </Transition>

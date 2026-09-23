@@ -63,34 +63,34 @@ function submit() {
                 <div>
                     <label class="block text-sm font-semibold text-[var(--color-ink)] mb-1">Họ và tên</label>
                     <input v-model="form.name" type="text" required
-                        class="w-full border border-[var(--color-line)] rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-[var(--color-accent)] transition"
+                        class="w-full border border-[var(--color-line)] rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-[var(--color-accent)] focus:ring-2 focus:ring-[var(--color-peach)] transition"
                         placeholder="Nguyễn Văn A" />
                     <p v-if="form.errors.name" class="text-red-500 text-xs mt-1">{{ form.errors.name }}</p>
                 </div>
                 <div>
                     <label class="block text-sm font-semibold text-[var(--color-ink)] mb-1">Email</label>
                     <input v-model="form.email" type="email" required
-                        class="w-full border border-[var(--color-line)] rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-[var(--color-accent)] transition"
+                        class="w-full border border-[var(--color-line)] rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-[var(--color-accent)] focus:ring-2 focus:ring-[var(--color-peach)] transition"
                         placeholder="you@example.com" />
                     <p v-if="form.errors.email" class="text-red-500 text-xs mt-1">{{ form.errors.email }}</p>
                 </div>
                 <div>
                     <label class="block text-sm font-semibold text-[var(--color-ink)] mb-1">Số điện thoại <span class="text-[var(--color-muted)] font-normal">(tùy chọn)</span></label>
                     <input v-model="form.phone" type="tel"
-                        class="w-full border border-[var(--color-line)] rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-[var(--color-accent)] transition"
+                        class="w-full border border-[var(--color-line)] rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-[var(--color-accent)] focus:ring-2 focus:ring-[var(--color-peach)] transition"
                         placeholder="0901234567" />
                 </div>
                 <div>
                     <label class="block text-sm font-semibold text-[var(--color-ink)] mb-1">Mật khẩu</label>
                     <input v-model="form.password" type="password" required
-                        class="w-full border border-[var(--color-line)] rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-[var(--color-accent)] transition"
+                        class="w-full border border-[var(--color-line)] rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-[var(--color-accent)] focus:ring-2 focus:ring-[var(--color-peach)] transition"
                         placeholder="Tối thiểu 8 ký tự" />
                     <p v-if="form.errors.password" class="text-red-500 text-xs mt-1">{{ form.errors.password }}</p>
                 </div>
                 <div>
                     <label class="block text-sm font-semibold text-[var(--color-ink)] mb-1">Xác nhận mật khẩu</label>
                     <input v-model="form.password_confirmation" type="password" required
-                        class="w-full border border-[var(--color-line)] rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-[var(--color-accent)] transition"
+                        class="w-full border border-[var(--color-line)] rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-[var(--color-accent)] focus:ring-2 focus:ring-[var(--color-peach)] transition"
                         placeholder="Nhập lại mật khẩu" />
                 </div>
                 <button type="submit" :disabled="form.processing"

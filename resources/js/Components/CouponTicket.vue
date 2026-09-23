@@ -53,8 +53,8 @@ const label = props.isFreeship
                 <p class="text-xs font-semibold text-[var(--color-muted)] uppercase tracking-wide">
                     {{ isFreeship ? 'Freeship' : 'Voucher' }}
                 </p>
-                <span v-if="source === 'facebook'" class="text-xs bg-blue-100 text-blue-700 font-semibold px-1.5 py-0.5 rounded">📘 Facebook</span>
-                <span v-else-if="source === 'youtube'" class="text-xs bg-red-100 text-red-700 font-semibold px-1.5 py-0.5 rounded">▶️ YouTube</span>
+                <span v-if="source === 'facebook'" class="text-xs bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300 font-semibold px-1.5 py-0.5 rounded">📘 Facebook</span>
+                <span v-else-if="source === 'youtube'" class="text-xs bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300 font-semibold px-1.5 py-0.5 rounded">▶️ YouTube</span>
             </div>
             <p class="text-lg font-extrabold text-[var(--color-ink)]">{{ label }}</p>
             <p v-if="subtitle" class="text-xs text-[var(--color-muted)] mt-0.5">{{ subtitle }}</p>
