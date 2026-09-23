@@ -3,7 +3,10 @@
 namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
+use App\Models\ShopeeOrder;
 use App\Models\User;
+use App\Services\CashbackService;
+use App\Services\MembershipTierService;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -15,33 +18,60 @@ use Inertia\Response;
 
 class UserController extends Controller
 {
+    public function __construct(
+        private CashbackService $cashback,
+        private MembershipTierService $tiers,
+    ) {}
+
     public function index(Request $request): Response
     {
-        $users = $this->filteredQuery($request)
+        $paginator = $this->filteredQuery($request)
             ->withCount('affiliateLinks')
             // Tính bằng SQL thay vì gọi approvedCommissionTotal()/reservedWithdrawalTotal() trên
             // từng dòng: 20 user/trang x 2 quan hệ = 40 truy vấn thừa cho mỗi lần mở trang.
             ->withSum(['commissions as approved_commission_total' => fn (Builder $q) => $q->where('status', 'approved')], 'amount')
             ->withSum(['withdrawals as reserved_withdrawal_total' => fn (Builder $q) => $q->whereIn('status', ['pending', 'approved', 'completed'])], 'amount')
             ->latest()
-            ->paginate(20)
-            ->through(fn (User $u) => [
-                'id' => $u->id,
-                'name' => $u->name,
-                'email' => $u->email,
-                'phone' => $u->phone,
-                'sub_id' => $u->sub_id,
-                'role' => $u->role,
-                'links_count' => $u->affiliate_links_count,
-                'approved_commission' => (float) $u->approved_commission_total,
-                'available_balance' => (float) $u->approved_commission_total - (float) $u->reserved_withdrawal_total,
-                'banned_at' => $u->banned_at?->toDateTimeString(),
-                'banned_reason' => $u->banned_reason,
-                'created_at' => $u->created_at->toDateString(),
-                'last_seen_at' => $u->last_seen_at?->toDateTimeString(),
-                // "x phút trước" tính ở server theo múi giờ app — máy admin có thể đặt múi giờ khác.
-                'last_seen_human' => $u->last_seen_at?->locale('vi')->diffForHumans(),
-            ])
+            ->paginate(20);
+
+        $userIds = $paginator->getCollection()->pluck('id')->all();
+
+        // Cùng công thức với trang Đơn hàng của khách (OrderHistoryController): tỉ lệ nền + thưởng
+        // hạng của từng người, nhân với hoa hồng ròng của các đơn CHƯA chốt (status pending) —
+        // đây là số admin cần để ước lượng quỹ hoàn tiền sắp phải trả, không phải tiền đã chắc chắn.
+        $baseRate = $this->cashback->rate();
+        $bonusRates = $this->tiers->bonusRatesFor($userIds);
+
+        $pendingNetByUser = ShopeeOrder::whereIn('user_id', $userIds)
+            ->where('status', 'pending')
+            ->groupBy('user_id')
+            ->selectRaw('user_id, SUM(net_commission) as net_total')
+            ->pluck('net_total', 'user_id');
+
+        $users = $paginator
+            ->through(function (User $u) use ($baseRate, $bonusRates, $pendingNetByUser) {
+                $rate = $baseRate > 0 ? min(100.0, $baseRate + (float) ($bonusRates[$u->id] ?? 0.0)) : 0.0;
+                $pendingNet = (float) ($pendingNetByUser[$u->id] ?? 0);
+
+                return [
+                    'id' => $u->id,
+                    'name' => $u->name,
+                    'email' => $u->email,
+                    'phone' => $u->phone,
+                    'sub_id' => $u->sub_id,
+                    'role' => $u->role,
+                    'links_count' => $u->affiliate_links_count,
+                    'approved_commission' => (float) $u->approved_commission_total,
+                    'available_balance' => (float) $u->approved_commission_total - (float) $u->reserved_withdrawal_total,
+                    'pending_estimate' => $rate > 0 ? round($pendingNet * $rate / 100, 2) : null,
+                    'banned_at' => $u->banned_at?->toDateTimeString(),
+                    'banned_reason' => $u->banned_reason,
+                    'created_at' => $u->created_at->toDateString(),
+                    'last_seen_at' => $u->last_seen_at?->toDateTimeString(),
+                    // "x phút trước" tính ở server theo múi giờ app — máy admin có thể đặt múi giờ khác.
+                    'last_seen_human' => $u->last_seen_at?->locale('vi')->diffForHumans(),
+                ];
+            })
             ->withQueryString();
 
         return Inertia::render('Admin/Users', [

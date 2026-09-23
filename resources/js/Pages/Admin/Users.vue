@@ -202,6 +202,7 @@ function confirmRole() {
                         <th class="px-4 py-3 font-semibold">Mã sub_id</th>
                         <th class="px-4 py-3 font-semibold text-right">Link</th>
                         <th class="px-4 py-3 font-semibold text-right">Hoa hồng duyệt</th>
+                        <th class="px-4 py-3 font-semibold text-right">Hoàn dự kiến</th>
                         <th class="px-4 py-3 font-semibold text-right">Số dư khả dụng</th>
                         <th class="px-4 py-3 font-semibold">Trạng thái</th>
                         <th class="px-4 py-3 font-semibold">Truy cập cuối</th>
@@ -223,6 +224,7 @@ function confirmRole() {
                         </td>
                         <td class="px-4 py-3 text-right tabular-nums text-[var(--color-ink)]/70">{{ u.links_count }}</td>
                         <td class="px-4 py-3 text-right tabular-nums text-[var(--color-ink)]/70">{{ vnd(u.approved_commission) }}</td>
+                        <td class="px-4 py-3 text-right tabular-nums text-[var(--color-accent)]">{{ u.pending_estimate === null ? '—' : vnd(u.pending_estimate) }}</td>
                         <td class="px-4 py-3 text-right tabular-nums font-semibold text-[var(--color-brand-green)]">{{ vnd(u.available_balance) }}</td>
                         <td class="px-4 py-3">
                             <span v-if="u.banned_at" class="px-2 py-1 rounded-full text-xs font-semibold bg-red-100 text-red-600">Bị khoá</span>
@@ -251,7 +253,7 @@ function confirmRole() {
                         </td>
                     </tr>
                     <tr v-if="!users?.data?.length">
-                        <td colspan="8" class="px-4 py-10 text-center text-[var(--color-muted)]">Không tìm thấy tài khoản nào.</td>
+                        <td colspan="9" class="px-4 py-10 text-center text-[var(--color-muted)]">Không tìm thấy tài khoản nào.</td>
                     </tr>
                 </tbody>
             </table>
