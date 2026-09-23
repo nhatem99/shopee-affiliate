@@ -83,6 +83,7 @@ const accountDrawerOpen = ref(false)
                          mục "Hoàn tiền" dưới đó không bao giờ hiện ở đây. Thiếu link này thì khách
                          máy tính không có đường nào tới /hoan-tien ngoài gõ tay URL. -->
                     <Link v-if="!auth.isAdmin && cashbackOn" href="/hoan-tien" class="nav-pill rounded-xl px-3.5 py-2" :class="{ 'nav-pill--active': current.startsWith('/hoan-tien') }">Hoàn tiền</Link>
+                    <Link v-if="!auth.isAdmin" href="/ma-giam-gia" class="nav-pill rounded-xl px-3.5 py-2" :class="{ 'nav-pill--active': current.startsWith('/ma-giam-gia') }">Mã giảm giá</Link>
                     <Link v-if="!auth.isAdmin" href="/blog" class="nav-pill rounded-xl px-3.5 py-2" :class="{ 'nav-pill--active': current.startsWith('/blog') }">Blog</Link>
                     <Link v-if="auth.isLoggedIn && !auth.isAdmin" href="/history" class="nav-pill rounded-xl px-3.5 py-2" :class="{ 'nav-pill--active': current.startsWith('/history') }">Lịch sử</Link>
                     <Link v-if="auth.isLoggedIn && !auth.isAdmin && cashbackOn" href="/don-hang" class="nav-pill rounded-xl px-3.5 py-2" :class="{ 'nav-pill--active': current.startsWith('/don-hang') }">Đơn hàng</Link>

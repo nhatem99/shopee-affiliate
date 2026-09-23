@@ -24,6 +24,7 @@ use App\Http\Controllers\Auth\LoginController;
 use App\Http\Controllers\Auth\RegisterController;
 use App\Http\Controllers\BlogController;
 use App\Http\Controllers\ChatController;
+use App\Http\Controllers\CheckInController;
 use App\Http\Controllers\GuideController;
 use App\Http\Controllers\NotificationController;
 use App\Http\Controllers\OrderHistoryController;
@@ -31,10 +32,12 @@ use App\Http\Controllers\ProfileController;
 use App\Http\Controllers\ShopeeVoucherController;
 use App\Http\Controllers\ShortLinkController;
 use App\Http\Controllers\TrackingController;
+use App\Http\Controllers\VoucherCatalogController;
 use App\Http\Controllers\WithdrawalController;
 use App\Models\PlatformVoucher;
 use App\Services\CashbackLeaderboardService;
 use App\Services\CashbackService;
+use App\Services\DailyCheckInService;
 use App\Services\MembershipTierService;
 use App\Services\TrackingService;
 use Illuminate\Http\Request;
@@ -42,7 +45,7 @@ use Illuminate\Support\Facades\Route;
 use Inertia\Inertia;
 
 // Home
-Route::get('/', function (Request $request, TrackingService $tracking, CashbackService $cashback, CashbackLeaderboardService $leaderboard, MembershipTierService $tiers) {
+Route::get('/', function (Request $request, TrackingService $tracking, CashbackService $cashback, CashbackLeaderboardService $leaderboard, MembershipTierService $tiers, DailyCheckInService $checkIn) {
     $tracking->log('page_view', $request, ['url' => $request->fullUrl()]);
 
     return Inertia::render('Home', [
@@ -56,6 +59,10 @@ Route::get('/', function (Request $request, TrackingService $tracking, CashbackS
         // Hạng thành viên & đặc quyền. null = chương trình tắt, khối ở frontend tự biến mất
         // (MembershipTierService::enabled đã gộp luôn điều kiện tỉ lệ hoàn tiền > 0).
         'membershipTiers' => $tiers->enabled() ? $tiers->publicTiers($request->user()) : null,
+        // Điểm danh nhận quà. null = admin đã tắt, thẻ ở frontend tự biến mất. Đóng closure để
+        // những lượt partial reload không xin tới nó (ví dụ reload riêng voucherResult sau mỗi lần
+        // dán link) không phải chạy lại mấy truy vấn đếm kho quà.
+        'dailyCheckIn' => fn () => $checkIn->enabled() ? $checkIn->state($request->user()) : null,
     ]);
 })->name('home');
 
@@ -128,6 +135,15 @@ Route::get('/hoan-tien', function (Request $request, CashbackService $cashback, 
 // Huong dan lay ma — trang cong khai, co URL rieng de dan vao bai dang Facebook/Zalo.
 Route::get('/huong-dan', [GuideController::class, 'index'])->name('guide');
 
+// Kho ma giam gia toan san — trang cong khai, khach xem ma khong can dan link san pham.
+// Khong dat duoi 'auth': day la trang di SEO, phai mo cho ca khach vang lai va bo tim kiem.
+Route::get('/ma-giam-gia', [VoucherCatalogController::class, 'index'])->name('vouchers.catalog');
+// Nguon du lieu cho cuon vo tan. Throttle rong tay hon 'affiliate-scan' vi day chi la doc
+// DB, khong goi sang ben thu ba — nhung van co tran de khong ai keo het bang bang mot vong lap.
+Route::get('/api/vouchers', [VoucherCatalogController::class, 'feed'])
+    ->middleware('throttle:60,1')
+    ->name('vouchers.catalog.feed');
+
 // Blog
 Route::get('/blog', [BlogController::class, 'index'])->name('blog.index');
 Route::get('/blog/{slug}', [BlogController::class, 'show'])->name('blog.show');
@@ -151,6 +167,11 @@ Route::middleware('auth')->group(function () {
     // không có route "lấy tin mới" riêng — xem ChatService.
     Route::get('/ho-tro', [ChatController::class, 'index'])->name('support');
     Route::post('/ho-tro/gui', [ChatController::class, 'store'])->middleware('throttle:chat')->name('support.send');
+    // Điểm danh nhận quà hằng ngày — thẻ nằm trên trang chủ, bấm xong quay về chính trang đó.
+    // Throttle theo user chứ không theo IP: cả nhà dùng chung một mạng là chung một IP.
+    Route::post('/diem-danh', [CheckInController::class, 'store'])
+        ->middleware('throttle:checkin')
+        ->name('checkin.store');
     Route::get('/thong-bao', [NotificationController::class, 'index'])->name('notifications');
     Route::post('/thong-bao/doc-het', [NotificationController::class, 'readAll'])->name('notifications.readAll');
     Route::post('/thong-bao/{id}/doc', [NotificationController::class, 'read'])->name('notifications.read');

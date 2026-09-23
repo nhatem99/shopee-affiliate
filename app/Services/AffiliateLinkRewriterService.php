@@ -226,7 +226,14 @@ class AffiliateLinkRewriterService
      * KHÔNG xoá nữa — mất mã là mất luôn khả năng hoàn tiền cho khách đó, đắt hơn nhiều so với
      * việc kín thêm một chút.
      */
-    private function buildSubId(string $channelLabel, ?string $userSubId): string
+    /**
+     * Ghép nhãn kênh với mã khách thành giá trị đặt vào ô Sub_id của Shopee.
+     *
+     * Public vì trang mã giảm giá (/ma-giam-gia) cũng phải dựng đúng chuỗi này — xem
+     * VoucherCatalogService::publicUrlFor(). Quy ước 5 khe phải nằm ở MỘT chỗ duy nhất:
+     * chép sang nơi khác là sớm muộn hai bên lệch nhau và báo cáo affiliate đọc sai.
+     */
+    public function buildSubId(string $channelLabel, ?string $userSubId): string
     {
         if ($userSubId === null || $userSubId === '') {
             return $channelLabel;

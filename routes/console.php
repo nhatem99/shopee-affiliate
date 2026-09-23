@@ -53,3 +53,12 @@ Schedule::command('kieushopee:health')
     ->withoutOverlapping()
     ->description('Kiểm tra nguồn kieushopee, tự bật/tắt bảo trì')
     ->storeOutput();
+
+// Làm mới kho mã của trang /ma-giam-gia. Mỗi giờ: mã toàn sàn đổi theo ngày chứ không theo
+// phút, nhưng cột "đã dùng %" thì nhích liên tục — để quá thưa là khách bấm vào mã mà nguồn
+// đang ghi 60% thực tế đã hết lượt. Nguồn là API của website khác nên cũng không nên gọi dày.
+Schedule::command('vouchers:sync')
+    ->hourly()
+    ->withoutOverlapping()
+    ->description('Đồng bộ kho mã giảm giá toàn sàn (/ma-giam-gia)')
+    ->storeOutput();

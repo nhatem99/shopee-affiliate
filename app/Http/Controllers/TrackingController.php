@@ -12,8 +12,9 @@ class TrackingController extends Controller
     /**
      * Sự kiện được phép ghi nhận từ frontend — tránh nhận log tuỳ ý từ client.
      * 'facebook_open' = khách bấm "Mở Facebook ngay" (điểm chuyển đổi của luồng lấy mã qua FB).
+     * 'voucher_claim' = khách bấm "Áp dụng" ở /ma-giam-gia (điểm chuyển đổi của trang mã).
      */
-    private const ALLOWED_EVENTS = ['voucher_copy', 'facebook_open'];
+    private const ALLOWED_EVENTS = ['voucher_copy', 'facebook_open', 'voucher_claim'];
 
     public function store(Request $request, TrackingService $tracking): JsonResponse
     {

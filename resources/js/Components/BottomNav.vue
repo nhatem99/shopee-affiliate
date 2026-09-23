@@ -12,6 +12,9 @@ const { cashbackOn } = useCashback()
 const items = computed(() => [
     ...(auth.isAdmin ? [] : [
         { href: '/', icon: '⌂', label: 'Trang chủ' },
+        // Trang mã đứng ngay cạnh Trang chủ: đây là lối vào KHÔNG cần dán link sản phẩm,
+        // dùng được cả với khách vãng lai lẫn khách chưa có sẵn thứ muốn mua.
+        { href: '/ma-giam-gia', icon: '🎟️', label: 'Mã giảm giá' },
         // Khách vãng lai trước đây chỉ sinh đúng MỘT mục, chiếm nguyên chiều ngang trông như
         // thanh bị lỗi. Mục này vừa lấp chỗ đó vừa đưa đúng nhóm cần đọc nhất tới phần giải
         // thích — họ là người sẽ mất tiền nếu bấm mua mà chưa đăng nhập.

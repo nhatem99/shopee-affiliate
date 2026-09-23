@@ -77,6 +77,42 @@ return [
         'yt_markers' => ['yt', 'yt1', 'yt2', 'yt3', 'ytb', 'youtube'],
     ],
 
+    /**
+     * Kho mã giảm giá toàn sàn ở /ma-giam-gia — xem VoucherCatalogSyncService.
+     */
+    'voucher_catalog' => [
+        // Nguồn cấp danh sách mã. Đây là API của một website khác, không phải của mình:
+        // họ đổi đường dẫn hoặc chặn là trang mã đứng yên ở lần đồng bộ cuối (không sập,
+        // chỉ cũ dần) — lệnh `vouchers:sync` sẽ kêu trong log và ở /admin/scheduler.
+        'source_url' => env('VOUCHER_CATALOG_SOURCE', 'https://bloghoantien.com/api/vouchers'),
+
+        // Số mã xin mỗi lượt gọi và trần số trang, để một nguồn trả sai `hasMore` không
+        // kéo lệnh chạy vô tận.
+        'page_size' => (int) env('VOUCHER_CATALOG_PAGE_SIZE', 50),
+        'max_pages' => (int) env('VOUCHER_CATALOG_MAX_PAGES', 20),
+
+        // Các sàn đi lấy. Nguồn cấp cả Lazada/TikTok Shop/Tiki/ShopeeFood nhưng CHƯA bật sàn
+        // nào ngoài Shopee, vì hai lý do khác nhau (đo thật 23-09-2026):
+        //
+        //  • Lazada/TikTok Shop/Tiki: link không trỏ shopee.vn nên không đổi được sang
+        //    affiliate của mình — mình chỉ có affiliate ID Shopee. Bật lên là mã bị bỏ hết
+        //    ở bước đồng bộ, không mã nào ra tới trang.
+        //
+        //  • ShopeeFood: nguồn trả 50 mã nhưng CẢ 50 dùng CHUNG đúng một link rút gọn
+        //    (https://shope.ee/8pkfHVMmn3) trỏ trang chủ ShopeeFood, không phải link riêng
+        //    theo mã. Tức là không có chuyện bấm "Áp dụng" rồi mã tự lưu vào tài khoản —
+        //    đúng thứ cả trang này hứa. Bày lên thì mỗi nút đưa khách tới cùng một chỗ.
+        //
+        // Muốn thêm sàn = phải có affiliate ID của sàn đó VÀ nguồn phải trả link theo từng mã.
+        'platforms' => ['shopee'],
+
+        // Nhãn Sub_id cho traffic đến từ trang mã, để tách khỏi fb/IG/YT trong báo cáo
+        // affiliate Shopee. Cùng quy tắc với `utm_content` ở trên: Shopee đọc được và
+        // khách thấy trên thanh địa chỉ, nên KHÔNG đặt tên miền/thương hiệu vào đây.
+        // Để rỗng thì tham số bị xoá hẳn khỏi URL.
+        'utm_content' => env('VOUCHER_CATALOG_UTM_CONTENT', 'MGG'),
+    ],
+
     // Nguồn lấy mã YouTube — chạy song song kieushopee, admin chọn nguồn nào đang dùng ở
     // /admin/api-config. Khác kieushopee ở chỗ đây là API BẤT ĐỒNG BỘ: tạo job rồi phải hỏi
     // lại nhiều lần cho tới khi xong.

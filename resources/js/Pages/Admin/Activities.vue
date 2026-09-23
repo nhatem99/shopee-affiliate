@@ -31,6 +31,7 @@ const eventLabels = {
     url_paste: 'Dán link sản phẩm',
     voucher_select: 'Chọn/lấy mã',
     voucher_copy: 'Copy mã',
+    voucher_claim: '🎟️ Áp dụng mã (trang mã giảm giá)',
     short_link_click: 'Click link rút gọn',
     ytb_activate: '▶️ Kích hoạt mã YouTube (bước 1)',
     facebook_open: '👉 Mở Facebook (chuyển đổi)',
