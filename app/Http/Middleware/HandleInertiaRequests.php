@@ -50,6 +50,10 @@ class HandleInertiaRequests extends Middleware
             'flash' => [
                 'success' => fn () => $request->session()->get('success'),
                 'error' => fn () => $request->session()->get('error'),
+                // Phần quà vừa bốc được ở /diem-danh, để thẻ Điểm danh chạy màn lật quà đúng MỘT lần
+                // ngay sau cú bấm. Đi theo flash chứ không nằm trong prop của thẻ: prop sống qua mọi
+                // lần F5, mà quà bay ra lại mỗi lần tải trang thì thành trò đùa — xem CheckInController.
+                'checkin' => fn () => $request->session()->get('checkin'),
             ],
             'settings' => [
                 'customerAuthEnabled' => Setting::getBool('customer_auth_enabled', true),

@@ -11,6 +11,7 @@ import CashbackExplainer from '@/Components/CashbackExplainer.vue'
 import CashbackLeaderboard from '@/Components/CashbackLeaderboard.vue'
 import HowItWorksSteps from '@/Components/HowItWorksSteps.vue'
 import MembershipTiers from '@/Components/MembershipTiers.vue'
+import DailyCheckIn from '@/Components/DailyCheckIn.vue'
 import { useToast } from '@/composables/useToast'
 import { useCashback } from '@/composables/useCashback'
 import { useFestive } from '@/composables/useFestive'
@@ -36,6 +37,9 @@ const props = defineProps({
     // Bảng hạng thành viên + tiến độ của chính khách này — null khi admin tắt chương trình hạng
     // hoặc khi tỉ lệ hoàn tiền đang là 0 (xem MembershipTierService::enabled).
     membershipTiers: { type: Object, default: null },
+    // Thẻ Điểm danh nhận quà — null khi admin tắt chương trình (xem DailyCheckInService).
+    // Khách vãng lai vẫn có dữ liệu này: thẻ hiện đủ kho quà và dẫn họ đi đăng ký.
+    dailyCheckIn: { type: Object, default: null },
 })
 
 // Nơi khách phải bấm sau khi Facebook mở ra — dùng lại ở nhiều câu hướng dẫn nên gom một chỗ.
@@ -986,6 +990,12 @@ onUnmounted(() => {
                 <div v-if="canUseVoucherTool" class="mt-4">
                     <HowItWorksSteps :title="stepsTitle" :steps="steps" />
                 </div>
+
+                <!-- Điểm danh nhận quà: đứng ngay dưới công cụ chính, trước lịch sử/bảng xếp hạng.
+                     Đây là lý do để quay lại vào ngày khách KHÔNG có gì để mua, nên nó phải nằm trong
+                     màn hình đầu tiên sau khi cuộn một nhịp — nhét xuống cuối trang thì chỉ người đã quay
+                     lại rồi mới thấy, tức đúng nhóm không cần nó nữa. -->
+                <DailyCheckIn v-if="dailyCheckIn" :state="dailyCheckIn" class="mt-4" />
 
                 <!-- Lịch sử chuyển đổi (lưu trên trình duyệt) + Bảng xếp hạng hoàn tiền, dạng tab.
                      Chỉ hiện thanh tab khi cả hai cùng có; thiếu một bên thì hiện thẳng bên còn lại

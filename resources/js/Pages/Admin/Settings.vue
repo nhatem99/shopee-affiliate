@@ -26,6 +26,9 @@ const props = defineProps({
     welcomeBonusEnabled: { type: Boolean, default: true },
     welcomeBonusAmount: { type: Number, default: 5000 },
     membershipTierEnabled: { type: Boolean, default: true },
+    checkinEnabled: { type: Boolean, default: true },
+    // DailyCheckInService::state(null) — kho quà hôm nay, dùng cho bảng tồn ở dưới công tắc.
+    checkinPrizes: { type: Object, default: null },
 })
 
 const toast = useToast()
@@ -61,6 +64,8 @@ const welcomeBonusAmount = ref(props.welcomeBonusAmount)
 const savingWelcomeBonusAmount = ref(false)
 const membershipTierEnabled = ref(props.membershipTierEnabled)
 const savingMembershipTier = ref(false)
+const checkinEnabled = ref(props.checkinEnabled)
+const savingCheckin = ref(false)
 
 // Đồng bộ lại nếu server trả về giá trị khác (ví dụ sau khi lưu xong)
 watch(() => props.customerAuthEnabled, (v) => { customerAuthEnabled.value = v })
@@ -79,6 +84,7 @@ watch(() => props.cashbackDisplayRate, (v) => { cashbackDisplayRate.value = v ??
 watch(() => props.welcomeBonusEnabled, (v) => { welcomeBonusEnabled.value = v })
 watch(() => props.welcomeBonusAmount, (v) => { welcomeBonusAmount.value = v })
 watch(() => props.membershipTierEnabled, (v) => { membershipTierEnabled.value = v })
+watch(() => props.checkinEnabled, (v) => { checkinEnabled.value = v })
 
 function toggleCustomerAuth() {
     const next = !customerAuthEnabled.value
@@ -379,6 +385,35 @@ function toggleMembershipTier() {
         },
         onError: () => toast.error('Không lưu được, vui lòng thử lại.'),
         onFinish: () => { savingMembershipTier.value = false },
+    })
+}
+
+// Tắt chỉ ảnh hưởng từ bây giờ: chuỗi ngày và tiền đã phát nằm nguyên trong bảng check_ins,
+// bật lại trong ngày là khách nối tiếp đúng chuỗi cũ — không ai mất gì vì một cú gạt công tắc.
+// Tổng số phần quà CÓ HẠN mỗi ngày — mẫu số của dòng "còn X/Y phần". Mức không giới hạn
+// (quantity = null) không đếm ở đây: nó không bao giờ hết nên cộng vào là vô nghĩa.
+const checkinTotalGifts = computed(() => (props.checkinPrizes?.prizes ?? [])
+    .filter((p) => p.quantity !== null)
+    .reduce((sum, p) => sum + p.quantity, 0))
+
+function money(n) {
+    return Number(n || 0).toLocaleString('vi-VN') + ' đ'
+}
+
+function toggleCheckin() {
+    const next = !checkinEnabled.value
+    savingCheckin.value = true
+
+    router.post('/admin/settings', { checkin_enabled: next }, {
+        preserveScroll: true,
+        onSuccess: () => {
+            checkinEnabled.value = next
+            toast.success(next
+                ? 'Đã bật điểm danh — thẻ nhận quà hiện lại trên trang chủ.'
+                : 'Đã tắt — thẻ điểm danh biến khỏi trang chủ, chuỗi ngày của khách giữ nguyên.')
+        },
+        onError: () => toast.error('Không lưu được, vui lòng thử lại.'),
+        onFinish: () => { savingCheckin.value = false },
     })
 }
 
@@ -827,6 +862,65 @@ function saveCashbackDisplayRate() {
                             : (Number(cashbackRate) > 0
                                 ? `Đang chạy — khách hạng Kim cương nhận tới ${Math.min(100, Number(cashbackRate) + 5)}% hoa hồng ròng.`
                                 : 'Đã bật nhưng chưa chạy: tỉ lệ hoàn tiền đang là 0.') }}
+                    </span>
+                </div>
+            </div>
+
+            <div class="bg-[var(--color-surface)] rounded-2xl border border-[var(--color-line)] p-6">
+                <div class="flex items-start justify-between gap-6">
+                    <div class="min-w-0">
+                        <h2 class="font-bold text-[var(--color-ink)] mb-1">📅 Điểm danh nhận quà</h2>
+                        <p class="text-sm text-[var(--color-muted)] leading-relaxed">
+                            Thẻ trên trang chủ: khách bấm một lần mỗi ngày, bốc ngẫu nhiên một phần quà trong kho quà
+                            của ngày hôm đó, điểm danh liên tiếp đủ mốc thì được thưởng thêm. Tiền vào ví ngay nhưng
+                            khách <strong class="text-[var(--color-ink)]">không rút được</strong> nếu chưa có đơn nào được hoàn tiền thật,
+                            nên không sợ cày tài khoản ảo. Kho quà tự đầy lại lúc 0 giờ; sửa mệnh giá và số phần
+                            trong <code>DailyCheckInService::PRIZES</code>.
+                        </p>
+                    </div>
+                    <button
+                        type="button"
+                        role="switch"
+                        :aria-checked="checkinEnabled"
+                        :disabled="savingCheckin"
+                        @click="toggleCheckin"
+                        class="relative inline-flex h-7 w-12 flex-none items-center rounded-full transition-colors disabled:opacity-60"
+                        :class="checkinEnabled ? 'bg-[var(--color-brand-green)]' : 'bg-[var(--color-line)]'"
+                    >
+                        <span class="inline-block h-5 w-5 rounded-full bg-white shadow transition-transform" :class="checkinEnabled ? 'translate-x-6' : 'translate-x-1'"></span>
+                    </button>
+                </div>
+
+                <div v-if="checkinPrizes" class="mt-4 pt-4 border-t border-[var(--color-line)]">
+                    <p class="text-xs font-bold uppercase tracking-wide text-[var(--color-muted)] mb-2">Kho quà hôm nay</p>
+                    <ul class="space-y-1.5">
+                        <li
+                            v-for="prize in checkinPrizes.prizes"
+                            :key="prize.amount"
+                            class="flex items-center justify-between gap-3 text-sm"
+                        >
+                            <span class="font-semibold text-[var(--color-ink)] tabular-nums">{{ money(prize.amount) }}</span>
+                            <span v-if="prize.quantity === null" class="text-xs text-[var(--color-muted)]">Không giới hạn</span>
+                            <span v-else class="text-xs tabular-nums" :class="prize.left > 0 ? 'text-[var(--color-muted)]' : 'text-[var(--color-accent)]'">
+                                {{ prize.left > 0 ? `còn ${prize.left}/${prize.quantity} phần` : 'đã hết hôm nay' }}
+                            </span>
+                        </li>
+                    </ul>
+                    <p class="text-xs text-[var(--color-muted)] mt-3 leading-relaxed">
+                        Mốc chuỗi ngày:
+                        <template v-for="(m, mi) in checkinPrizes.milestones" :key="m.days">
+                            <span v-if="mi">, </span>{{ m.days }} ngày +{{ money(m.amount) }}
+                        </template>
+                        — lặp lại, trùng cả hai thì lấy mốc lớn.
+                    </p>
+                </div>
+
+                <div class="mt-4 pt-4 border-t border-[var(--color-line)] flex items-center gap-2 text-sm">
+                    <span class="w-2 h-2 rounded-full flex-none" :class="checkinEnabled ? 'bg-[var(--color-brand-green)]' : 'bg-[var(--color-muted)]'"></span>
+                    <span class="text-[var(--color-ink)] font-medium">
+                        {{ checkinEnabled
+                            ? `Đang chạy — hôm nay còn ${(checkinPrizes?.gifts_left ?? 0).toLocaleString('vi-VN')}/${checkinTotalGifts.toLocaleString('vi-VN')} phần quà có hạn, giải cao nhất còn lại ${money(checkinPrizes?.top_prize ?? 0)}.`
+                            : 'Đang tắt — thẻ điểm danh không hiện trên trang chủ.' }}
                     </span>
                 </div>
             </div>

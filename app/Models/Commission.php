@@ -21,6 +21,9 @@ class Commission extends Model
     /** Tiền thưởng khi đăng ký (xem WelcomeBonusService). Không phải tiền từ đơn nào. */
     public const TYPE_WELCOME_BONUS = 'welcome_bonus';
 
+    /** Quà điểm danh hằng ngày (xem DailyCheckInService). Cũng không phải tiền từ đơn nào. */
+    public const TYPE_CHECKIN = 'checkin';
+
     protected function casts(): array
     {
         return [

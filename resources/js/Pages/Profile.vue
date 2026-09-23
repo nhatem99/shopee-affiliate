@@ -3,6 +3,7 @@ import { ref, computed } from 'vue'
 import { Head, Link, useForm } from '@inertiajs/vue3'
 import AccountLayout from '@/Layouts/AccountLayout.vue'
 import MembershipTierProgress from '@/Components/MembershipTierProgress.vue'
+import DailyCheckIn from '@/Components/DailyCheckIn.vue'
 import UserAvatar from '@/Components/UserAvatar.vue'
 import { useToast } from '@/composables/useToast'
 
@@ -17,6 +18,8 @@ const props = defineProps({
     // Hạng thành viên + tiến độ lên hạng của quý này. null = admin tắt chương trình hạng (hoặc
     // tỉ lệ hoàn tiền = 0), lúc đó thẻ hạng biến mất khỏi trang này.
     tier: { type: Object, default: null },
+    // Thẻ Điểm danh nhận quà — null khi admin tắt chương trình, thẻ tự biến mất khỏi trang.
+    dailyCheckIn: { type: Object, default: null },
 })
 
 function vnd(n) {
@@ -164,6 +167,13 @@ const providerLabels = { momo: 'MoMo', zalopay: 'ZaloPay' }
                     Gửi yêu cầu xong, bên mình duyệt rồi chuyển tay về ví của bạn — không phải tự động, nên bạn chờ một chút nhé.
                 </p>
             </div>
+
+            <!-- Điểm danh nhận quà. Đứng ngay dưới số dư vì đây là thứ DUY NHẤT trên trang này
+                 khách bấm một cái là con số phía trên nhúch lên ngay; mọi khối còn lại (rút tiền, hạng,
+                 lịch sử) đều là chờ hoặc là việc phải làm ở chỗ khác.
+                 reload='balance': số dư nằm ngay trên thẻ nên phải lấy lại cùng lượt, không thì khách
+                 vừa nhận quà mà con số đứng yên — xem Components/DailyCheckIn.vue. -->
+            <DailyCheckIn v-if="dailyCheckIn" :state="dailyCheckIn" :reload="['balance']" />
 
             <!-- Hạng thành viên. Đặt ngay dưới số dư vì nó nói về cùng một thứ — tiền hoàn —
                  và là nơi trang /hoan-tien đã hứa là "theo dõi được tiến độ nâng hạng". -->

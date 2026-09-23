@@ -7,6 +7,7 @@ use App\Models\Setting;
 use App\Services\CashbackLeaderboardService;
 use App\Services\CashbackService;
 use App\Services\ChatService;
+use App\Services\DailyCheckInService;
 use App\Services\GuideVideoService;
 use App\Services\MembershipTierService;
 use App\Services\SourceHealthService;
@@ -41,6 +42,10 @@ class SettingsController extends Controller
             'cashbackRate' => (float) Setting::get(CashbackService::RATE_KEY, 0),
             'welcomeBonusEnabled' => Setting::getBool(WelcomeBonusService::ENABLED_KEY, true),
             'membershipTierEnabled' => Setting::getBool(MembershipTierService::ENABLED_KEY, true),
+            'checkinEnabled' => Setting::getBool(DailyCheckInService::ENABLED_KEY, true),
+            // Số liệu kho quà của HÔM NAY — không có nó thì công tắc chỉ là cái nút câm, admin không
+            // biết hôm nay đã phát bao nhiêu tiền và còn lại bao nhiêu phần.
+            'checkinPrizes' => app(DailyCheckInService::class)->state(null),
             'welcomeBonusAmount' => (float) Setting::get(WelcomeBonusService::AMOUNT_KEY, WelcomeBonusService::DEFAULT_AMOUNT),
             // Trả về null (không phải 0) khi chưa đặt, để ô nhập hiện trống = "theo tỉ lệ thực".
             'cashbackDisplayRate' => Setting::get(CashbackService::DISPLAY_RATE_KEY) !== null
@@ -69,6 +74,7 @@ class SettingsController extends Controller
             'cashback_display_rate' => ['sometimes', 'nullable', 'numeric', 'min:0', 'max:100'],
             'welcome_bonus_enabled' => ['sometimes', 'boolean'],
             'membership_tier_enabled' => ['sometimes', 'boolean'],
+            'checkin_enabled' => ['sometimes', 'boolean'],
             'welcome_bonus_amount' => ['sometimes', 'integer', 'min:0', 'max:1000000'],
         ]);
 
@@ -77,6 +83,13 @@ class SettingsController extends Controller
         // phần thưởng của lúc ghi, nên không có chuyện gạt công tắc rồi ví khách tụt xuống.
         if (array_key_exists('membership_tier_enabled', $validated)) {
             Setting::set(MembershipTierService::ENABLED_KEY, $validated['membership_tier_enabled'] ? '1' : '0');
+        }
+
+        // Tắt là thẻ điểm danh biến khỏi trang chủ và /diem-danh từ chối mọi lượt bấm. Tiền đã
+        // phát giữ nguyên, chuỗi ngày cũng giữ nguyên trong bảng check_ins — bật lại trong vòng một
+        // ngày thì khách nối tiếp đúng chuỗi cũ, không ai bị mất gì vì một cú gạt công tắc.
+        if (array_key_exists('checkin_enabled', $validated)) {
+            Setting::set(DailyCheckInService::ENABLED_KEY, $validated['checkin_enabled'] ? '1' : '0');
         }
 
         if (array_key_exists('welcome_bonus_enabled', $validated)) {

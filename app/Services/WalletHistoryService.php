@@ -22,15 +22,25 @@ class WalletHistoryService
         $events = collect();
 
         foreach ($user->commissions()->get() as $c) {
-            $isBonus = $c->type === Commission::TYPE_WELCOME_BONUS;
+            // 'bonus' gom cả thưởng người mới lẫn quà điểm danh: phía giao diện, 'kind' chỉ quyết định
+            // màu và biểu tượng của dòng, mà hai loại này cùng là tiền tặng — thứ phân biệt chúng
+            // là 'title'. Thêm một kind mới là thêm một ô trong kindStyles của WalletHistory.vue, quên
+            // thì dòng đó mất sạch biểu tượng mà không báo gì.
+            $isCheckIn = $c->type === Commission::TYPE_CHECKIN;
+            $isBonus = $isCheckIn || $c->type === Commission::TYPE_WELCOME_BONUS;
             $counts = $c->status === 'approved';
 
             $events->push([
                 'key' => 'c'.$c->id,
                 'at' => $c->confirmed_at ?? $c->created_at,
                 'kind' => $isBonus ? 'bonus' : 'cashback',
-                'title' => $isBonus ? 'Thưởng người mới' : 'Hoàn tiền đơn hàng',
+                'title' => match (true) {
+                    $isCheckIn => 'Điểm danh nhận quà',
+                    $isBonus => 'Thưởng người mới',
+                    default => 'Hoàn tiền đơn hàng',
+                },
                 'note' => match (true) {
+                    $isCheckIn => 'Quà điểm danh hằng ngày',
                     $isBonus => 'Quà tặng khi đăng ký tài khoản',
                     $c->status === 'pending' => 'Đang chờ duyệt — chưa cộng vào ví',
                     $c->status === 'paid' => 'Đã thanh toán ngoài ví',

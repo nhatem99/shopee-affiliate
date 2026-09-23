@@ -43,6 +43,13 @@ class AppServiceProvider extends ServiceProvider
             return Limit::perMinute(10)->by($request->user()?->id ?: $request->ip());
         });
 
+        // Điểm danh. Mỗi ngày chỉ ăn thật được 1 lượt (unique trong DB), nên giới hạn này chỉ để
+        // chặn kiểu dội request vào vòng bốc quà. Khoá theo user: cả nhà dùng chung một IP là
+        // chuyện bình thường, khoá theo IP là người này bấm xong người kia mất lượt.
+        RateLimiter::for('checkin', function (Request $request) {
+            return Limit::perMinute(10)->by($request->user()?->id ?: $request->ip());
+        });
+
         // Chat hỗ trợ. Rộng tay hơn mấy cái trên vì gõ nhiều dòng ngắn liên tiếp là cách người
         // ta nhắn tin bình thường, nhưng vẫn đủ chặn kiểu dội hàng trăm dòng vào hộp thư admin.
         RateLimiter::for('chat', function (Request $request) {

@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\PayoutAccount;
 use App\Models\User;
 use App\Services\AvatarService;
+use App\Services\DailyCheckInService;
 use App\Services\MembershipTierService;
 use App\Services\WalletHistoryService;
 use Illuminate\Http\RedirectResponse;
@@ -19,7 +20,7 @@ class ProfileController extends Controller
 {
     public const MIN_WITHDRAWAL = 10000;
 
-    public function show(Request $request, MembershipTierService $tiers): Response
+    public function show(Request $request, MembershipTierService $tiers, DailyCheckInService $checkIn): Response
     {
         $this->ensureNotAdmin($request);
 
@@ -51,6 +52,12 @@ class ProfileController extends Controller
             // thẻ hạng ở Tổng quan tự biến mất. Đây là nơi trang /hoan-tien hứa là sẽ "theo dõi
             // được tiến độ nâng hạng", nên nó phải có thật ở đây.
             'tier' => $tiers->enabled() ? $tiers->progressFor($user) : null,
+            // Thẻ Điểm danh nhận quà, đặt ngay dưới số dư ở Tổng quan. Đây là việc duy nhất khách
+            // làm được NGAY trên trang này để số dư nhúch lên — mọi thứ còn lại ở đây đều là chờ.
+            //
+            // Tên prop phải là 'dailyCheckIn' giống hệt trang chủ: Components/DailyCheckIn.vue xin
+            // lại đúng tên này trong partial reload sau mỗi lượt bấm, đặt tên khác là thẻ đứng im.
+            'dailyCheckIn' => fn () => $checkIn->enabled() ? $checkIn->state($user) : null,
             'withdrawals' => $user->withdrawals()->latest()->get()->map(fn ($w) => [
                 'id' => $w->id,
                 'provider' => $w->provider,
