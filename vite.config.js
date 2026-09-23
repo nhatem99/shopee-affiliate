@@ -9,7 +9,11 @@ export default defineConfig({
             input: ['resources/css/app.css', 'resources/js/app.js'],
             refresh: true,
         }),
-        vue(),
+        // transformAssetUrls: false — không cho Vue biến `src="/logo.png"` (ảnh trong public/)
+        // thành import ES module. Mặc định lúc dev, @vitejs/plugin-vue bật includeAbsolute nên
+        // path tuyệt đối bị coi là import và Vite báo lỗi "Failed to resolve import" vì file
+        // trong public/ không nằm trong module graph.
+        vue({ template: { transformAssetUrls: false } }),
         tailwindcss(),
     ],
     server: {

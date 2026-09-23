@@ -17,7 +17,7 @@ function submit() {
     <div class="min-h-screen bg-[var(--color-side)] flex items-center justify-center px-4">
         <div class="w-full max-w-sm bg-[var(--color-surface)] rounded-2xl shadow-lg p-8">
             <div class="text-center mb-8">
-                <span class="inline-flex w-10 h-10 rounded-lg bg-gradient-to-br from-[var(--color-accent)] to-[var(--color-accent-deep)] items-center justify-center text-lg font-extrabold text-white mb-3">%</span>
+                <img src="/logo-icon.png" alt="tietkiemvi" class="inline-block w-16 h-16 mb-3">
                 <h1 class="text-xl font-extrabold text-[var(--color-ink)]">Đăng nhập quản trị</h1>
                 <p class="text-[var(--color-muted)] text-sm mt-1">Chỉ dành cho tài khoản admin</p>
             </div>

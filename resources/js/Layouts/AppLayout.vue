@@ -68,12 +68,12 @@ const accountDrawerOpen = ref(false)
                     >
                         <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" class="w-5 h-5"><path d="M4 7h16M4 12h16M4 17h16" /></svg>
                     </button>
-                    <Link href="/" class="flex items-center gap-2 font-extrabold text-xl text-[var(--color-ink)]">
-                    <span class="w-8 h-8 rounded-lg bg-gradient-to-br from-[var(--color-accent)] to-[var(--color-accent-deep)] flex items-center justify-center text-white text-base font-extrabold dark:shadow-[0_4px_14px_rgba(var(--color-accent-rgb),0.4)]">%</span>
-                    <!-- Ẩn dưới sm: ở 375px, chữ cứng này cộng với theme toggle + chuông thông báo
-                         + Đăng nhập/Đăng ký (khách chưa đăng nhập) tràn hàng, chữ đè lên các icon
-                         bên phải. Icon logo vẫn dẫn về trang chủ nên không mất lối vào nào. -->
-                    <span class="hidden sm:inline text-fire font-mono tracking-wide">Mã Giảm Giá</span>
+                    <Link href="/" class="flex items-center gap-2 shrink-0">
+                    <!-- Ẩn dưới sm: ở 375px, logo đầy đủ cộng với theme toggle + chuông thông báo
+                         + Đăng nhập/Đăng ký (khách chưa đăng nhập) tràn hàng. Dưới sm chỉ hiện icon
+                         vuông, logo vẫn dẫn về trang chủ nên không mất lối vào nào. -->
+                    <img src="/logo-icon.png" alt="tietkiemvi" class="w-11 h-11 sm:hidden">
+                    <img src="/logo.png" alt="tietkiemvi" class="hidden sm:block h-11 w-auto">
                     </Link>
                 </div>
 

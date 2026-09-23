@@ -156,9 +156,8 @@ const navGroups = [
             class="w-[248px] flex-none bg-[var(--color-side)] text-white flex flex-col py-6 px-4 fixed h-screen z-50 transition-transform duration-200 md:translate-x-0"
             :class="mobileOpen ? 'translate-x-0' : '-translate-x-full'"
         >
-            <Link href="/" class="flex items-center gap-2 font-extrabold text-lg text-white mb-6 px-2">
-                <span class="w-8 h-8 rounded-lg bg-gradient-to-br from-[var(--color-accent)] to-[var(--color-accent-deep)] flex items-center justify-center text-base font-extrabold">%</span>
-                Mã Giảm Giá
+            <Link href="/" class="flex items-center mb-6 px-2">
+                <img src="/logo.png" alt="tietkiemvi" class="h-11 w-auto">
             </Link>
 
             <!-- overflow-y-auto: có tiêu đề nhóm thì cột dài hơn màn hình điện thoại ngang,
