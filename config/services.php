@@ -113,6 +113,32 @@ return [
         'utm_content' => env('VOUCHER_CATALOG_UTM_CONTENT', 'MGG'),
     ],
 
+    /**
+     * Kho sản phẩm Flash Sale ở /flashsale — xem FlashSaleSyncService.
+     *
+     * KHÁC voucher_catalog ở một điểm cốt lõi: link gửi khách KHÔNG lấy từ nguồn (nguồn
+     * chỉ cấp link cho ~9% sản phẩm, và link đó là short-link JS-redirect không đổi được
+     * affiliate bằng cách swap query param thường). Ở đây tự dựng link sản phẩm từ
+     * shopid+itemid — trang sản phẩm Shopee thường không cần chữ ký như link voucher,
+     * chỉ cần mmp_pid để tính hoa hồng — nên dùng được cho 100% sản phẩm, không phụ
+     * thuộc nguồn có cấp link hay không.
+     */
+    'flash_sale' => [
+        // Nguồn trả TOÀN BỘ danh sách trong một lần gọi, không phân trang.
+        'source_url' => env('FLASH_SALE_SOURCE', 'https://api.thichsansale.click/apidata.php'),
+
+        // Suất amount <= giá trị này bị loại ở bước đồng bộ — coi là đã hết suất, bày ra
+        // chỉ để khách bấm vào một sale không còn gì. Mặc định 0 = chỉ loại đúng "amount
+        // bằng 0" (đo thật 23-09-2026: 20/2659 dòng), không đoán thêm ngưỡng nào khác vì
+        // chưa có bằng chứng amount thấp mà vẫn còn mua được hay không.
+        'min_amount' => (int) env('FLASH_SALE_MIN_AMOUNT', 1),
+
+        // Nhãn Sub_id riêng cho traffic từ trang Flash Sale, tách khỏi 'MGG' của trang mã
+        // và 'fb' mặc định — cùng quy tắc: Shopee đọc được, khách thấy trên thanh địa chỉ,
+        // không đặt tên miền/thương hiệu vào đây.
+        'utm_content' => env('FLASH_SALE_UTM_CONTENT', 'FS'),
+    ],
+
     // Nguồn lấy mã YouTube — chạy song song kieushopee, admin chọn nguồn nào đang dùng ở
     // /admin/api-config. Khác kieushopee ở chỗ đây là API BẤT ĐỒNG BỘ: tạo job rồi phải hỏi
     // lại nhiều lần cho tới khi xong.

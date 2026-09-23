@@ -62,3 +62,13 @@ Schedule::command('vouchers:sync')
     ->withoutOverlapping()
     ->description('Đồng bộ kho mã giảm giá toàn sàn (/ma-giam-gia)')
     ->storeOutput();
+
+// Lam moi kho Flash Sale. 15 phut/lan — day hon voucher (hourly) vi so suat con lai
+// (amount) va suat da dong doi nhanh hon han ma giam gia, va nguon tra het du lieu
+// trong MOT lan goi (khong phan trang) nen moi lan chi la mot request, khong tich luy
+// nhu vong lap phan trang cua voucher.
+Schedule::command('flashsale:sync')
+    ->everyFifteenMinutes()
+    ->withoutOverlapping()
+    ->description('Đồng bộ kho sản phẩm Flash Sale (/flashsale)')
+    ->storeOutput();

@@ -25,6 +25,7 @@ use App\Http\Controllers\Auth\RegisterController;
 use App\Http\Controllers\BlogController;
 use App\Http\Controllers\ChatController;
 use App\Http\Controllers\CheckInController;
+use App\Http\Controllers\FlashSaleController;
 use App\Http\Controllers\GuideController;
 use App\Http\Controllers\NotificationController;
 use App\Http\Controllers\OrderHistoryController;
@@ -143,6 +144,12 @@ Route::get('/ma-giam-gia', [VoucherCatalogController::class, 'index'])->name('vo
 Route::get('/api/vouchers', [VoucherCatalogController::class, 'feed'])
     ->middleware('throttle:60,1')
     ->name('vouchers.catalog.feed');
+
+// Flash Sale toan san — cung mot kieu voi /ma-giam-gia: trang cong khai, khong can dan link.
+Route::get('/flashsale', [FlashSaleController::class, 'index'])->name('flashsale.catalog');
+Route::get('/api/flashsale', [FlashSaleController::class, 'feed'])
+    ->middleware('throttle:60,1')
+    ->name('flashsale.catalog.feed');
 
 // Blog
 Route::get('/blog', [BlogController::class, 'index'])->name('blog.index');
