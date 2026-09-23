@@ -1,6 +1,7 @@
 <script setup>
 import { Link, usePage } from '@inertiajs/vue3'
 import { computed, watch } from 'vue'
+import UserAvatar from '@/Components/UserAvatar.vue'
 import { useAuthStore } from '@/Stores/useAuthStore'
 import { accountNavItemsFor, isAccountNavActive } from '@/accountNavItems'
 
@@ -45,9 +46,11 @@ watch(current, () => emit('close'))
                 class="fixed inset-y-0 left-0 z-[80] w-[82vw] max-w-[320px] bg-[var(--color-surface)] shadow-2xl flex flex-col overflow-y-auto"
             >
                 <div class="p-4 flex items-center gap-3 border-b border-[var(--color-line)]">
-                    <div class="flex-none w-11 h-11 rounded-full bg-gradient-to-br from-[var(--color-accent)] to-[var(--color-accent-deep)] flex items-center justify-center text-white text-base font-extrabold">
-                        {{ (auth.user?.name || auth.user?.email || '?').charAt(0).toUpperCase() }}
-                    </div>
+                    <UserAvatar
+                        :src="auth.user?.avatar"
+                        :name="auth.user?.name || auth.user?.email"
+                        class="flex-none w-11 h-11 text-base"
+                    />
                     <div class="min-w-0 flex-1">
                         <p class="font-bold text-sm text-[var(--color-ink)] truncate">{{ auth.user?.name }}</p>
                         <p class="text-xs text-[var(--color-muted)] truncate">{{ auth.user?.email }}</p>

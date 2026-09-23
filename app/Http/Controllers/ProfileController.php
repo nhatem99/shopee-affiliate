@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\PayoutAccount;
 use App\Models\User;
+use App\Services\AvatarService;
 use App\Services\MembershipTierService;
 use App\Services\WalletHistoryService;
 use Illuminate\Http\RedirectResponse;
@@ -32,6 +33,8 @@ class ProfileController extends Controller
                 // translatedFormat('F Y') — locale mặc định của app là 'en' (config/app.php),
                 // đổi locale ảnh hưởng toàn app nên không đáng chỉ để có mỗi dòng này.
                 'member_since' => 'Tháng '.$user->created_at->format('m/Y'),
+                // Ảnh đại diện tự tải lên ở trang Thông tin cá nhân; null thì vẫn là chữ cái đầu.
+                'avatar' => $user->avatarUrl(),
             ],
             // Tổng quan không có form sửa ví, chỉ cần đọc để hiện trong modal rút tiền — cùng
             // dữ liệu với trang Thông tin cá nhân (info()) nên gộp lại một hàm.
@@ -79,8 +82,10 @@ class ProfileController extends Controller
                 'name' => $user->name,
                 'email' => $user->email,
                 'phone' => $user->phone,
+                'avatar' => $user->avatarUrl(),
             ],
             'payoutAccounts' => $this->payoutAccountsFor($user),
+            'avatarMaxKb' => AvatarService::MAX_IMAGE_KB,
         ]);
     }
 
@@ -123,6 +128,39 @@ class ProfileController extends Controller
         $user->update($data);
 
         return back()->with('success', 'Cập nhật thông tin thành công.');
+    }
+
+    /**
+     * Tải ảnh đại diện. Ảnh được cắt vuông + mã hoá lại trong AvatarService — controller chỉ
+     * kiểm tra đầu vào, không đụng tới file.
+     *
+     * Trần 'max' tính bằng KB, phải khớp với con số gửi ra frontend để form chặn trước khi
+     * khách ngồi chờ tải xong 8MB rồi mới bị báo lỗi.
+     */
+    public function updateAvatar(Request $request, AvatarService $avatars): RedirectResponse
+    {
+        $this->ensureNotAdmin($request);
+
+        $request->validate([
+            'avatar' => ['required', 'image', 'mimes:jpg,jpeg,png,webp', 'max:'.AvatarService::MAX_IMAGE_KB],
+        ], [
+            'avatar.image' => 'File tải lên phải là ảnh.',
+            'avatar.mimes' => 'Chỉ nhận ảnh JPG, PNG hoặc WebP.',
+            'avatar.max' => 'Ảnh tối đa '.(int) (AvatarService::MAX_IMAGE_KB / 1024).'MB.',
+        ]);
+
+        $avatars->store($request->user(), $request->file('avatar'));
+
+        return back()->with('success', 'Đã cập nhật ảnh đại diện.');
+    }
+
+    public function destroyAvatar(Request $request, AvatarService $avatars): RedirectResponse
+    {
+        $this->ensureNotAdmin($request);
+
+        $avatars->remove($request->user());
+
+        return back()->with('success', 'Đã gỡ ảnh đại diện.');
     }
 
     public function storePayoutAccount(Request $request): RedirectResponse

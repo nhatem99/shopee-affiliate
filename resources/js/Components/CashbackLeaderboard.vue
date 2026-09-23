@@ -1,6 +1,7 @@
 <script setup>
 import { computed } from 'vue'
 import { Link } from '@inertiajs/vue3'
+import UserAvatar from '@/Components/UserAvatar.vue'
 import { useAuthStore } from '@/Stores/useAuthStore'
 import { useCashback } from '@/composables/useCashback'
 
@@ -44,12 +45,9 @@ const rankStyle = {
     3: { medal: '🥉', ring: 'from-orange-300 via-amber-600 to-orange-700', bar: 'h-10 md:h-12', label: 'Hạng ba', tone: 'text-orange-600' },
 }
 
-// Chữ cái đầu làm avatar — tên đã che nên lấy chữ đầu của chữ đầu tiên là đủ, vừa không lộ
-// thêm gì, vừa cho mỗi người một hình đại diện thay vì một dãy ảnh mặc định giống nhau.
-function initial(name) {
-    return (name || '?').trim().charAt(0).toUpperCase()
-}
-
+// Ai đã tải ảnh đại diện ở trang Thông tin cá nhân thì hiện ảnh đó (entry.avatar), còn lại vẫn
+// là chữ cái đầu trên nền màu như trước — xem Components/UserAvatar.vue.
+//
 // Mỗi tên một màu cố định (băm theo ký tự) để cùng một người lần nào cũng ra cùng màu.
 const avatarPalette = [
     'from-rose-400 to-pink-500',
@@ -121,10 +119,13 @@ const inTopList = computed(() => entries.value.some(e => e.is_me))
                                         class="rounded-full p-[3px] bg-gradient-to-br shadow-lg"
                                         :class="[rankStyle[slot.rank].ring, slot.rank === 1 ? 'w-[76px] h-[76px] md:w-24 md:h-24' : 'w-14 h-14 md:w-[72px] md:h-[72px]']"
                                     >
-                                        <div
-                                            class="w-full h-full rounded-full bg-gradient-to-br flex items-center justify-center text-white font-extrabold"
-                                            :class="[avatarColor(slot.entry.name), slot.rank === 1 ? 'text-2xl md:text-3xl' : 'text-lg md:text-xl']"
-                                        >{{ initial(slot.entry.name) }}</div>
+                                        <UserAvatar
+                                            :src="slot.entry.avatar"
+                                            :name="slot.entry.name"
+                                            :gradient="avatarColor(slot.entry.name)"
+                                            class="w-full h-full"
+                                            :class="slot.rank === 1 ? 'text-2xl md:text-3xl' : 'text-lg md:text-xl'"
+                                        />
                                     </div>
                                     <span class="absolute -bottom-2 left-1/2 -translate-x-1/2 text-xl md:text-2xl leading-none drop-shadow">{{ rankStyle[slot.rank].medal }}</span>
                                 </div>
@@ -161,10 +162,12 @@ const inTopList = computed(() => entries.value.some(e => e.is_me))
                         :class="e.is_me ? 'bg-[var(--color-green-soft)]' : 'hover:bg-[var(--color-peach-soft)]'"
                     >
                         <span class="w-7 text-center font-mono font-extrabold text-sm text-[var(--color-muted)]">{{ e.rank }}</span>
-                        <div
-                            class="w-9 h-9 rounded-full bg-gradient-to-br flex-none flex items-center justify-center text-white text-sm font-extrabold"
-                            :class="avatarColor(e.name)"
-                        >{{ initial(e.name) }}</div>
+                        <UserAvatar
+                            :src="e.avatar"
+                            :name="e.name"
+                            :gradient="avatarColor(e.name)"
+                            class="w-9 h-9 flex-none text-sm"
+                        />
                         <div class="flex-1 min-w-0">
                             <p class="text-sm font-semibold text-[var(--color-ink)] truncate">
                                 {{ e.name }}

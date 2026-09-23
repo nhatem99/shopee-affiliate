@@ -9,6 +9,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use Spatie\Permission\Traits\HasRoles;
 
@@ -18,6 +19,10 @@ use Spatie\Permission\Traits\HasRoles;
 // 'tier' (hạng thành viên) cũng vậy, cùng một lý do ở một mặt khác: hạng cộng thêm tới 5 điểm
 // phần trăm vào tiền hoàn của mỗi đơn, nên nó là quyền lợi bằng tiền chứ không phải thuộc tính
 // hồ sơ. Chỉ MembershipTierService::store() được đổi.
+//
+// 'avatar_path' cũng ngoài danh sách: nó là đường dẫn file trên server, chỉ AvatarService được
+// đặt sau khi đã tự lưu file. Nhận thẳng chuỗi này từ request là cho khách trỏ avatar vào bất
+// kỳ file nào trong thư mục uploads.
 #[Fillable(['name', 'email', 'password', 'phone', 'google_id', 'wallet_balance'])]
 #[Hidden(['password', 'remember_token'])]
 class User extends Authenticatable
@@ -123,6 +128,17 @@ class User extends Authenticatable
     public function isAdmin(): bool
     {
         return $this->role === 'admin';
+    }
+
+    /**
+     * URL ảnh đại diện, hoặc null khi khách chưa tải ảnh nào (giao diện quay về chữ cái đầu).
+     *
+     * Ghép URL ở đây chứ không lưu sẵn trong cột: đổi APP_URL hay đổi disk là mọi URL đã lưu
+     * cứng trong DB hỏng hết. Xem AvatarService.
+     */
+    public function avatarUrl(): ?string
+    {
+        return $this->avatar_path ? Storage::disk('uploads')->url($this->avatar_path) : null;
     }
 
     public function isBanned(): bool

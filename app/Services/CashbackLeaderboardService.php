@@ -9,6 +9,7 @@ use Carbon\CarbonImmutable;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Storage;
 
 /**
  * Bảng xếp hạng "ai được hoàn nhiều nhất tháng này" cho trang khách.
@@ -56,7 +57,7 @@ class CashbackLeaderboardService
     /**
      * @return array{
      *     month: string,
-     *     entries: list<array{rank: int, name: string, amount: float, orders: int, is_me: bool}>,
+     *     entries: list<array{rank: int, name: string, avatar: string|null, amount: float, orders: int, is_me: bool}>,
      *     total_users: int,
      *     total_amount: float,
      *     demo: bool,
@@ -91,7 +92,7 @@ class CashbackLeaderboardService
     }
 
     /**
-     * @return array{entries: list<array{rank: int, name: string, amount: float, orders: int, is_me: bool}>, total_users: int, total_amount: float, demo: bool}
+     * @return array{entries: list<array{rank: int, name: string, avatar: string|null, amount: float, orders: int, is_me: bool}>, total_users: int, total_amount: float, demo: bool}
      */
     private function demoBoard(): array
     {
@@ -101,6 +102,7 @@ class CashbackLeaderboardService
             $entries[] = [
                 'rank' => $i + 1,
                 'name' => $row['name'],
+                'avatar' => null,
                 'amount' => (float) $row['amount'],
                 'orders' => $row['orders'],
                 'is_me' => false,
@@ -127,7 +129,7 @@ class CashbackLeaderboardService
     }
 
     /**
-     * @return array{month: string, entries: list<array{rank: int, user_id: int, name: string, amount: float, orders: int}>, total_users: int, total_amount: float}
+     * @return array{month: string, entries: list<array{rank: int, user_id: int, name: string, avatar: string|null, amount: float, orders: int}>, total_users: int, total_amount: float}
      */
     private function build(CarbonImmutable $month): array
     {
@@ -144,6 +146,13 @@ class CashbackLeaderboardService
                 'rank' => $i + 1,
                 'user_id' => (int) $row->id,
                 'name' => self::maskName((string) $row->name),
+                // Ảnh đại diện khách TỰ tải lên ở trang Thông tin cá nhân. Không có thì frontend
+                // vẽ chữ cái đầu như trước — mặc định của mọi tài khoản vẫn là không có ảnh.
+                //
+                // Đây là chỗ duy nhất trên bảng lộ ra thứ không che được: tên đã che nhưng mặt
+                // thì không. Vì vậy avatar phải là hành động chủ động của khách (tải lên, gỡ
+                // xuống bất cứ lúc nào), không bao giờ tự lấy từ Google hay nơi nào khác.
+                'avatar' => $row->avatar_path ? Storage::disk('uploads')->url($row->avatar_path) : null,
                 'amount' => (float) $row->total,
                 'orders' => (int) $row->orders,
             ];
@@ -207,8 +216,8 @@ class CashbackLeaderboardService
             ->join('users', 'users.id', '=', 'commissions.user_id')
             ->where('users.role', '!=', 'admin')
             ->whereNull('users.banned_at')
-            ->groupBy('users.id', 'users.name')
-            ->select('users.id', 'users.name')
+            ->groupBy('users.id', 'users.name', 'users.avatar_path')
+            ->select('users.id', 'users.name', 'users.avatar_path')
             ->selectRaw('SUM(commissions.amount) as total')
             ->selectRaw('COUNT(*) as orders');
     }

@@ -29,6 +29,9 @@ class HandleInertiaRequests extends Middleware
                     'name' => $request->user()->name,
                     'email' => $request->user()->email,
                     'role' => $request->user()->role,
+                    // Ảnh đại diện dùng ở mọi khung tròn đang vẽ chữ cái đầu (sidebar Tài khoản,
+                    // menu trượt). Chỉ là một cột của user đã nạp sẵn nên không tốn query.
+                    'avatar' => $request->user()->avatarUrl(),
                 ] : null,
                 // Admin đang "xem như khách" (ImpersonationService): AppLayout dựa vào đây để hiện
                 // thanh "Đang xem với tư cách ... — Thoát". Null với mọi phiên bình thường.

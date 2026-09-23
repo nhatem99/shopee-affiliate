@@ -3,6 +3,7 @@ import { ref, computed } from 'vue'
 import { Head, Link, useForm } from '@inertiajs/vue3'
 import AccountLayout from '@/Layouts/AccountLayout.vue'
 import MembershipTierProgress from '@/Components/MembershipTierProgress.vue'
+import UserAvatar from '@/Components/UserAvatar.vue'
 import { useToast } from '@/composables/useToast'
 
 const toast = useToast()
@@ -90,9 +91,11 @@ const providerLabels = { momo: 'MoMo', zalopay: 'ZaloPay' }
                  "mới" ở đây nghĩa là chưa có đơn hoàn tiền thật nào, đúng cái khách cần biết
                  (còn phải mua 1 đơn thì thưởng chào mừng mới rút được, xem khối bên dưới). -->
             <div class="card-glass rounded-2xl p-5 flex items-center gap-4">
-                <div class="flex-none w-14 h-14 rounded-full bg-gradient-to-br from-[var(--color-accent)] to-[var(--color-accent-deep)] flex items-center justify-center text-white text-xl font-extrabold">
-                    {{ (profile.name || profile.email || '?').charAt(0).toUpperCase() }}
-                </div>
+                <UserAvatar
+                    :src="profile.avatar"
+                    :name="profile.name || profile.email"
+                    class="flex-none w-14 h-14 text-xl"
+                />
                 <div class="min-w-0">
                     <div class="flex items-center flex-wrap gap-x-2 gap-y-1">
                         <p class="font-bold text-[var(--color-ink)] truncate">{{ profile.name || profile.email }}</p>

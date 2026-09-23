@@ -2,6 +2,7 @@
 import { Link, usePage } from '@inertiajs/vue3'
 import { computed } from 'vue'
 import AppLayout from '@/Layouts/AppLayout.vue'
+import UserAvatar from '@/Components/UserAvatar.vue'
 import { useAuthStore } from '@/Stores/useAuthStore'
 import { accountNavItemsFor, isAccountNavActive } from '@/accountNavItems'
 
@@ -42,9 +43,11 @@ function isActive(href) {
             <aside class="hidden md:block md:w-64 flex-none md:sticky md:top-20">
                 <div class="card-glass rounded-2xl p-4">
                     <div class="flex items-center gap-3 pb-4 mb-2 border-b border-[var(--color-line)]">
-                        <div class="flex-none w-10 h-10 rounded-full bg-gradient-to-br from-[var(--color-accent)] to-[var(--color-accent-deep)] flex items-center justify-center text-white text-sm font-extrabold">
-                            {{ (auth.user?.name || auth.user?.email || '?').charAt(0).toUpperCase() }}
-                        </div>
+                        <UserAvatar
+                            :src="auth.user?.avatar"
+                            :name="auth.user?.name || auth.user?.email"
+                            class="flex-none w-10 h-10 text-sm"
+                        />
                         <div class="min-w-0">
                             <p class="font-bold text-sm text-[var(--color-ink)] truncate">{{ auth.user?.name }}</p>
                             <p class="text-xs text-[var(--color-muted)] truncate">{{ auth.user?.email }}</p>

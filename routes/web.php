@@ -140,6 +140,8 @@ Route::middleware('auth')->group(function () {
     Route::get('/profile', [ProfileController::class, 'show'])->name('profile');
     Route::patch('/profile', [ProfileController::class, 'updateProfile'])->name('profile.update');
     Route::get('/profile/thong-tin', [ProfileController::class, 'info'])->name('profile.info');
+    Route::post('/profile/avatar', [ProfileController::class, 'updateAvatar'])->name('profile.avatar');
+    Route::delete('/profile/avatar', [ProfileController::class, 'destroyAvatar'])->name('profile.avatar.destroy');
     Route::post('/profile/payout', [ProfileController::class, 'storePayoutAccount'])->name('profile.payout');
     Route::get('/profile/mat-khau', [ProfileController::class, 'password'])->name('profile.password.edit');
     Route::post('/profile/password', [ProfileController::class, 'updatePassword'])->middleware('throttle:login')->name('profile.password');
