@@ -33,7 +33,7 @@ class RestockScheduleService
      * Một đợt back mã coi như còn "nóng" trong bao lâu kể từ mốc giờ. Mã back ra có giới hạn lượt
      * và hết nhanh, nên đây là ước lượng chứ không phải cam kết của nguồn.
      */
-    public const WINDOW_MINUTES = 60;
+    public const WINDOW_MINUTES = 30;
 
     public function inFbIgWindow(?CarbonInterface $at = null): bool
     {

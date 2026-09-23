@@ -370,7 +370,7 @@ async function testConfig(config) {
                                 họ xếp hàng xử lý.
                                 <br /><br />
                                 Nếu bật <b>"Tự chuyển sang FB-IG trong khung giờ back mã"</b> ở trang <b>Cài đặt</b>:
-                                tới 0h, 9h, 15h, 20h (mỗi khung 1 tiếng) hệ thống tạm chuyển sang kieushopee rồi tự
+                                tới 0h, 9h, 15h, 20h (mỗi khung 30 phút) hệ thống tạm chuyển sang kieushopee rồi tự
                                 quay lại ganma khi hết khung. Công tắc ở đây không bị sửa.
                             </p>
                         </div>

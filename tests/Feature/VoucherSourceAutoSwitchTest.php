@@ -68,7 +68,7 @@ class VoucherSourceAutoSwitchTest extends TestCase
     {
         $this->useSource(GanmaService::SOURCE);
         $this->enableAutoSwitch();
-        $this->atVn('09:30');
+        $this->atVn('09:15');
 
         $this->assertSame(KieuShopeeService::SOURCE, $this->activeSource());
         // Lựa chọn của admin trong DB không được đụng tới — hết khung là tự quay về.
@@ -101,7 +101,7 @@ class VoucherSourceAutoSwitchTest extends TestCase
      * Biên khung giờ: mở ngay tại mốc, đóng đúng WINDOW_MINUTES sau đó. Lệch một phút ở đây là
      * khách dán link đúng lúc mã vừa back mà vẫn bị đẩy qua nguồn chậm.
      */
-    public function test_khung_gio_mo_tai_moc_va_dong_sau_dung_mot_tieng(): void
+    public function test_khung_gio_mo_tai_moc_va_dong_sau_ba_muoi_phut(): void
     {
         $this->useSource(GanmaService::SOURCE);
         $this->enableAutoSwitch();
@@ -112,10 +112,10 @@ class VoucherSourceAutoSwitchTest extends TestCase
         $this->atVn('09:00');
         $this->assertSame(KieuShopeeService::SOURCE, $this->activeSource(), 'đúng mốc 9h');
 
-        $this->atVn('09:59');
+        $this->atVn('09:29');
         $this->assertSame(KieuShopeeService::SOURCE, $this->activeSource(), 'phút cuối của khung');
 
-        $this->atVn('10:00');
+        $this->atVn('09:30');
         $this->assertSame(GanmaService::SOURCE, $this->activeSource(), 'hết khung');
     }
 
@@ -137,8 +137,8 @@ class VoucherSourceAutoSwitchTest extends TestCase
         $this->useSource(GanmaService::SOURCE);
         $this->enableAutoSwitch();
 
-        // 02:30 UTC = 09:30 giờ VN → đang trong khung.
-        $this->travelTo(CarbonImmutable::parse('2026-09-16 02:30', 'UTC'));
+        // 02:15 UTC = 09:15 giờ VN → đang trong khung.
+        $this->travelTo(CarbonImmutable::parse('2026-09-16 02:15', 'UTC'));
         $this->assertSame(KieuShopeeService::SOURCE, $this->activeSource());
 
         // 09:30 UTC = 16:30 giờ VN → đã ngoài khung 15h.
@@ -165,14 +165,14 @@ class VoucherSourceAutoSwitchTest extends TestCase
     {
         $this->useSource(GanmaService::SOURCE);
         $this->enableAutoSwitch();
-        $this->atVn('09:30');
+        $this->atVn('09:15');
 
         $this->actingAs($this->createAdmin())->get('/admin/api-config')
             ->assertOk()
             ->assertInertia(fn ($page) => $page
                 ->where('voucherSource.configured', GanmaService::SOURCE)
                 ->where('voucherSource.active', KieuShopeeService::SOURCE)
-                ->where('voucherSource.fbIgWindowEndsAt', '10:00')
+                ->where('voucherSource.fbIgWindowEndsAt', '09:30')
             );
     }
 

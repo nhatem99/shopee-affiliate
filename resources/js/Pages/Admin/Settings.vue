@@ -635,7 +635,7 @@ function saveCashbackDisplayRate() {
                         <h2 class="font-bold text-[var(--color-ink)] mb-1">⚡ Tự chuyển sang FB-IG trong khung giờ back mã</h2>
                         <p class="text-sm text-[var(--color-muted)] leading-relaxed">
                             Khi nguồn lấy mã đang là <b>ganma (mã YouTube)</b>: tới khung giờ back mã FB-IG
-                            (<b>0h, 9h, 15h, 20h — mỗi khung 1 tiếng</b>, giờ VN) thì tạm chuyển sang
+                            (<b>0h, 9h, 15h, 20h — mỗi khung 30 phút</b>, giờ VN) thì tạm chuyển sang
                             <b>kieushopee</b>, hết khung tự quay lại ganma. Đang để kieushopee sẵn thì không đổi gì.
                             Công tắc nguồn ở trang Cấu hình API <b>không bị sửa</b> — đây chỉ là lớp ghi đè tạm thời.
                             Giao diện khách không đổi gì cả.
