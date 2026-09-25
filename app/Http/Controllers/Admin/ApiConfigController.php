@@ -129,9 +129,17 @@ class ApiConfigController extends Controller
                 return response()->json($result, $result['ok'] ? 200 : 422);
             }
 
+            // ACCESSTRADE cũng trả kèm lý do hỏng: phép thử là tạo một link thật, tức đi qua đủ
+            // cả ba thứ có thể sai (key, campaign_id, tài khoản đã được duyệt chưa) — nói gọn
+            // "Kết nối thất bại" thì admin không biết phải sửa ô nào.
+            if ($config->platform === AccessTradeService::PLATFORM) {
+                $result = app(AccessTradeService::class)->testConnection();
+
+                return response()->json($result, $result['ok'] ? 200 : 422);
+            }
+
             $ok = match ($config->platform) {
                 'shopee' => app(ShopeeApiService::class)->testConnection($config),
-                'accesstrade' => app(AccessTradeService::class)->testConnection($config),
                 'facebook' => (new FacebookPageService($config->app_id, $config->app_secret))->testConnection(),
                 default => throw new \Exception('Platform không được hỗ trợ.'),
             };

@@ -139,6 +139,36 @@ return [
         'utm_content' => env('FLASH_SALE_UTM_CONTENT', 'FS'),
     ],
 
+    /**
+     * Mạng affiliate ACCESSTRADE — dùng cho TikTok Shop (xem AccessTradeService).
+     *
+     * Khác mọi khối khác trong file này ở một điểm: API KEY CỐ Ý KHÔNG ĐẶT SẴN GIÁ TRỊ Ở ĐÂY.
+     * Key này mở được toàn bộ tài khoản affiliate (đọc đơn, tạo link, xem doanh thu) và xoay
+     * key là thao tác một nút trên pub2.accesstrade.vn, nên chỗ đúng của nó là bản ghi
+     * `accesstrade` ở /admin/api-config — dán vào là chạy ngay, không phải sửa code rồi deploy.
+     * env() chỉ là đường dự phòng.
+     *
+     * campaign_id thì không phải bí mật, để sẵn đây cho khỏi phải nhập lại sau mỗi lần cài mới.
+     */
+    'accesstrade' => [
+        'endpoint' => env('ACCESSTRADE_ENDPOINT', 'https://api.accesstrade.vn/v1'),
+
+        'api_key' => env('ACCESSTRADE_API_KEY', ''),
+
+        // Chiến dịch TIKTOK SHOP CPS — đã được duyệt cho tài khoản này (kiểm chứng
+        // 25-09-2026 qua GET /v1/campaigns: approval = "successful", status = 1).
+        'campaign_id' => env('ACCESSTRADE_CAMPAIGN_ID', '6648523843406889655'),
+
+        // Nhãn nguồn traffic gửi kèm link. Cùng nguyên tắc với utm_content bên Shopee: giá trị
+        // này ACCESSTRADE và sàn đều đọc được, nên đừng đặt tên miền/thương hiệu vào đây.
+        'utm_source' => env('ACCESSTRADE_UTM_SOURCE', 'web'),
+
+        // Link dùng cho nút "Kiểm tra kết nối" ở /admin/api-config. Sản phẩm nào cũng được —
+        // phép thử này để xem key + campaign + trạng thái duyệt có chạy không, không phải để
+        // kiểm tra sản phẩm còn hàng.
+        'test_url' => env('ACCESSTRADE_TEST_URL', 'https://shop.tiktok.com/view/product/1733724538346374522?region=VN&local=en'),
+    ],
+
     // Nguồn lấy mã YouTube — chạy song song kieushopee, admin chọn nguồn nào đang dùng ở
     // /admin/api-config. Khác kieushopee ở chỗ đây là API BẤT ĐỒNG BỘ: tạo job rồi phải hỏi
     // lại nhiều lần cho tới khi xong.
