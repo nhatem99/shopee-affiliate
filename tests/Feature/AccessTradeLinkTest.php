@@ -72,8 +72,12 @@ class AccessTradeLinkTest extends TestCase
         $this->assertSame(self::PRODUCT_URL, $result['url_origin']);
     }
 
-    /** Mã khách phải nằm ở khe sub1 — đây là đường duy nhất để hoàn tiền cho đúng người. */
-    public function test_ma_khach_di_vao_khe_sub1(): void
+    /**
+     * Mã khách phải nằm ở CẢ utm_content LẪN sub1 — đây là đường duy nhất để hoàn tiền cho đúng
+     * người. utm_content là ô có tên trong danh sách trường của báo cáo đơn hàng v2; sub1 thì
+     * tài liệu báo cáo không nhắc tới, nhưng gửi thừa không tốn gì còn gửi thiếu thì mất đơn.
+     */
+    public function test_ma_khach_di_vao_ca_utm_content_lan_sub1(): void
     {
         $this->fakeSuccess();
 
@@ -82,7 +86,8 @@ class AccessTradeLinkTest extends TestCase
         Http::assertSent(function (Request $request) {
             $body = $request->data();
 
-            return $body['sub1'] === 'u7k2m9'
+            return $body['utm_content'] === 'u7k2m9'
+                && $body['sub1'] === 'u7k2m9'
                 && $body['campaign_id'] === '6648523843406889655'
                 && $body['urls'] === [self::PRODUCT_URL]
                 && $request->hasHeader('Authorization', 'Token khoa-test');
@@ -93,13 +98,14 @@ class AccessTradeLinkTest extends TestCase
      * Khách vãng lai: KHÔNG được gửi sub1 rỗng. ACCESSTRADE ghi nguyên văn giá trị nhận được vào
      * link, nên chuỗi rỗng là một khe rác trong báo cáo, khác hẳn với việc không có khe nào.
      */
-    public function test_khach_vang_lai_thi_khong_gui_sub1(): void
+    public function test_khach_vang_lai_thi_khong_gui_o_ma_khach_nao(): void
     {
         $this->fakeSuccess();
 
         $this->service()->createProductLink(self::PRODUCT_URL);
 
-        Http::assertSent(fn (Request $request) => ! array_key_exists('sub1', $request->data()));
+        Http::assertSent(fn (Request $request) => ! array_key_exists('sub1', $request->data())
+            && ! array_key_exists('utm_content', $request->data()));
     }
 
     /**

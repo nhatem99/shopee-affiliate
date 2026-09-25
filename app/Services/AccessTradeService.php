@@ -70,8 +70,17 @@ class AccessTradeService
                     'campaign_id' => $params['campaign_id'],
                     'urls' => [$url],
                     'utm_source' => $params['utm_source'],
-                    // Khe 1 dành cho mã khách, giống cách đọc báo cáo bên Shopee. Các khe sub2-3
-                    // để trống, dành chỗ cho nhu cầu sau này mà không phải đổi cách đọc báo cáo.
+                    // Mã khách gửi ở CẢ HAI ô, cố ý.
+                    //
+                    // `utm_content` là ô chắc chắn quay về: nó nằm trong danh sách trường của
+                    // báo cáo đơn hàng (/v1/order-list v2) cùng với utm_source/medium/campaign.
+                    // `sub1` thì tài liệu báo cáo KHÔNG hề nhắc tới — chỉ thấy nó trong tham số
+                    // lúc tạo link và trong chuỗi aff_link trả về.
+                    //
+                    // Chưa có đơn TikTok nào để đối chiếu thật, mà gửi thừa một ô thì không tốn
+                    // gì; gửi thiếu ô đúng thì mọi đơn phát sinh không quy được về ai, và chỉ lộ
+                    // ra ở kỳ đối soát đầu tiên — lúc đó tiền đã tiêu, khách đã mua xong.
+                    'utm_content' => $subId,
                     'sub1' => $subId,
                 ]));
         } catch (\Exception $e) {
