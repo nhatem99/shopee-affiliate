@@ -43,6 +43,31 @@ class AccessTradeService
     private const TIMEOUT = 15;
 
     /**
+     * Tiền tố của mấy ô mẫu do ApiConfigSeeder điền ('YOUR_ACCESSTRADE_API_KEY'...). Coi như
+     * chưa cấu hình — xem params().
+     */
+    private const PLACEHOLDER_PREFIX = 'YOUR_';
+
+    /**
+     * Đường TikTok có đang bật không. Công tắc là chính ô is_active của thẻ AccessTrade ở
+     * /admin/api-config — chỗ admin vốn đã nhìn vào để bật/tắt từng nhà cung cấp.
+     *
+     * Trước đây không có cửa nào cả: lịch accesstrade:sync-orders chạy vô điều kiện, gạt công
+     * tắc trên giao diện không tắt được gì, và cách duy nhất để dừng là sửa routes/console.php
+     * rồi deploy. Với một đường vừa gọi API bên ngoài vừa ghi tiền vào ví khách thì phải có
+     * phanh bấm được từ giao diện.
+     *
+     * Chưa có bản ghi nào = chưa cài đặt = tắt. Mặc định TẮT theo lệ chung của repo cho mọi
+     * hành vi tự động.
+     */
+    public function enabled(): bool
+    {
+        return ApiConfig::where('platform', self::PLATFORM)
+            ->where('is_active', true)
+            ->exists();
+    }
+
+    /**
      * Sinh link affiliate cho MỘT url sản phẩm TikTok Shop.
      *
      * @param  string|null  $subId  Mã định danh khách đang đăng nhập (User::$sub_id) — null là
@@ -165,7 +190,16 @@ class AccessTradeService
      *   • endpoint   → gốc API, mặc định https://api.accesstrade.vn/v1
      *
      * KHÔNG lọc theo is_active, cùng lý do đã ghi ở KieuShopeeService::params(): is_active trả
-     * lời "nguồn nào đang phục vụ khách", không phải "gọi nguồn này bằng tham số gì".
+     * lời "nguồn nào đang phục vụ khách", không phải "gọi nguồn này bằng tham số gì". Việc
+     * bật/tắt hẳn đường TikTok nằm ở enabled() bên dưới.
+     *
+     * GIÁ TRỊ GIẢ CỦA SEEDER BỊ COI NHƯ RỖNG — đây không phải chi tiết vụn:
+     * ApiConfigSeeder tạo sẵn bản ghi 'accesstrade' với app_id='YOUR_ACCESSTRADE_PUBLISHER_ID',
+     * app_secret='YOUR_ACCESSTRADE_API_KEY', và bản ghi đó ĐANG NẰM TRÊN PRODUCTION. Vì chuỗi
+     * giả không rỗng nên nó vừa che mất campaign_id thật ở config, vừa lọt qua cửa "chưa cấu
+     * hình" trong createProductLink() — kết quả là lịch 2 giờ/lần bắn request thật bằng token
+     * rác, nhận 401, và Log::warning bị LOG_LEVEL=error trên prod nuốt mất. Hỏng im lặng vĩnh
+     * viễn, đúng loại lỗi không ai phát hiện cho tới khi ngồi đọc báo cáo.
      *
      * @return array{endpoint: string, api_key: string, campaign_id: string, utm_source: string, test_url: string}
      */
@@ -174,9 +208,15 @@ class AccessTradeService
         $row = ApiConfig::where('platform', self::PLATFORM)->first();
         $meta = $row->meta ?? [];
 
-        $pick = fn (?string $fromDb, string $configKey) => filled($fromDb)
-            ? trim($fromDb)
-            : (string) config("services.accesstrade.{$configKey}");
+        $pick = function (?string $fromDb, string $configKey): string {
+            $value = trim((string) $fromDb);
+
+            if ($value !== '' && ! str_starts_with($value, self::PLACEHOLDER_PREFIX)) {
+                return $value;
+            }
+
+            return (string) config("services.accesstrade.{$configKey}");
+        };
 
         return [
             'endpoint' => rtrim($pick($row->endpoint ?? null, 'endpoint'), '/'),

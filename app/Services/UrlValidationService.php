@@ -92,6 +92,18 @@ class UrlValidationService
         'shope.ee',
         's.afp.ad',
         'kieushopee.com',
+
+        // Đường TikTok Shop qua ACCESSTRADE (xem AccessTradeService). Link họ cấp luôn là
+        // go.isclix.com/deep_link/... (bản đầy đủ) hoặc shorten.asia/... (bản rút gọn) — đo
+        // thật 25-09-2026. Thiếu hai domain này thì khách bấm "Mua ngay" trên sản phẩm TikTok
+        // nhận thẳng 422 "Link không hợp lệ" ở ShortLinkController::store(), tức toàn bộ đường
+        // TikTok chết ngay ở cú bấm cuối cùng.
+        'go.isclix.com',
+        'shorten.asia',
+
+        // Đích cuối của link TikTok, phòng khi chuỗi redirect được giải sẵn trước khi lưu.
+        'tiktok.com',
+        'shop.tiktok.com',
     ];
 
     public function validateAffiliateRedirectUrl(string $url): void

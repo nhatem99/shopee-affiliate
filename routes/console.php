@@ -44,11 +44,14 @@ Schedule::command('tiers:refresh')
 
 // Kéo đơn TikTok Shop từ ACCESSTRADE về rồi cộng tiền hoàn (xem AccessTradeOrderImportService).
 //
-// 2 giờ/lần, quét lại 30 ngày mỗi lượt: đơn không đứng yên sau khi đặt — trạng thái đi từ chờ
-// sang duyệt/từ chối trong nhiều tuần, và cờ đối soát (is_confirmed) còn tới muộn hơn nữa. Chỉ
-// lấy đơn mới thì những lần đổi trạng thái đó không bao giờ về, tức tiền không bao giờ vào ví
-// khách. Một lượt 30 ngày là 1-2 request, rẻ so với quota 30 request/phút của họ.
-Schedule::command('accesstrade:sync-orders')
+// 2 giờ/lần, quét lại 90 NGÀY mỗi lượt. Con số 90 không phải cho rộng rãi — nó bắt buộc:
+// tham số since/until của họ lọc theo NGÀY PHÁT SINH ĐƠN, trong khi cờ đối soát (is_confirmed,
+// điều kiện duy nhất để tiền chảy vào ví) về theo KỲ, thường ở tháng kế tiếp. Quét 30 ngày thì
+// đơn đặt đầu tháng đã rơi ra khỏi cửa sổ trước khi được xác nhận: dòng trong shopee_orders
+// đứng nguyên 'pending' mãi mãi và khách không bao giờ nhận được đồng nào — không log, không
+// lỗi, không ai biết. 90 ngày = 3 lát = 3 request mỗi lượt, vẫn thừa quota 30 request/phút.
+// Lệnh còn tự đếm và kêu lên nếu vẫn có đơn treo ngoài cửa sổ.
+Schedule::command('accesstrade:sync-orders', ['--days' => 90])
     ->everyTwoHours()
     ->withoutOverlapping()
     ->description('Đồng bộ đơn TikTok Shop (ACCESSTRADE) + cộng tiền hoàn')
