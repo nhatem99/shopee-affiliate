@@ -42,8 +42,40 @@ class TikTokLinkResolverTest extends TestCase
         $this->assertSame(self::PRODUCT_ID, $result['product_id']);
     }
 
-    /** Link rút gọn từ app: phải đi theo redirect mới thấy id. */
-    public function test_link_rut_gon_duoc_giai_qua_redirect(): void
+    /**
+     * Chuỗi redirect THẬT, chép từ link chia sẻ lấy trong app TikTok ngày 25-09-2026:
+     * vt.tiktok.com/ZS9A4R76bVmje-pJ8pO → 301 → shop.tiktok.com/vn/pdp/{id}?_d=...&chain_key=...
+     *
+     * Dạng /vn/pdp/ này chính là chỗ bản đầu tiên của service sai: regex chỉ biết
+     * /view/product/ (dạng feed của ACCESSTRADE trả về) nên mọi link khách dán đều ra null.
+     */
+    public function test_link_rut_gon_that_tu_app_duoc_giai(): void
+    {
+        Http::fake([
+            'vt.tiktok.com/*' => Http::response('', 301, [
+                'Location' => 'https://shop.tiktok.com/vn/pdp/'.self::PRODUCT_ID.'?_d=e7j35hbmmll668&_svg=1&chain_key=EzPRbF0aqpyq',
+            ]),
+        ]);
+
+        $result = $this->resolver()->resolve('https://vt.tiktok.com/ZS9A4R76bVmje-pJ8pO/');
+
+        $this->assertSame(self::PRODUCT_ID, $result['product_id']);
+        // Tham số của link chia sẻ bị cắt sạch: chain_key/_d là tracking của người đã chia sẻ.
+        $this->assertSame('https://shop.tiktok.com/vn/pdp/'.self::PRODUCT_ID, $result['canonical_url']);
+    }
+
+    /** Thị trường khác cho ra /th/pdp/, /id/pdp/... — chặn cứng "vn" là rơi hết mấy link đó. */
+    public function test_nhan_ca_tien_to_quoc_gia_khac(): void
+    {
+        Http::fake();
+
+        $result = $this->resolver()->resolve('https://shop.tiktok.com/th/pdp/'.self::PRODUCT_ID);
+
+        $this->assertSame(self::PRODUCT_ID, $result['product_id']);
+    }
+
+    /** Dạng cũ /view/product/ vẫn phải nhận: đó là dạng feed của ACCESSTRADE trả về. */
+    public function test_van_nhan_dang_view_product_cua_feed(): void
     {
         Http::fake([
             'vt.tiktok.com/*' => Http::response('', 302, [
@@ -54,10 +86,7 @@ class TikTokLinkResolverTest extends TestCase
         $result = $this->resolver()->resolve('https://vt.tiktok.com/ZSABC123/');
 
         $this->assertSame(self::PRODUCT_ID, $result['product_id']);
-        $this->assertSame(
-            'https://shop.tiktok.com/view/product/'.self::PRODUCT_ID.'?region=VN&local=vi',
-            $result['canonical_url'],
-        );
+        $this->assertSame('https://shop.tiktok.com/vn/pdp/'.self::PRODUCT_ID, $result['canonical_url']);
     }
 
     /** TikTok có trả Location tương đối — ghép sai là vòng sau mất luôn host rồi bỏ cuộc. */

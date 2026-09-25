@@ -32,10 +32,21 @@ class TikTokLinkResolverService
     private const TIMEOUT = 8;
 
     /**
-     * Dạng url chuẩn dùng cho mọi thứ phía sau (gửi ACCESSTRADE, tra thông tin sản phẩm). Đây
-     * đúng là dạng mà chính feed sản phẩm của họ trả về ở trường `detail_link`.
+     * Dạng url chuẩn dùng cho mọi thứ phía sau (gửi ACCESSTRADE, tra thông tin sản phẩm).
+     *
+     * Chọn `/vn/pdp/{id}` vì đó là dạng ỨNG DỤNG TIKTOK ĐANG PHÁT RA ngày nay — đo thật
+     * 25-09-2026 trên một link chia sẻ lấy từ app: vt.tiktok.com/ZS9A4R76bVmje-pJ8pO redirect
+     * 301 thẳng tới https://shop.tiktok.com/vn/pdp/1732117639001048907?_d=...&chain_key=...
+     *
+     * Feed của ACCESSTRADE thì lại trả dạng cũ /view/product/{id}, và cả hai dạng đều còn sống
+     * (đều HTTP 200) lẫn đều được họ nhận khi tạo link. Vẫn chọn dạng của app vì trang sản phẩm
+     * TikTok chỉ là vỏ rỗng dựng bằng JS — mình KHÔNG có cách nào kiểm chứng từ server rằng dạng
+     * cũ còn hiện đúng sản phẩm hay đã âm thầm thành trang trống trên điện thoại khách.
+     *
+     * Cắt sạch tham số của link chia sẻ (_d, chain_key, _svg...) chứ không mang theo: đó là
+     * tracking của NGƯỜI ĐÃ CHIA SẺ link đó, mang theo là tự nguyện đẩy công của mình cho họ.
      */
-    private const CANONICAL_FORMAT = 'https://shop.tiktok.com/view/product/%s?region=VN&local=vi';
+    private const CANONICAL_FORMAT = 'https://shop.tiktok.com/vn/pdp/%s';
 
     /**
      * @return array{product_id: string, canonical_url: string}|null null = không phải link sản
@@ -91,13 +102,21 @@ class TikTokLinkResolverService
     }
 
     /**
-     * Ba dạng đã gặp:
-     *   shop.tiktok.com/view/product/1733724538346374522?region=VN
+     * Bốn dạng đã gặp thật:
+     *   shop.tiktok.com/vn/pdp/1732117639001048907        ← app TikTok phát ra (đo 25-09-2026)
+     *   shop.tiktok.com/view/product/1733724538346374522  ← feed của ACCESSTRADE trả về
      *   www.tiktok.com/view/product/1733724538346374522
-     *   ...?product_id=1733724538346374522   (dạng TikTok gắn khi chia sẻ từ trong app)
+     *   ...?product_id=1733724538346374522
+     *
+     * Tiền tố quốc gia trong /vn/pdp/ để hờ (`[a-z]{2}`) vì cùng một sản phẩm ở thị trường khác
+     * sẽ ra /th/pdp/, /id/pdp/... — chặn cứng "vn" thì link khách dán từ vùng khác rơi hết.
      */
     private function extractProductId(string $url): ?string
     {
+        if (preg_match('#/(?:[a-z]{2}/)?pdp/(\d{6,})#', $url, $m)) {
+            return $m[1];
+        }
+
         if (preg_match('#/view/product/(\d{6,})#', $url, $m)) {
             return $m[1];
         }
