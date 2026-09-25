@@ -10,6 +10,10 @@ class FacebookReelSlot extends Model
         'reel_id',
         'product_key',
         'product_name',
+        // Mã khách mà caption hiện tại đang phục vụ — null là khách vãng lai. Xem migration
+        // 2026_09_25_140000: thiếu nó thì hai khách cùng sản phẩm dùng chung một reel và tiền
+        // hoàn chảy vào ví người bấm trước.
+        'user_sub_id',
         'target_url',
         'leased_until',
         'caption',

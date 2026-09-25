@@ -43,7 +43,7 @@ class FacebookReelSlotService
      * Thuê một reel cho sản phẩm này và trả về URL reel, hoặc null nếu không thu xếp được
      * (chưa cấu hình reel nào, hết slot, hoặc Graph API từ chối đổi caption).
      */
-    public function reelUrlFor(string $productKey, string $displayName, string $targetUrl): ?string
+    public function reelUrlFor(string $productKey, string $displayName, string $targetUrl, ?string $customerCode = null): ?string
     {
         if (! $this->pool()) {
             return null;
@@ -55,7 +55,10 @@ class FacebookReelSlotService
         // cùng xem một sản phẩm hot bấm gần nhau: request sau lọt qua nhánh $held ngay sau khi
         // request trước vừa claim (DB đã có product_key) nhưng TRƯỚC KHI Graph API trả lời —
         // nhận được URL và tưởng cap đã đổi xong, trong khi Facebook có khi vẫn chưa cập nhật.
-        $lock = Cache::lock("fb_reel_slot:{$productKey}", 30);
+        //
+        // Khoá theo SẢN PHẨM + KHÁCH: hai khách khác nhau cùng một sản phẩm giờ đi tới hai reel
+        // khác nhau, nên chặn nhau ở một khoá chung chỉ làm người sau chờ vô ích 15 giây.
+        $lock = Cache::lock("fb_reel_slot:{$productKey}:".($customerCode ?? 'guest'), 30);
 
         try {
             $lock->block(15);
@@ -66,23 +69,33 @@ class FacebookReelSlotService
         }
 
         try {
-            return $this->reelUrlForLocked($productKey, $displayName, $targetUrl);
+            return $this->reelUrlForLocked($productKey, $displayName, $targetUrl, $customerCode);
         } finally {
             $lock->release();
         }
     }
 
-    private function reelUrlForLocked(string $productKey, string $displayName, string $targetUrl): ?string
+    private function reelUrlForLocked(string $productKey, string $displayName, string $targetUrl, ?string $customerCode): ?string
     {
         $pool = $this->pool();
         $leaseMinutes = $this->config->facebookReelLeaseMinutes();
         $leasedUntil = now()->addMinutes($leaseMinutes);
 
-        // Sản phẩm này đang giữ reel nào chưa? Trúng thì không gọi API lần nữa — nhiều khách
-        // cùng xem một sản phẩm dùng chung reel.
+        // Sản phẩm này đang giữ reel nào cho ĐÚNG KHÁCH NÀY chưa? Trúng thì không gọi API lần
+        // nữa — cùng một khách bấm mua nhiều lần dùng lại đúng reel đó.
+        //
+        // Điều kiện user_sub_id là thứ CHẶN TIỀN ĐI NHẦM VÍ: caption reel chứa short-link của
+        // người thuê, mà short-link đó mang Sub_id của người đó. Dùng chung reel giữa hai khách
+        // nghĩa là khách sau mua bằng mã của khách trước, và tiền hoàn về ví người trước. Không
+        // có gì báo lỗi cả — đơn về đủ, hoa hồng về đủ, chỉ là về nhầm người.
+        //
+        // Khách vãng lai (null) dùng chung được với nhau: link của họ không mang mã ai cả.
         $held = FacebookReelSlot::whereIn('reel_id', $pool)
             ->where('product_key', $productKey)
             ->where('leased_until', '>', now())
+            ->where(fn ($q) => $customerCode === null
+                ? $q->whereNull('user_sub_id')
+                : $q->where('user_sub_id', $customerCode))
             ->first();
 
         if ($held) {
@@ -90,13 +103,17 @@ class FacebookReelSlotService
         }
 
         // Reel vẫn ĐANG HIỆN đúng link này (lease hết hạn nhưng chưa ai đè, hoặc job đối soát
-        // đọc thấy trên Facebook như vậy): thuê lại thẳng, caption không cần đổi.
+        // đọc thấy trên Facebook như vậy): thuê lại thẳng, caption không cần đổi. So khớp cả
+        // target_url nên tự nó đã là đúng một khách — không cần thêm điều kiện mã khách.
         $showing = FacebookReelSlot::whereIn('reel_id', $pool)
             ->where('product_key', $productKey)
             ->where('target_url', $targetUrl)
             ->first();
 
-        if ($showing && $this->claim($showing, $leasedUntil)) {
+        // Ghi kèm mã khách khi thuê lại: bản ghi cũ (tạo trước khi có cột này) hoặc bản ghi do
+        // job đối soát dựng lại có thể còn trống ô đó — trống thì nhánh $held ở trên coi reel
+        // này là "của khách vãng lai" và đem cho người khác dùng chung.
+        if ($showing && $this->claim($showing, $leasedUntil, ['user_sub_id' => $customerCode])) {
             return $showing->url();
         }
 
@@ -110,6 +127,7 @@ class FacebookReelSlotService
                 'product_key' => $productKey,
                 'product_name' => $displayName,
                 'target_url' => $targetUrl,
+                'user_sub_id' => $customerCode,
             ])) {
                 continue;
             }
@@ -122,6 +140,7 @@ class FacebookReelSlotService
                     'product_key' => $slot->product_key,
                     'product_name' => $slot->product_name,
                     'target_url' => $slot->target_url,
+                    'user_sub_id' => $slot->user_sub_id,
                     'leased_until' => null,
                     'sync_error' => $service->lastError,
                 ]);

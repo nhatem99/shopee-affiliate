@@ -245,6 +245,36 @@ class AffiliateLinkRewriterService
     }
 
     /**
+     * Chiều NGƯỢC LẠI của buildSubId(): đọc mã khách ra khỏi một URL đã gắn Sub_id.
+     *
+     * Để cạnh buildSubId() chứ không tách ra file khác: hai hàm này là hai nửa của cùng một quy
+     * ước về 5 khe, tách ra là sớm muộn một bên đổi cách xếp mà bên kia vẫn đọc theo cách cũ —
+     * và cái sai đó không báo gì cả, chỉ làm tiền hoàn đi nhầm ví.
+     *
+     * Trả null khi link không mang mã khách nào (khách vãng lai) — đó là trạng thái bình thường,
+     * không phải lỗi.
+     */
+    public static function customerCodeFrom(?string $url): ?string
+    {
+        if (! is_string($url) || $url === '') {
+            return null;
+        }
+
+        parse_str((string) parse_url($url, PHP_URL_QUERY), $query);
+        $utmContent = trim((string) ($query['utm_content'] ?? ''));
+
+        if ($utmContent === '') {
+            return null;
+        }
+
+        // Khe 2 là VỊ TRÍ CỐ ĐỊNH của mã khách — xem buildSubId(). Chuỗi không có dấu "-" nghĩa
+        // là chỉ có nhãn kênh, không có mã khách.
+        $slots = explode('-', $utmContent);
+
+        return isset($slots[1]) && $slots[1] !== '' ? $slots[1] : null;
+    }
+
+    /**
      * Chuẩn hoá về chữ thường để config viết 'IG' hay 'ig' đều chạy, và LOẠI GIÁ TRỊ RỖNG:
      * marker rỗng sẽ khớp với các khe trống của "Test-22---" (luôn có), tức mọi link đều bị gắn
      * nhãn kênh — hỏng âm thầm, báo cáo Shopee vẫn có số nên rất lâu mới phát hiện.

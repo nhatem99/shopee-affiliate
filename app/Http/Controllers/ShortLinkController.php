@@ -251,6 +251,11 @@ class ShortLinkController extends Controller
      */
     private function facebookCommentRedirectUrl(?string $productName, string $targetUrl, string $fallbackUrl, string $source): string
     {
+        // Mã khách đọc ngược ra từ chính link đích — không lấy từ auth() ở đây: $targetUrl là
+        // thứ THẬT SỰ nằm trong comment/caption, nên đọc từ nó thì khoá cache không bao giờ lệch
+        // với nội dung đã đăng (kể cả khi rewriteToOwnAffiliate không gắn được mã).
+        $customerCode = AffiliateLinkRewriterService::customerCodeFrom($targetUrl);
+
         $config = ApiConfig::where('platform', 'facebook')->where('is_active', true)->first();
 
         if (! $config || ! ($config->meta['comment_redirect_enabled'] ?? false)) {
@@ -268,6 +273,7 @@ class ShortLinkController extends Controller
                 $productKey,
                 $productName ?: 'Sản phẩm Shopee',
                 $fallbackUrl,
+                $customerCode,
             );
 
             if ($reelUrl) {
@@ -286,7 +292,13 @@ class ShortLinkController extends Controller
         // Khoá theo CẢ NGUỒN: hai nguồn cho ra link đích khác nhau (mã khác nhau) cho cùng
         // một sản phẩm. Dùng chung khoá thì ngay sau khi admin đổi nguồn, lượt bấm mới sẽ
         // tái dùng comment cũ và đẩy khách tới link của nguồn trước đó.
-        $cacheKey = "fb_comment_link:{$source}:{$productKey}";
+        //
+        // Và khoá theo CẢ KHÁCH: comment chứa short-link của người bấm trước, mà link đó mang
+        // Sub_id của người đó. Dùng chung comment giữa hai khách nghĩa là khách sau mua bằng mã
+        // của khách trước và tiền hoàn về ví người trước — đơn về đủ, hoa hồng về đủ, chỉ là về
+        // nhầm người, không có gì báo lỗi. Khách vãng lai (null) dùng chung được với nhau vì
+        // link của họ không mang mã ai cả.
+        $cacheKey = "fb_comment_link:{$source}:{$productKey}:".($customerCode ?? 'guest');
 
         if ($cached = Cache::get($cacheKey)) {
             return $this->cachedCommentUrl($cached, $pool);

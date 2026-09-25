@@ -204,6 +204,13 @@ class FacebookReelSyncService
         $productKey = $link ? $this->productKeys->fromUrl($link->target_url, $link->product_name) : null;
         $targetUrl = $link ? url('/go/'.$link->code) : null;
 
+        // Reel đang hiện link của KHÁCH NÀO — đọc ngược ra từ chính link trong caption.
+        // Bắt buộc phải ghi ở đây chứ không chỉ lúc thuê: job này ghi đè cả hàng, để trống ô
+        // này là reel của một khách cụ thể bị hạ xuống thành "của khách vãng lai", và lượt bấm
+        // kế tiếp của người khác sẽ được dùng chung đúng cái reel đó — tức tiền hoàn lại chảy
+        // vào ví người đang giữ caption. Xem FacebookReelSlotService::reelUrlForLocked().
+        $customerCode = $link ? AffiliateLinkRewriterService::customerCodeFrom($link->target_url) : null;
+
         $was = $slot->product_key;
         $changed = $productKey !== $was || $targetUrl !== $slot->target_url;
 
@@ -211,6 +218,7 @@ class FacebookReelSyncService
             'product_key' => $productKey,
             'product_name' => $link?->product_name ?? ($changed ? null : $slot->product_name),
             'target_url' => $targetUrl,
+            'user_sub_id' => $customerCode,
             // Thực tế khác bản ghi → lease cũ đang giữ chỗ cho sản phẩm không còn trên reel,
             // thả ra. Khớp thì giữ nguyên lease, khách đang xem không bị đổi caption dưới chân.
             'leased_until' => $changed ? null : $slot->leased_until,
