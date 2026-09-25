@@ -42,6 +42,18 @@ Schedule::command('tiers:refresh')
     ->description('Xét hạng thành viên theo tiền hoàn quý trước')
     ->storeOutput();
 
+// Kéo đơn TikTok Shop từ ACCESSTRADE về rồi cộng tiền hoàn (xem AccessTradeOrderImportService).
+//
+// 2 giờ/lần, quét lại 30 ngày mỗi lượt: đơn không đứng yên sau khi đặt — trạng thái đi từ chờ
+// sang duyệt/từ chối trong nhiều tuần, và cờ đối soát (is_confirmed) còn tới muộn hơn nữa. Chỉ
+// lấy đơn mới thì những lần đổi trạng thái đó không bao giờ về, tức tiền không bao giờ vào ví
+// khách. Một lượt 30 ngày là 1-2 request, rẻ so với quota 30 request/phút của họ.
+Schedule::command('accesstrade:sync-orders')
+    ->everyTwoHours()
+    ->withoutOverlapping()
+    ->description('Đồng bộ đơn TikTok Shop (ACCESSTRADE) + cộng tiền hoàn')
+    ->storeOutput();
+
 // Gọi thử nguồn kieushopee, tự bật chế độ bảo trì khi nó chết (xem SourceHealthService). Công
 // tắc ở Admin > Cài đặt đang tắt thì lệnh thoát ngay, không gọi sang nguồn.
 //

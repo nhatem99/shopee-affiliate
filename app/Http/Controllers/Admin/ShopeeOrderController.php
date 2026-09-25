@@ -39,6 +39,10 @@ class ShopeeOrderController extends Controller
             ->withQueryString()
             ->through(fn (ShopeeOrder $o) => [
                 'id' => $o->id,
+                // Bảng này giờ có cả đơn TikTok lấy qua ACCESSTRADE. Thiếu nhãn sàn thì hai
+                // nguồn đơn nằm lẫn nhau mà nhìn không phân biệt được — trong khi cách đối soát
+                // và nơi tra cứu đơn gốc của hai bên khác hẳn nhau.
+                'platform' => $o->platform,
                 'order_id' => $o->order_id,
                 'product_name' => $o->product_name,
                 'shop_name' => $o->shop_name,

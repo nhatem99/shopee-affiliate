@@ -265,7 +265,16 @@ function goPage(url) {
                 </thead>
                 <tbody class="divide-y divide-[var(--color-line)]">
                     <tr v-for="o in orders?.data" :key="o.id">
-                        <td class="px-4 py-3 font-mono text-xs text-[var(--color-muted)] whitespace-nowrap">{{ o.order_id }}</td>
+                        <!-- Nhãn sàn: bảng này chứa cả đơn TikTok lấy qua ACCESSTRADE lẫn đơn
+                             Shopee nhập tay từ file CSV. Hai bên tra cứu đơn gốc ở hai nơi khác
+                             nhau nên nhìn phải biết ngay là đơn của sàn nào. -->
+                        <td class="px-4 py-3 font-mono text-xs text-[var(--color-muted)] whitespace-nowrap">
+                            <span
+                                v-if="o.platform === 'tiktok'"
+                                class="inline-block mr-1.5 px-1.5 py-0.5 rounded text-[10px] font-sans font-bold bg-black text-white align-middle"
+                            >TikTok</span>
+                            {{ o.order_id }}
+                        </td>
                         <td class="px-4 py-3 text-[var(--color-ink)]/80 max-w-[240px] truncate" :title="o.product_name">
                             {{ o.product_name }}
                             <span v-if="o.shop_name" class="block text-xs text-[var(--color-muted)] truncate">{{ o.shop_name }}</span>

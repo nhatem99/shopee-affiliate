@@ -145,6 +145,18 @@ class AccessTradeService
     }
 
     /**
+     * Cùng bộ tham số đó, cho service khác gọi endpoint khác của ACCESSTRADE (đồng bộ đơn hàng —
+     * xem AccessTradeOrderImportService). Mở ra một cửa đọc thay vì để mỗi nơi tự đọc ApiConfig:
+     * hai chỗ tự suy ra độc lập là sớm muộn một bên đọc key ở DB còn bên kia đọc ở config.
+     *
+     * @return array{endpoint: string, api_key: string, campaign_id: string, utm_source: string, test_url: string}
+     */
+    public function apiParams(): array
+    {
+        return $this->params();
+    }
+
+    /**
      * Tham số gọi API, ưu tiên bản ghi ở /admin/api-config rồi mới tới config/services.php.
      *
      * Ánh xạ các ô của form admin (form dùng chung cho mọi provider nên tên ô là tên chung):

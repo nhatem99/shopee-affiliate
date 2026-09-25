@@ -247,6 +247,11 @@ class ShopeeReportImportService
 
         $order = ShopeeOrder::updateOrCreate(
             [
+                // Bảng này giờ chứa cả đơn TikTok (AccessTradeOrderImportService). Thiếu
+                // `platform` ở khoá tìm thì một đơn TikTok trùng order_id sẽ bị dòng Shopee ghi
+                // đè — hai sàn đánh số đơn trong hai không gian khác nhau, không có gì bảo đảm
+                // không trùng.
+                'platform' => ShopeeOrder::PLATFORM_SHOPEE,
                 'order_id' => $row['order_id'],
                 'item_id' => $row['item_id'],
                 'model_id' => $row['model_id'] ?? '',

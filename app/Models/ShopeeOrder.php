@@ -15,6 +15,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
  * scopeCompleted() + ShopeeReportImportService::syncCommissions().
  */
 #[Fillable([
+    'platform',
     'order_id', 'item_id', 'model_id', 'checkout_id',
     'shop_id', 'shop_name', 'product_name', 'quantity', 'price', 'order_value',
     'net_commission', 'total_order_commission',
@@ -26,6 +27,17 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 class ShopeeOrder extends Model
 {
     use HasFactory;
+
+    /**
+     * Sàn phát sinh đơn. Bảng vốn chỉ có đơn Shopee nhập tay từ file CSV; từ 25-09-2026 nhận
+     * thêm đơn TikTok Shop lấy qua API ACCESSTRADE (xem AccessTradeOrderImportService).
+     *
+     * Mọi thứ phía sau — cộng tiền, lịch sử đơn của khách, thu hồi khi huỷ — cố ý KHÔNG phân
+     * biệt hai sàn: đơn nào cũng là tiền của một khách thật, quy tắc trả phải giống nhau.
+     */
+    public const PLATFORM_SHOPEE = 'shopee';
+
+    public const PLATFORM_TIKTOK = 'tiktok';
 
     protected function casts(): array
     {
