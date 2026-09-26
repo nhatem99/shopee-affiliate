@@ -52,7 +52,16 @@ class ShopeeProductLookupService
             'rating' => (float) ($info['rating'] ?? 0),
             // Tỷ lệ hoa hồng thật của shop này (seller + Shopee) — dùng để ước tính
             // hoàn tiền thay vì tỷ lệ cứng mặc định của AccessTradeService.
+            //
+            // LÀ PHÂN SỐ, KHÔNG PHẢI PHẦN TRĂM: đo thật 26-09-2026 trên item 29816681536 —
+            // sellerRate = 0.1, shopeeRate = 0.04, và nguồn tự trả commission = 37660 trên giá
+            // 269000, tức đúng 0.14 × giá. Nhân thêm 100 ở đâu đó là số tiền hoàn sai 100 lần.
             'cashback_rate' => (float) ($info['sellerRate'] ?? 0) + (float) ($info['shopeeRate'] ?? 0),
+
+            // Hoa hồng bằng TIỀN cho đúng sản phẩm này, do nguồn tự tính sẵn. Dùng số này thay
+            // vì tự nhân giá × tỉ lệ: giá hiển thị và giá nguồn dùng để tính hoa hồng không phải
+            // lúc nào cũng là một (giá biến thể, giá sau khuyến mãi của shop).
+            'commission' => (float) ($info['commission'] ?? 0),
         ];
     }
 }

@@ -4,15 +4,19 @@ namespace App\Http\Controllers;
 
 use App\Exceptions\AffiliateScanException;
 use App\Models\PlatformVoucher;
+use App\Services\CashbackService;
 use App\Services\FacebookRedirectFlagService;
 use App\Services\ShopeeLinkResolverService;
+use App\Services\ShopeeProductLookupService;
 use App\Services\TrackingService;
 use App\Services\UrlValidationService;
 use App\Services\VoucherFetchResult;
 use App\Services\VoucherFetchService;
 use App\Services\VoucherRefService;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Cache;
 use Inertia\Inertia;
 use Inertia\Response;
 
@@ -24,6 +28,7 @@ class ShopeeVoucherController extends Controller
         private VoucherFetchService $fetcher,
         private VoucherRefService $refs,
         private TrackingService $tracking,
+        private ShopeeProductLookupService $productLookup,
     ) {}
 
     public function resolve(Request $request): Response|RedirectResponse
@@ -83,12 +88,53 @@ class ShopeeVoucherController extends Controller
                 'canonical_url' => $canonicalUrl,
                 'product' => $product,
                 'voucher_ref' => $ref,
+                // Để giao diện tự hỏi hoa hồng của sản phẩm này SAU khi đã hiện kết quả
+                // (xem commission()). Không hỏi ngay trong lượt này: nguồn hoa hồng là proxy
+                // bên thứ ba timeout 10 giây, mà lượt quét vốn đã phải chờ nguồn mã — cộng
+                // thêm vào đường chờ của khách là đổi một con số ước tính lấy 10 giây im lặng.
+                'item_id' => $ids['item_id'] ?? null,
                 // Chế độ mã YTB: khách phải mở link này (bước 1) trước khi bấm Facebook/Mua ngay
                 // (bước 2) — xem ShortLinkController::activateYoutube. null = không có bước 1.
                 'ytb_activate_url' => $ref && $result->ytbUrl ? route('voucher.ytb', $ref) : null,
             ],
             ...$this->facebookRedirectFlags(),
         ]);
+    }
+
+    /**
+     * Hoa hồng (bằng TIỀN) mà Shopee trả cho tụi mình nếu khách mua đúng sản phẩm này — giao
+     * diện nhân với tỉ lệ hoàn để hiện "Hoàn tiền dự kiến".
+     *
+     * Tách thành một request riêng chạy SAU khi kết quả đã hiện, không nhét vào lượt quét: nguồn
+     * hoa hồng là proxy bên thứ ba (ShopeeProductLookupService) timeout 10 giây và không có SLA,
+     * trong khi lượt quét vốn đã phải chờ nguồn mã. Hỏng thì khách chỉ mất một con số ước tính,
+     * không ai phải chờ thêm và luồng mua không hề đụng tới.
+     *
+     * Trả về tiền chứ không trả tỉ lệ: `cashback_rate` của nguồn là PHÂN SỐ (0.14 = 14%) chứ
+     * không phải phần trăm, và giá hiển thị không phải lúc nào cũng là giá nguồn dùng để tính
+     * hoa hồng — đẩy phép nhân ra frontend là mời gọi sai 100 lần.
+     */
+    public function commission(string $itemId, CashbackService $cashback): JsonResponse
+    {
+        if (! preg_match('/^\d{5,20}$/', $itemId)) {
+            return response()->json(['commission' => null], 422);
+        }
+
+        // Chương trình hoàn tiền đang tắt thì không có gì để ước tính, và cũng không việc gì phải
+        // gọi sang nguồn ngoài.
+        if ($cashback->displayRate() <= 0) {
+            return response()->json(['commission' => null]);
+        }
+
+        // 6 giờ: hoa hồng một sản phẩm gần như không đổi trong ngày, mà đây là nguồn ngoài —
+        // mỗi khách dán cùng một link hot lại gọi một lượt là vừa chậm vừa dễ bị chặn.
+        $commission = Cache::remember(
+            "shopee_commission:{$itemId}",
+            now()->addHours(6),
+            fn () => (float) ($this->productLookup->getByItemId($itemId)['commission'] ?? 0),
+        );
+
+        return response()->json(['commission' => $commission > 0 ? $commission : null]);
     }
 
     /**

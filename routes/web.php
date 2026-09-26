@@ -107,6 +107,14 @@ Route::post('/voucher/resolve', [ShopeeVoucherController::class, 'resolve'])
     ->middleware('throttle:affiliate-scan')
     ->name('voucher.resolve');
 
+// Hoa hồng của một sản phẩm, để giao diện hiện "Hoàn tiền dự kiến" SAU khi kết quả đã hiện.
+// Tách khỏi /voucher/resolve vì nguồn hoa hồng là proxy bên thứ ba chậm và hay hỏng — xem
+// ShopeeVoucherController::commission(). Dùng chung throttle với lượt quét: mỗi lượt quét kéo
+// theo đúng một lượt hỏi này.
+Route::get('/voucher/hoa-hong/{itemId}', [ShopeeVoucherController::class, 'commission'])
+    ->middleware('throttle:affiliate-scan')
+    ->name('voucher.commission');
+
 // Short-link cloaking cho link affiliate: /go/{code} -> 302 -> link Shopee thật (mmp_pid của mình)
 Route::post('/voucher/shorten', [ShortLinkController::class, 'store'])
     ->middleware('throttle:affiliate-scan')
