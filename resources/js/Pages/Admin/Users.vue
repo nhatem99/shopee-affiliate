@@ -189,7 +189,7 @@ function confirmRole() {
                     :class="(filters?.status || '') === s.v ? 'bg-[var(--color-accent)] text-white' : 'bg-[var(--color-bg)] text-[var(--color-ink)] border border-[var(--color-line)] hover:border-[var(--color-accent)]'"
                     class="px-3 py-1.5 rounded-lg text-xs font-semibold transition">{{ s.l }}</button>
 
-                <button @click="resetFilters" class="ml-auto text-xs text-[var(--color-muted)] hover:text-[var(--color-accent)] transition">Xoá lọc</button>
+                <button @click="resetFilters" class="ml-auto text-xs text-[var(--color-muted)] hover:text-[var(--color-accent-deep)] transition">Xoá lọc</button>
             </div>
         </div>
 
@@ -214,7 +214,7 @@ function confirmRole() {
                         <td class="px-4 py-3">
                             <p class="font-semibold text-[var(--color-ink)]">
                                 {{ u.name }}
-                                <span v-if="u.id === currentUserId" class="ml-1 text-[10px] font-bold text-[var(--color-accent)]">(bạn)</span>
+                                <span v-if="u.id === currentUserId" class="ml-1 text-[10px] font-bold text-[var(--color-accent-deep)]">(bạn)</span>
                             </p>
                             <p class="text-xs text-[var(--color-muted)]">{{ u.email }}</p>
                             <p class="text-xs text-[var(--color-muted)]">{{ u.phone || '—' }} · tham gia {{ u.created_at }}</p>
@@ -224,7 +224,7 @@ function confirmRole() {
                         </td>
                         <td class="px-4 py-3 text-right tabular-nums text-[var(--color-ink)]/70">{{ u.links_count }}</td>
                         <td class="px-4 py-3 text-right tabular-nums text-[var(--color-ink)]/70">{{ vnd(u.approved_commission) }}</td>
-                        <td class="px-4 py-3 text-right tabular-nums text-[var(--color-accent)]">{{ u.pending_estimate === null ? '—' : vnd(u.pending_estimate) }}</td>
+                        <td class="px-4 py-3 text-right tabular-nums text-[var(--color-accent-deep)]">{{ u.pending_estimate === null ? '—' : vnd(u.pending_estimate) }}</td>
                         <td class="px-4 py-3 text-right tabular-nums font-semibold text-[var(--color-brand-green)]">{{ vnd(u.available_balance) }}</td>
                         <td class="px-4 py-3">
                             <span v-if="u.banned_at" class="px-2 py-1 rounded-full text-xs font-semibold bg-red-100 text-red-600 dark:bg-red-900/40 dark:text-red-300">Bị khoá</span>
@@ -242,7 +242,7 @@ function confirmRole() {
                         <td class="px-4 py-3">
                             <div class="flex flex-wrap items-center gap-x-3 gap-y-1">
                                 <button v-if="u.id !== currentUserId && u.role !== 'admin' && !u.banned_at" @click="impersonating = u" class="text-xs font-semibold text-[var(--color-brand-green)] hover:underline transition">Vào tài khoản</button>
-                                <button @click="openEdit(u)" class="text-xs font-semibold text-[var(--color-accent)] hover:underline transition">Sửa</button>
+                                <button @click="openEdit(u)" class="text-xs font-semibold text-[var(--color-accent-deep)] hover:underline transition">Sửa</button>
                                 <button @click="openReset(u)" class="text-xs font-semibold text-blue-600 hover:underline transition">Mật khẩu</button>
                                 <button v-if="u.id !== currentUserId" @click="roleTarget = u" class="text-xs font-semibold text-purple-600 hover:underline transition">
                                     {{ u.role === 'admin' ? 'Hạ quyền' : 'Cấp quyền' }}

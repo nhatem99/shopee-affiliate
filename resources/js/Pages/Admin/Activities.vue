@@ -252,7 +252,7 @@ function pickDay(date) {
                 <button
                     v-for="(label, key) in securityEventLabels" :key="key"
                     @click="filter('event_type', key)"
-                    class="flex items-baseline justify-between gap-2 min-w-0 text-left text-[var(--color-ink)]/80 hover:text-[var(--color-accent)] transition"
+                    class="flex items-baseline justify-between gap-2 min-w-0 text-left text-[var(--color-ink)]/80 hover:text-[var(--color-accent-deep)] transition"
                 >
                     <span class="truncate">{{ label }}</span>
                     <b class="flex-none">{{ summary?.security_events?.[key] ?? 0 }}</b>
@@ -307,7 +307,7 @@ function pickDay(date) {
                     <button
                         v-for="(count, src) in summary?.top_traffic_sources" :key="src"
                         @click="filter('traffic_source', src)"
-                        class="flex items-center justify-between w-full text-left hover:text-[var(--color-accent)] transition"
+                        class="flex items-center justify-between w-full text-left hover:text-[var(--color-accent-deep)] transition"
                     >
                         <span class="truncate">{{ trafficSourceLabel(src) }}</span>
                         <b class="flex-none ml-2">{{ count }}</b>
@@ -321,7 +321,7 @@ function pickDay(date) {
                     <button
                         v-for="(count, ip) in summary?.top_ips" :key="ip"
                         @click="ipInput = ip; applySearch()"
-                        class="flex items-center justify-between w-full text-left hover:text-[var(--color-accent)] transition"
+                        class="flex items-center justify-between w-full text-left hover:text-[var(--color-accent-deep)] transition"
                     >
                         <span class="truncate font-mono text-xs">{{ ip }}</span>
                         <b class="flex-none ml-2">{{ count }}</b>
@@ -351,7 +351,7 @@ function pickDay(date) {
                     :class="filters?.from === d.date && filters?.to === d.date ? 'bg-[var(--color-accent)]/10' : ''"
                 >
                     <span class="flex-none w-11 font-mono tabular-nums"
-                        :class="d.date === today ? 'font-bold text-[var(--color-accent)]' : 'text-[var(--color-muted)]'">
+                        :class="d.date === today ? 'font-bold text-[var(--color-accent-deep)]' : 'text-[var(--color-muted)]'">
                         {{ d.date === today ? 'Nay' : shortDate(d.date) }}
                     </span>
                     <span class="relative flex-1 h-4 min-w-0 rounded bg-[var(--color-line)]/40 overflow-hidden">
@@ -488,7 +488,7 @@ function pickDay(date) {
             <div class="flex flex-wrap items-center gap-2 mt-3">
                 <span class="text-xs text-[var(--color-muted)]">Nhanh:</span>
                 <button v-for="r in quickRanges" :key="r.label" @click="pickRange(r.days)"
-                    class="px-3 py-1.5 rounded-lg text-xs font-semibold bg-[var(--color-bg)] text-[var(--color-ink)]/80 border border-[var(--color-line)] hover:border-[var(--color-accent)] hover:text-[var(--color-accent)] transition">
+                    class="px-3 py-1.5 rounded-lg text-xs font-semibold bg-[var(--color-bg)] text-[var(--color-ink)]/80 border border-[var(--color-line)] hover:border-[var(--color-accent)] hover:text-[var(--color-accent-deep)] transition">
                     {{ r.label }}
                 </button>
             </div>
@@ -513,10 +513,10 @@ function pickDay(date) {
             </select>
 
             <div class="hidden md:flex md:flex-wrap gap-2">
-                <button @click="filter('event_type', '')" :class="!filters?.event_type ? 'bg-[var(--color-accent)] text-white' : 'bg-[var(--color-surface)] text-[var(--color-ink)] border border-[var(--color-line)] hover:border-[var(--color-accent)] hover:text-[var(--color-accent)]'"
+                <button @click="filter('event_type', '')" :class="!filters?.event_type ? 'bg-[var(--color-accent)] text-white' : 'bg-[var(--color-surface)] text-[var(--color-ink)] border border-[var(--color-line)] hover:border-[var(--color-accent)] hover:text-[var(--color-accent-deep)]'"
                     class="px-4 py-2 rounded-xl text-sm font-semibold transition">Tất cả sự kiện</button>
                 <button v-for="(label, key) in eventLabels" :key="key" @click="filter('event_type', key)"
-                    :class="filters?.event_type === key ? 'bg-[var(--color-accent)] text-white' : 'bg-[var(--color-surface)] text-[var(--color-ink)] border border-[var(--color-line)] hover:border-[var(--color-accent)] hover:text-[var(--color-accent)]'"
+                    :class="filters?.event_type === key ? 'bg-[var(--color-accent)] text-white' : 'bg-[var(--color-surface)] text-[var(--color-ink)] border border-[var(--color-line)] hover:border-[var(--color-accent)] hover:text-[var(--color-accent-deep)]'"
                     class="px-4 py-2 rounded-xl text-sm font-semibold transition">
                     {{ label }}
                 </button>
@@ -559,7 +559,7 @@ function pickDay(date) {
                     <div class="flex items-baseline justify-between gap-3">
                         <span class="flex-none text-[var(--color-muted)]">IP</span>
                         <button v-if="a.ip_address" @click="ipInput = a.ip_address; applySearch()"
-                            class="min-w-0 text-right font-mono text-[var(--color-accent)] underline decoration-dotted break-all">
+                            class="min-w-0 text-right font-mono text-[var(--color-accent-deep)] underline decoration-dotted break-all">
                             {{ a.ip_address }}
                         </button>
                         <span v-else class="text-[var(--color-muted)]">—</span>
@@ -575,7 +575,7 @@ function pickDay(date) {
                     <div v-if="a.traffic_source" class="flex items-baseline justify-between gap-3">
                         <span class="flex-none text-[var(--color-muted)]">Nguồn</span>
                         <button @click="filter('traffic_source', a.traffic_source)"
-                            class="min-w-0 text-right text-[var(--color-accent)] break-words">
+                            class="min-w-0 text-right text-[var(--color-accent-deep)] break-words">
                             {{ trafficSourceLabel(a.traffic_source) }}
                         </button>
                     </div>
@@ -637,7 +637,7 @@ function pickDay(date) {
                         <td class="px-4 py-3 text-[var(--color-ink)]/70 whitespace-nowrap">{{ [a.browser, a.os_name].filter(Boolean).join(' / ') || '—' }}</td>
                         <td class="px-4 py-3 whitespace-nowrap">
                             <button v-if="a.ip_address" @click="ipInput = a.ip_address; applySearch()"
-                                class="font-mono text-[var(--color-muted)] hover:text-[var(--color-accent)] hover:underline transition">
+                                class="font-mono text-[var(--color-muted)] hover:text-[var(--color-accent-deep)] hover:underline transition">
                                 {{ a.ip_address }}
                             </button>
                             <span v-else class="text-[var(--color-muted)]">—</span>

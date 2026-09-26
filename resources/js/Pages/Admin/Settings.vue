@@ -901,7 +901,7 @@ function saveCashbackDisplayRate() {
                         >
                             <span class="font-semibold text-[var(--color-ink)] tabular-nums">{{ money(prize.amount) }}</span>
                             <span v-if="prize.quantity === null" class="text-xs text-[var(--color-muted)]">Không giới hạn</span>
-                            <span v-else class="text-xs tabular-nums" :class="prize.left > 0 ? 'text-[var(--color-muted)]' : 'text-[var(--color-accent)]'">
+                            <span v-else class="text-xs tabular-nums" :class="prize.left > 0 ? 'text-[var(--color-muted)]' : 'text-[var(--color-accent-deep)]'">
                                 {{ prize.left > 0 ? `còn ${prize.left}/${prize.quantity} phần` : 'đã hết hôm nay' }}
                             </span>
                         </li>
@@ -929,7 +929,7 @@ function saveCashbackDisplayRate() {
                 <h2 class="font-bold text-[var(--color-ink)] mb-1">🎬 Video hướng dẫn lấy mã</h2>
                 <p class="text-sm text-[var(--color-muted)] leading-relaxed mb-4">
                     Hiện ở đầu trang công khai
-                    <a href="/huong-dan" target="_blank" rel="noopener" class="font-mono text-xs text-[var(--color-accent)] underline underline-offset-2">/huong-dan</a>
+                    <a href="/huong-dan" target="_blank" rel="noopener" class="font-mono text-xs text-[var(--color-accent-deep)] underline underline-offset-2">/huong-dan</a>
                     — dán link đó vào bài đăng Facebook/Zalo hoặc gửi cho khách đang bí ở bước kích hoạt mã.
                     Chọn <strong class="text-[var(--color-ink)]">một trong hai</strong> cách bên dưới:
                     đặt cách này thì cách kia tự bị gỡ. Để trống cả hai thì trang vẫn chạy, chỉ còn phần hướng dẫn bằng chữ.
@@ -969,7 +969,7 @@ function saveCashbackDisplayRate() {
                         accept="video/mp4,video/webm,video/quicktime"
                         :disabled="savingGuideVideo"
                         @change="uploadGuideVideo"
-                        class="w-full text-sm text-[var(--color-ink)] file:mr-3 file:px-4 file:py-2 file:rounded-xl file:border-0 file:text-sm file:font-semibold file:bg-[var(--color-peach-soft)] file:text-[var(--color-accent)] disabled:opacity-60"
+                        class="w-full text-sm text-[var(--color-ink)] file:mr-3 file:px-4 file:py-2 file:rounded-xl file:border-0 file:text-sm file:font-semibold file:bg-[var(--color-peach-soft)] file:text-[var(--color-accent-deep)] disabled:opacity-60"
                     />
                     <p class="text-xs text-[var(--color-muted)] leading-relaxed mt-2">
                         MP4, WebM hoặc MOV — tối đa <strong class="text-[var(--color-ink)]">{{ guideVideo?.maxUploadMb ?? 0 }} MB</strong>
@@ -984,7 +984,7 @@ function saveCashbackDisplayRate() {
                         href="/huong-dan"
                         target="_blank"
                         rel="noopener"
-                        class="text-sm font-semibold text-[var(--color-accent)] underline underline-offset-2"
+                        class="text-sm font-semibold text-[var(--color-accent-deep)] underline underline-offset-2"
                     >Xem thử trang hướng dẫn →</a>
                     <button
                         type="button"

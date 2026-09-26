@@ -235,7 +235,7 @@ async function copyCron() {
                     <tbody>
                         <tr v-for="s in reelSlots" :key="s.reel_id" class="border-t border-[var(--color-line)] align-top">
                             <td class="px-4 py-3 whitespace-nowrap">
-                                <a :href="s.url" target="_blank" rel="noopener" class="font-mono text-xs text-[var(--color-accent)] hover:underline">{{ s.reel_id }}</a>
+                                <a :href="s.url" target="_blank" rel="noopener" class="font-mono text-xs text-[var(--color-accent-deep)] hover:underline">{{ s.reel_id }}</a>
                             </td>
                             <td class="px-4 py-3">
                                 <template v-if="s.product_key">

@@ -30,11 +30,16 @@ const messages = computed(() => [
 
 <template>
     <!-- Bấm vào đâu trên thanh cũng ra trang đăng ký (hoặc /login khi admin tắt đăng ký —
-         joinHref lo việc đó), vì cả thanh chỉ nói đúng một chuyện: hãy đăng nhập trước. -->
+         joinHref lo việc đó), vì cả thanh chỉ nói đúng một chuyện: hãy đăng nhập trước.
+
+         Vì cả thanh là một hàng bấm được nên nó phải cao tối thiểu 44px — py-2 cũ cho ra khoảng
+         34px, hụt 10px ngay ở phần tử đầu tiên khách chạm tới. Vẫn giữ display block chứ KHÔNG
+         đổi sang flex: .marquee__track là inline-flex rộng gấp đôi khung, làm nó thành flex item
+         là nó bị co vừa khung và cú chạy tới -50% hoá sai. -->
     <Link
         v-if="missingOut"
         :href="joinHref"
-        class="marquee block border-b border-[rgba(var(--color-accent-rgb),0.25)] bg-gradient-to-r from-[rgba(var(--color-accent-rgb),0.12)] via-[rgba(var(--color-accent-rgb),0.06)] to-[rgba(var(--color-accent-rgb),0.12)] py-2 text-xs md:text-sm font-semibold text-[var(--color-accent-deep)] dark:text-[var(--color-accent)]"
+        class="marquee focus-ring block min-h-[44px]  border-b border-[rgba(var(--color-accent-rgb),0.25)] bg-gradient-to-r from-[rgba(var(--color-accent-rgb),0.12)] via-[rgba(var(--color-accent-rgb),0.06)] to-[rgba(var(--color-accent-rgb),0.12)] text-xs md:text-sm font-semibold text-[var(--color-accent-deep)] dark:text-[var(--color-accent-deep)]"
     >
         <div class="marquee__track">
             <!-- Hai bản giống hệt nhau, chạy tới -50% là đúng hết một bản rồi lặp — mắt không

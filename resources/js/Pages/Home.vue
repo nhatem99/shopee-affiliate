@@ -617,6 +617,20 @@ function vnd(n) {
     return '₫' + Number(n || 0).toLocaleString('vi-VN')
 }
 
+// Phần trăm giảm của sản phẩm vừa quét — null khi KHÔNG đủ dữ liệu để nói chắc.
+// Lấy THẲNG ô `discount_percent` mà server đã trả, KHÔNG tự lấy giá trừ lại ở đây: cả ba
+// nguồn sản phẩm đều trả sẵn ô này cùng một khuôn (ShopeeLinkResolverService dùng chính
+// `raw_discount` của Shopee, KieuShopeeService tự tính khi nguồn không có, GanmaService trả 0
+// vì không đọc được giá gốc). Tự trừ lại ở frontend là mở đường cho một con số KHÁC con số
+// khách nhìn thấy trên chính trang Shopee — với người vốn đã đa nghi về "web hoàn tiền" thì
+// một cái badge vênh 3% là đủ để họ thoát. 0 nghĩa là không hiện badge: thà không nói còn hơn
+// dán nhãn đỏ "-0%" lên thẻ đang mời khách bấm mua.
+const discountPercent = computed(() => {
+    const percent = Math.round(Number(props.voucherResult?.product?.discount_percent || 0))
+
+    return percent >= 1 ? percent : null
+})
+
 // --- Mã gợi ý ---
 const platformTabs = [
     { key: 'all', label: 'Tất cả' },
@@ -674,8 +688,9 @@ const openFaq = ref(null)
 
 // Khung dán link dính lên đầu trang khi cuộn (sticky) để khách lúc nào cũng dán được link.
 // Lúc đã dính thì thu gọn tiêu đề lại, nếu không khung chiếm gần hết màn hình điện thoại.
-// Đo bằng vị trí thật của khung chứ không bằng scrollY: phía trên nó còn banner khung giờ
-// back mã, lấy mốc scrollY cố định sẽ thu gọn sớm và làm nội dung giật một nhịp.
+// Đo bằng vị trí thật của khung chứ không bằng scrollY: chiều cao phần trên khung đổi theo
+// trạng thái (banner, dải nhắc, thanh chữ chạy), lấy mốc scrollY cố định sẽ thu gọn sai nhịp
+// và làm nội dung giật một cái.
 const HEADER_HEIGHT = 64 // AppLayout: header sticky h-16
 const stickyEl = ref(null)
 const stuck = ref(false)
@@ -723,9 +738,12 @@ onUnmounted(() => {
         <!-- Công cụ chính: hiện ngay khi vào trang, không cần mô tả dài trước đó -->
         <section id="voucher-tool" class="px-4 pt-6 pb-4">
             <div class="max-w-3xl mx-auto">
-                <!-- Khung giờ back mã: đặt trên cùng để khách vừa vào trang là biết ngay
-                     lúc nào nguồn cấp mã nạp lại lượt, trước cả ô dán link. -->
-                <RestockSchedule class="mb-4" />
+                <!-- Banner "khung giờ back mã" đã CHUYỂN XUỐNG dưới khối hướng dẫn.
+                     Kể cả sau khi chính nó đã được rút gọn thành thẻ thường (xem đầu
+                     RestockSchedule.vue), nó vẫn cao ~170px — đặt trên ô dán link là đẩy chính
+                     thứ duy nhất khách vào đây để làm ra khỏi màn hình đầu của iPhone SE
+                     (375x667). Giờ giấc back mã là câu hỏi THỨ HAI (hỏi khi quét không ra mã),
+                     nên nó đứng ở vị trí thứ hai. -->
 
                 <!-- top-16 = chiều cao header sticky của AppLayout (h-16). Nền đặc chỉ bật khi
                      đã dính, để lúc chưa cuộn khung vẫn phẳng với nền trang. Cố tình KHÔNG dùng
@@ -739,7 +757,10 @@ onUnmounted(() => {
                     class="sticky top-16 z-30 -mx-4 px-4 pt-2 pb-3 transition-shadow duration-200 [contain:layout_paint]"
                     :class="stuck ? 'bg-[var(--color-bg)] shadow-[0_10px_24px_rgba(0,0,0,.12)]' : ''"
                 >
-                    <div v-if="canUseVoucherTool" class="rounded-3xl bg-gradient-to-br from-[var(--color-peach)] via-[var(--color-peach-soft)] to-[var(--color-green-soft)] border border-[var(--color-line)] transition-all duration-200" :class="stuck ? 'p-4' : 'p-6 md:p-8'">
+                    <!-- rounded-2xl = --radius-card của hệ. rounded-3xl (24px) ở đây là bo góc
+                         duy nhất trong trang không khớp với thẻ nào khác, nhìn ra ngay khi nó
+                         nằm sát khối kết quả bo 16px. -->
+                    <div v-if="canUseVoucherTool" class="rounded-2xl bg-gradient-to-br from-[var(--color-peach)] via-[var(--color-peach-soft)] to-[var(--color-green-soft)] border border-[var(--color-line)] transition-all duration-200" :class="stuck ? 'p-3' : 'p-5 md:p-8'">
                         <!-- Giữ h1 trong DOM (chỉ thu chiều cao) để không mất thẻ h1 của trang.
                              Thu gọn bằng grid-template-rows (1fr -> 0fr) chứ không dùng max-height:
                              max-height phải đoán một giá trị lớn hơn chiều cao thật (vd max-h-40 =
@@ -751,11 +772,15 @@ onUnmounted(() => {
                             class="grid transition-[grid-template-rows,opacity,margin-bottom] duration-200 ease-out"
                             :class="stuck ? 'grid-rows-[0fr] opacity-0 mb-0' : 'grid-rows-[1fr] opacity-100 mb-4'"
                         >
+                            <!-- Tiêu đề + mô tả rút ngắn để cả H1 + ô dán + nút nằm gọn trong
+                                 màn hình đầu của iPhone SE (375x667). Bản cũ tràn 2 dòng tiêu đề
+                                 + 2 dòng mô tả, riêng phần chữ đã ăn ~100px mà không giúp khách
+                                 làm được gì thêm — họ đã biết mình vào đây để dán link. -->
                             <div class="overflow-hidden min-h-0">
                                 <h1 class="text-xl md:text-2xl font-extrabold text-[var(--color-ink)] mb-1">
-                                    Dán link sản phẩm Shopee để lấy mã giảm giá
+                                    Dán link Shopee — lấy mã giảm giá
                                 </h1>
-                                <p class="text-sm text-[var(--color-muted)]">Nhận ngay link đã áp sẵn mã giảm giá — không cần nhập mã, miễn phí.</p>
+                                <p class="text-sm text-[var(--color-muted)]">Miễn phí, không cần nhập mã.</p>
                             </div>
                         </div>
 
@@ -771,13 +796,16 @@ onUnmounted(() => {
                                     @paste="onVoucherUrlPaste"
                                     @input="onVoucherUrlInput"
                                     placeholder="Dán link Shopee (shopee.vn hoặc s.shopee.vn)..."
-                                    class="w-full pl-10 pr-20 border border-[var(--color-line)] rounded-xl text-sm bg-[var(--color-surface)] focus:outline-none focus:border-[var(--color-accent)] focus:ring-2 focus:ring-[var(--color-peach)] transition-all duration-200"
-                                    :class="stuck ? 'py-3' : 'py-4'"
+                                    class="focus-ring w-full pl-10 pr-24 border border-[var(--color-line)] rounded-xl text-sm bg-[var(--color-surface)] focus:border-[var(--color-accent)] transition-all duration-200"
+                                    :class="stuck ? 'min-h-[48px]' : 'min-h-[56px]'"
                                 />
+                                <!-- Chiều cao đặt bằng min-h chứ không py-*, và nút "Dán" cao 44px
+                                     — nó là nút được bấm nhiều nhất trang (khách vừa copy link từ
+                                     app Shopee xong) mà trước đây chỉ cao 30px. -->
                                 <button
                                     @click="pasteVoucherUrl"
                                     type="button"
-                                    class="absolute right-1.5 top-1/2 -translate-y-1/2 text-xs font-bold text-[var(--color-accent)] bg-[var(--color-peach-soft)] hover:bg-[var(--color-peach)] border border-[var(--color-accent)]/30 rounded-lg px-3 py-1.5 transition"
+                                    class="focus-ring absolute right-1.5 top-1/2 -translate-y-1/2 min-h-[44px] text-sm font-bold text-[var(--color-accent-deep)] bg-[var(--color-peach-soft)] hover:bg-[var(--color-peach)] border border-[var(--color-accent)]/30 rounded-lg px-3 transition"
                                 >Dán</button>
                             </div>
                             <!-- Dán link là tự quét luôn, nên nút này gần như không còn việc gì:
@@ -792,7 +820,7 @@ onUnmounted(() => {
                                 @click="resolveVoucher"
                                 :disabled="resolving || !voucherUrl.trim() || alreadyResolved"
                                 class="btn-fire rounded-xl flex items-center justify-center gap-2 whitespace-nowrap transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
-                                :class="stuck ? 'px-6 py-3' : 'px-8 py-4'"
+                                :class="stuck ? 'px-6 min-h-[44px]' : 'px-8 min-h-[52px]'"
                             >
                                 <svg v-if="resolving" class="w-4 h-4 animate-spin" viewBox="0 0 24 24" fill="none">
                                     <circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" stroke-dasharray="30 70" />
@@ -801,24 +829,26 @@ onUnmounted(() => {
                                 {{ resolving ? 'Đang tìm mã...' : (alreadyResolved ? 'Đã tìm xong' : 'Tìm mã ngay') }}
                             </button>
                         </div>
-                        <p v-if="voucherError" class="text-red-500 text-sm mt-2">{{ voucherError }}</p>
+                        <!-- text-red-500 không có bản tối đi kèm mà tối là chế độ mặc định —
+                             dùng token danger (đã kiểm tương phản ở cả hai chế độ). -->
+                        <p v-if="voucherError" class="text-sm mt-2 font-semibold text-[var(--color-danger)]">{{ voucherError }}</p>
                     </div>
 
                     <!-- Máy tính (không phải admin): ẩn khung tìm mã, chỉ hiện thông báo dùng điện thoại.
                          PHẢI đứng liền ngay sau khối v-if bên trên — chen bất cứ thẻ nào vào giữa
                          là đứt cặp v-if/v-else và thông báo này nhảy ra trên cả điện thoại. -->
-                    <div v-else class="rounded-3xl p-6 md:p-8 bg-gradient-to-br from-[var(--color-peach)] via-[var(--color-peach-soft)] to-[var(--color-green-soft)] border border-[var(--color-line)] text-center">
+                    <div v-else class="rounded-2xl p-5 md:p-8 bg-gradient-to-br from-[var(--color-peach)] via-[var(--color-peach-soft)] to-[var(--color-green-soft)] border border-[var(--color-line)] text-center">
                         <p class="text-2xl mb-2">📱</p>
                         <p class="font-semibold text-[var(--color-ink)]">Chức năng lấy mã chỉ dùng được trên điện thoại.</p>
                         <p class="text-sm text-[var(--color-muted)] mt-1">Shopee chỉ áp mã khi bấm từ điện thoại. Vui lòng mở tietkiemvi.com bằng trình duyệt trên điện thoại để dán link nhé.</p>
                         <div class="flex items-center justify-center gap-3 mt-4">
-                            <Link href="/ma-giam-gia" class="px-4 py-2 rounded-xl text-sm font-semibold bg-[var(--color-surface)] border border-[var(--color-line)] text-[var(--color-ink)] hover:border-[var(--color-accent)] hover:text-[var(--color-accent)] transition">Xem mã giảm giá</Link>
-                            <Link href="/flashsale" class="px-4 py-2 rounded-xl text-sm font-semibold bg-[var(--color-surface)] border border-[var(--color-line)] text-[var(--color-ink)] hover:border-[var(--color-accent)] hover:text-[var(--color-accent)] transition">Xem Flash Sale</Link>
+                            <Link href="/ma-giam-gia" class="focus-ring inline-flex items-center min-h-[44px] px-4 rounded-xl text-sm font-semibold bg-[var(--color-surface)] border border-[var(--color-line)] text-[var(--color-ink)] hover:border-[var(--color-accent)] transition no-underline">Xem mã giảm giá</Link>
+                            <Link href="/flashsale" class="focus-ring inline-flex items-center min-h-[44px] px-4 rounded-xl text-sm font-semibold bg-[var(--color-surface)] border border-[var(--color-line)] text-[var(--color-ink)] hover:border-[var(--color-accent)] transition no-underline">Xem Flash Sale</Link>
                         </div>
                     </div>
 
                     <!-- Dải xác nhận cho khách ĐÃ đăng nhập, dính theo ô dán link. Bắt buộc gói
-                         gọn MỘT DÒNG (text-[11px], truncate): vùng này đã chiếm chỗ của ô nhập
+                         gọn MỘT DÒNG (text-xs + truncate): vùng này đã chiếm chỗ của ô nhập
                          trên màn hình điện thoại, dài thêm một dòng nữa là đẩy chính công cụ ra
                          khỏi tầm nhìn.
 
@@ -836,37 +866,75 @@ onUnmounted(() => {
                         <div
                             v-if="showLoggedInCashbackBadge"
                             title="Đơn được tính hoàn tiền sau khi Shopee chốt ở trạng thái Hoàn thành và tụi mình đối soát báo cáo."
-                            class="mt-2 flex items-center gap-2 rounded-xl bg-[var(--color-green-soft)] border border-[var(--color-brand-green)]/25 px-3 py-1.5"
+                            class="mt-2 flex items-center gap-2 rounded-xl bg-[var(--color-money-soft)] border border-[var(--color-money)]/25 px-3 py-2"
                         >
-                            <span class="text-[11px] leading-tight truncate text-[var(--color-brand-green)] font-semibold">
+                            <!-- Chữ dùng --color-money chứ không --color-brand-green: brand-green
+                                 chỉ đạt 3.41:1 ở chế độ sáng, mà đây là chữ nhỏ. Và 11px thì phần
+                                 dấu tiếng Việt (ấ, ợ, ề) bị bóp nghẹt — sàn cứng là 12px. -->
+                            <span class="text-xs leading-tight truncate text-[var(--color-money)] font-semibold">
                                 ✓ Đang đăng nhập — mua từ link này thì đơn mới được tính hoàn tiền
                             </span>
                         </div>
                     </template>
                 </div>
 
-                <!-- Kết quả -->
-                <div v-if="canUseVoucherTool && voucherResult" ref="voucherResultEl" class="mt-4 card-glass rounded-2xl p-5">
-                    <div v-if="voucherResult.product" class="flex gap-4 items-start mb-5">
+                <!-- Kết quả — màn hình đắt nhất của cả sản phẩm. Đọc từ trên xuống theo đúng ba
+                     câu hỏi của khách: MUA GÌ (tầng sản phẩm) → ĐƯỢC LỢI BAO NHIÊU (dải tiền) →
+                     BẤM VÀO ĐÂU (một nút cam duy nhất). Trước đây cả ba tầng bị nén chung vào
+                     một cột chữ nhỏ bên phải cái ảnh 64px, nên câu thứ hai — lý do duy nhất
+                     khiến khách ở lại — nằm ở cỡ chữ 11px dưới cùng. -->
+                <div v-if="canUseVoucherTool && voucherResult" ref="voucherResultEl" class="mt-4 card p-4">
+                    <!-- Tầng 1: MUA GÌ -->
+                    <div v-if="voucherResult.product" class="flex gap-3 items-start">
                         <div class="w-16 h-16 rounded-xl bg-[var(--color-peach-soft)] flex-none overflow-hidden">
                             <img v-if="voucherResult.product.product_image" :src="voucherResult.product.product_image" :alt="voucherResult.product.product_name" class="w-full h-full object-cover" />
                             <div v-else class="w-full h-full flex items-center justify-center text-2xl">🛍️</div>
                         </div>
                         <div class="flex-1 min-w-0">
-                            <span class="inline-flex items-center justify-center w-5 h-5 rounded bg-[#F5511E] text-white text-[10px] font-black mb-1">S</span>
+                            <!-- Nhãn sàn bằng chữ thường màu phụ, không còn ô vuông cam #F5511E:
+                                 ô đó là một đốm cam nữa ngay trên cái nút cam, và nó viết thẳng mã
+                                 màu nên ở chế độ tối vẫn là cam chế độ sáng. -->
+                            <p class="text-xs font-semibold text-[var(--color-muted)]">Shopee</p>
                             <p class="font-semibold text-[var(--color-ink)] text-sm line-clamp-2">{{ voucherResult.product.product_name || 'Sản phẩm' }}</p>
-                            <p class="font-bold text-[var(--color-accent)] mt-1">{{ vnd(voucherResult.product.discounted_price) }}</p>
 
-                            <!-- Ước tính, KHÔNG phải cam kết: hoa hồng thật của đơn chỉ chốt sau
-                                 khi Shopee đối soát, và shop có thể đổi tỉ lệ giữa chừng. Chữ ở
-                                 đây phải nói đúng chừng đó — FAQ bên dưới cũng nói cùng một điều. -->
-                            <p v-if="cashbackEstimate" class="mt-1 text-[11px] leading-tight text-[var(--color-brand-green)] font-semibold">
-                                💸 Hoàn tiền dự kiến ~{{ vnd(cashbackEstimate) }}
-                                <span class="font-normal text-[var(--color-muted)]">— nhận sau khi đơn hoàn thành</span>
-                            </p>
+                            <!-- Hàng giá: giá phải trả đứng trước và đậm nhất. Badge % CHỈ hiện
+                                 khi server nói có giảm (discountPercent) — nguồn ganma không đọc
+                                 được giá gốc nên trả 0, dán "-0%" lên đó là một nhãn đỏ nói với
+                                 khách rằng họ chẳng được giảm gì.
+                                 Giá gốc gạch ngang có điều kiện RIÊNG, không đi chung với badge:
+                                 kieushopee có thể trả sẵn raw_discount mà KHÔNG trả giá gốc (khi
+                                 đó original_price = discounted_price), in ra là hai con số y hệt
+                                 nhau nằm cạnh nhau, một cái bị gạch — nhìn như lỗi hiển thị.
+                                 Cả hàng giá cũng ẩn khi không đọc được giá: "₫0" dưới tên sản
+                                 phẩm là một con số SAI, tệ hơn hẳn việc không có con số nào. -->
+                            <div v-if="Number(voucherResult.product.discounted_price) > 0" class="mt-1 flex items-baseline flex-wrap gap-x-2 gap-y-1">
+                                <span class="num text-lg font-extrabold text-[var(--color-ink)]">{{ vnd(voucherResult.product.discounted_price) }}</span>
+                                <span
+                                    v-if="Number(voucherResult.product.original_price) > Number(voucherResult.product.discounted_price)"
+                                    class="num text-xs text-[var(--color-muted)] line-through"
+                                >{{ vnd(voucherResult.product.original_price) }}</span>
+                                <span v-if="discountPercent" class="num text-xs font-bold px-1.5 py-0.5 rounded-md text-[var(--color-danger)] bg-[var(--color-danger-soft)]">-{{ discountPercent }}%</span>
+                            </div>
                         </div>
                     </div>
-                    <p v-else class="text-sm text-[var(--color-muted)] mb-5">Không lấy được thông tin sản phẩm, nhưng bạn vẫn có thể dùng link bên dưới.</p>
+                    <p v-else class="text-sm text-[var(--color-muted)]">Không lấy được thông tin sản phẩm, nhưng bạn vẫn có thể dùng link bên dưới.</p>
+
+                    <!-- Tầng 2: ĐƯỢC LỢI BAO NHIÊU. Một dải duy nhất, màu tiền, số to — đây là
+                         thứ trang này có mà chỗ khác không có, không thể là dòng chữ nhỏ nhất thẻ.
+                         Ước tính, KHÔNG phải cam kết: hoa hồng thật của đơn chỉ chốt sau khi Shopee
+                         đối soát, và shop có thể đổi tỉ lệ giữa chừng. Chữ ở đây phải nói đúng
+                         chừng đó — FAQ bên dưới cũng nói cùng một điều. -->
+                    <div v-if="cashbackEstimate" class="panel bg-[var(--color-money-soft)] mt-3 px-3 py-3">
+                        <div class="flex items-baseline justify-between gap-3">
+                            <span class="text-sm font-semibold text-[var(--color-ink)]">💸 Hoàn tiền dự kiến</span>
+                            <span class="num text-lg font-extrabold text-[var(--color-money)] whitespace-nowrap">~{{ vnd(cashbackEstimate) }}</span>
+                        </div>
+                        <!-- Chữ ink chứ không muted: nền ở đây là --color-money-soft (#E7F5EE ở
+                             chế độ sáng) chứ không phải nền thẻ, và muted trên nền đó chỉ còn
+                             4.27:1 — trượt AA cho chữ 12px. Vẫn đọc ra là dòng phụ nhờ cỡ chữ và
+                             độ đậm, mà đây lại đúng là câu giữ chữ tín (nói trước tiền vào chậm). -->
+                        <p class="text-xs text-[var(--color-ink)] mt-0.5">Vào ví sau khi đơn hoàn thành và được đối soát.</p>
+                    </div>
 
                     <!-- Chế độ tự chuyển hướng: khách không bấm gì cả, chỉ báo đang đi. -->
                     <div v-if="autoRedirecting" class="flex items-center gap-3 mb-4 mt-3 px-4 py-3 rounded-xl bg-[var(--color-peach-soft)] text-[var(--color-ink)] text-sm font-semibold">
@@ -879,9 +947,13 @@ onUnmounted(() => {
                          máy mình, rồi quay lại làm bước 2. Thẻ <a> thật, cùng tab, KHÔNG target=_blank
                          — cùng lý do với nút Facebook: tab mới làm hỏng universal link mở app.
                          Nút bước 2 bên dưới khoá cho tới khi bấm ở đây (ytbBlocked). -->
+                    <!-- Màu của khối này chuyển từ đỏ YouTube viết thẳng (#FF0000/#c00000) sang
+                         token danger: đỏ cứng đó sinh ra cho nền trắng, ở chế độ tối (mặc định
+                         của trang) chữ #c00000 gần như chìm vào nền navy. Vai trò ngữ nghĩa vẫn
+                         đúng: đây là chỗ khách dễ làm hỏng đơn của chính mình nhất. -->
                     <div
                         v-if="!autoRedirecting && voucherResult.voucher_ref && voucherResult.ytb_activate_url"
-                        class="mb-3 mt-3 rounded-xl border border-[#FF0000]/30 bg-[#FF0000]/5 px-4 py-3"
+                        class="mb-3 mt-3 rounded-xl border border-[rgba(var(--color-danger-rgb),.3)] bg-[rgba(var(--color-danger-rgb),.06)] px-4 py-3"
                     >
                         <p class="text-sm font-bold text-[var(--color-ink)] mb-2">Mã này cần kích hoạt YouTube trước — làm theo thứ tự:</p>
                         <ol class="text-xs text-[var(--color-ink)] leading-relaxed space-y-1 list-decimal list-inside mb-2">
@@ -891,35 +963,40 @@ onUnmounted(() => {
 
                         <!-- Đây là chỗ duy nhất lời nhắc còn kịp: bấm xong là khách sang Shopee,
                              nhìn thấy đúng sản phẩm mình định mua và rất dễ đặt hàng luôn. -->
-                        <div class="mb-3 rounded-lg bg-[#FF0000]/10 border border-[#FF0000]/30 px-3 py-2.5">
-                            <p class="text-xs font-bold text-[#c00000] leading-relaxed">
+                        <div class="mb-3 rounded-lg bg-[var(--color-danger-soft)] border border-[rgba(var(--color-danger-rgb),.3)] px-3 py-2.5">
+                            <p class="text-sm font-bold text-[var(--color-danger)] leading-relaxed">
                                 ⛔ Đừng đặt hàng ngay ở bước 1
                             </p>
-                            <p class="text-[11px] text-[var(--color-ink)] leading-relaxed mt-1">
+                            <p class="text-xs text-[var(--color-ink)] leading-relaxed mt-1">
                                 Shopee sẽ mở ra với mã đã nhận, nhưng <b>đừng bấm mua ở trang đó</b> —
                                 đặt hàng ngay tại bước này dễ khiến tài khoản bị Shopee đánh dấu <b>F02</b>.
                                 Hãy quay lại đây làm tiếp <b>bước 2</b> rồi mới đặt hàng.
                             </p>
                         </div>
 
+                        <!-- Chữ TRẮNG trên nền #FF0000 chỉ được 4.0:1 — trượt AA, mà dòng phụ
+                             còn để white/80 nên thực tế còn thấp hơn. Đổi sang nền danger-soft +
+                             chữ danger: đạt chuẩn ở cả hai chế độ, và không thành nút đặc thứ hai
+                             tranh chỗ với nút cam bên dưới. Giữ viền nhấp nháy để mắt vẫn tìm ra
+                             đây là việc phải làm trước. -->
                         <a
                             v-if="ytbBlocked"
                             :href="voucherResult.ytb_activate_url"
                             @click="markYtbActivated(voucherResult.voucher_ref)"
-                            class="w-full px-4 py-2.5 rounded-xl flex flex-col items-center justify-center text-white bg-[#FF0000] hover:bg-[#d90000] transition no-underline animate-pulse-ring"
+                            class="focus-ring w-full min-h-[52px] px-4 py-2 rounded-xl flex flex-col items-center justify-center bg-[var(--color-danger-soft)] border-2 border-[rgba(var(--color-danger-rgb),.45)] text-[var(--color-danger)] transition no-underline animate-pulse-ring"
                         >
-                            <span class="flex items-center gap-2 text-sm font-bold">
+                            <span class="flex items-center gap-2 text-sm font-extrabold">
                                 <span>▶️</span>
                                 <span>Bước 1: Kích hoạt mã YouTube</span>
                             </span>
-                            <span class="text-[11px] font-semibold text-white/80">Mở ra rồi quay lại — đừng đặt hàng</span>
+                            <span class="text-xs font-semibold">Mở ra rồi quay lại — đừng đặt hàng</span>
                         </a>
-                        <div v-else class="rounded-lg bg-[var(--color-brand-green)]/10 border border-[var(--color-brand-green)]/30 px-3 py-2.5">
-                            <p class="flex items-center gap-2 text-sm font-bold text-[var(--color-brand-green)]">
+                        <div v-else class="rounded-lg bg-[var(--color-money-soft)] border border-[var(--color-money)]/30 px-3 py-2.5">
+                            <p class="flex items-center gap-2 text-sm font-bold text-[var(--color-money)]">
                                 <span>✓</span>
                                 <span>Đã nhận mã xong bước 1</span>
                             </p>
-                            <p class="text-[11px] text-[var(--color-ink)] leading-relaxed mt-1">
+                            <p class="text-xs text-[var(--color-ink)] leading-relaxed mt-1">
                                 Giờ bấm nút <b>bước 2</b> bên dưới để đặt hàng — <b>đừng mua thẳng trên Shopee</b>,
                                 dễ bị đánh dấu <b>F02</b>.
                             </p>
@@ -928,7 +1005,7 @@ onUnmounted(() => {
                             v-if="ytbBlocked"
                             type="button"
                             @click="markYtbActivated(voucherResult.voucher_ref)"
-                            class="mt-2 text-[11px] text-[var(--color-muted)] underline underline-offset-2"
+                            class="focus-ring mt-1 min-h-[44px] text-xs text-[var(--color-muted)] underline underline-offset-2"
                         >Vừa kích hoạt rồi (Shopee đã mở)? Bỏ qua bước này</button>
                     </div>
 
@@ -937,9 +1014,9 @@ onUnmounted(() => {
                          đơn và làm lại được. -->
                     <div
                         v-if="!autoRedirecting && ytbReturnNudge && voucherResult.voucher_ref"
-                        class="mb-3 mt-3 rounded-xl border border-[#FF0000]/40 bg-[#FF0000]/10 px-4 py-3"
+                        class="mb-3 mt-3 rounded-xl border border-[rgba(var(--color-danger-rgb),.4)] bg-[var(--color-danger-soft)] px-4 py-3"
                     >
-                        <p class="text-sm font-bold text-[#c00000] mb-1">⚠️ Bạn chưa làm bước 2 — đừng mua ở bước 1</p>
+                        <p class="text-sm font-bold text-[var(--color-danger)] mb-1">⚠️ Bạn chưa làm bước 2 — đừng mua ở bước 1</p>
                         <p class="text-xs text-[var(--color-ink)] leading-relaxed">
                             Nếu bạn vừa đặt hàng thẳng ở trang Shopee lúc nãy thì nên <b>huỷ đơn đó</b> —
                             mua ở bước 1 dễ khiến tài khoản bị đánh dấu <b>F02</b>. Đặt lại bằng nút
@@ -947,8 +1024,11 @@ onUnmounted(() => {
                         </p>
                     </div>
 
-                    <!-- Nói trước khi khách bấm: nút này mở Facebook, không phải mở thẳng Shopee. -->
-                    <div v-if="!autoRedirecting && viaFacebookComment && voucherResult.voucher_ref" class="mb-3 mt-3 rounded-xl border border-[#1877F2]/30 bg-[#1877F2]/5 px-4 py-3">
+                    <!-- Nói trước khi khách bấm: nút này mở Facebook, không phải mở thẳng Shopee.
+                         Dùng token info (thông tin trung tính) thay cho xanh Facebook #1877F2 viết
+                         thẳng — cùng là xanh, nhưng token có sẵn bản tối và không nhận vơ thương
+                         hiệu Facebook cho một khối hướng dẫn của mình. -->
+                    <div v-if="!autoRedirecting && viaFacebookComment && voucherResult.voucher_ref" class="mb-3 mt-3 rounded-xl border border-[rgba(var(--color-info-rgb),.3)] bg-[var(--color-info-soft)] px-4 py-3">
                         <p class="text-sm font-bold text-[var(--color-ink)] mb-2">{{ voucherResult.ytb_activate_url ? 'Bước 2 — nhận mã qua Facebook:' : 'Mã này nhận qua Facebook — làm 2 bước:' }}</p>
                         <ol class="text-xs text-[var(--color-ink)] leading-relaxed space-y-1 list-decimal list-inside">
                             <li v-if="!isFacebookLink(readyLinks.result)">Bấm nút bên dưới → hệ thống lấy mã và hiện nút <b>Mở Facebook ngay</b>.</li>
@@ -956,7 +1036,11 @@ onUnmounted(() => {
                             <li v-else>Bấm <b>Mở Facebook ngay</b> → <b>Facebook sẽ mở ra</b> tại một bình luận.</li>
                             <li>Bấm tiếp vào <b>{{ linkLocation }}</b> → về Shopee, mã đã áp sẵn.</li>
                         </ol>
-                        <p class="text-xs text-[var(--color-muted)] mt-2">Phải đi qua Facebook thì mã mới có hiệu lực — đừng đóng giữa chừng nhé.</p>
+                        <!-- Cùng lý do với dòng phụ ở dải hoàn tiền: nền đã đổi từ #1877F2/5 (gần
+                             như trắng) sang --color-info-soft #E8EEFC, muted trên nền đó tụt còn
+                             4.12:1 ở chế độ sáng. Mà đây là câu quyết định việc khách có mã hay
+                             không, không phải chú thích cho vui. -->
+                        <p class="text-xs text-[var(--color-ink)] mt-2">Phải đi qua Facebook thì mã mới có hiệu lực — đừng đóng giữa chừng nhé.</p>
                     </div>
 
                     <!-- Trước đây chỗ này có khối mời khách vãng lai đăng nhập để được hoàn tiền.
@@ -966,58 +1050,78 @@ onUnmounted(() => {
                          theo SẢN PHẨM nên có thể mang sub_id của khách khác. Lời mời hoàn tiền vẫn
                          còn ở cuối trang (showGuestCashbackNudge), chỗ không cản đường mua hàng. -->
 
-                    <!-- Mã đã được áp sẵn trong link nên khách không phải chọn/nhập gì, chỉ bấm mở. -->
-                    <div v-if="!autoRedirecting && voucherResult.voucher_ref" ref="resultCtaEl" class="flex items-stretch gap-1.5 mb-4">
-                        <!-- Đã lấy được link comment: chuyển hẳn sang thẻ <a>. Cú chạm vào anchor
-                             thật là điều kiện bắt buộc để iOS bật app Facebook; không dùng
-                             target="_blank" vì tab mới cũng làm hỏng universal link. -->
-                        <!-- Chưa qua bước 1 (kích hoạt YouTube) thì khoá — kể cả khi link reel đã
-                             lấy sẵn (autoRedirect): bấm được là khách bỏ bước 1 rồi mất mã YTB. -->
-                        <button
-                            v-if="ytbBlocked"
-                            type="button"
-                            disabled
-                            class="btn-fire flex-1 min-w-0 px-6 py-4 rounded-xl flex items-center justify-center gap-2 text-base opacity-50 cursor-not-allowed"
-                        >
-                            <span>🔒</span>
-                            <span class="truncate">Bước 2: {{ viaFacebookComment ? 'Lấy mã qua Facebook' : 'Mua ngay' }}</span>
-                        </button>
-                        <a
-                            v-else-if="readyLinks.result"
-                            :href="facebookAppLink(readyLinks.result)"
-                            @click="trackFacebookOpen(readyLinks.result, voucherResult.product?.product_name)"
-                            class="btn-fire flex-1 min-w-0 px-6 py-4 rounded-xl flex items-center justify-center gap-2 text-base animate-pulse-ring no-underline"
-                        >
-                            <span>{{ isFacebookLink(readyLinks.result) ? '👉' : '🛒' }}</span>
-                            <span class="truncate">{{ isFacebookLink(readyLinks.result) ? 'Mở Facebook ngay' : 'Mua ngay (đã áp mã)' }}</span>
-                        </a>
-                        <button
-                            v-else
-                            @click="openVoucherLink({ key: 'result', ref: voucherResult.voucher_ref })"
-                            :disabled="shorteningKey === 'result'"
-                            class="btn-fire flex-1 min-w-0 px-6 py-4 rounded-xl flex items-center justify-center gap-2 text-base animate-pulse-ring disabled:opacity-60"
-                        >
-                            <span>{{ viaFacebookComment ? '👉' : '🛒' }}</span>
-                            <span class="truncate">{{ ctaLabel }}</span>
-                        </button>
+                    <!-- Tầng 3: BẤM VÀO ĐÂU. Mã đã được áp sẵn trong link nên khách không phải
+                         chọn/nhập gì, chỉ bấm mở — đúng MỘT nút cam, chiếm trọn bề ngang, cao
+                         52px. Nút "sao chép" tách xuống hàng dưới thay vì đứng cạnh: nó là việc
+                         của người đi chia sẻ link, không phải của người đang muốn mua, mà đứng
+                         cạnh thì nó cắt mất 56px bề ngang của chính nút quan trọng nhất trang. -->
+                    <div v-if="!autoRedirecting && voucherResult.voucher_ref" class="mt-4 mb-4">
+                        <div ref="resultCtaEl">
+                            <!-- Đã lấy được link comment: chuyển hẳn sang thẻ <a>. Cú chạm vào anchor
+                                 thật là điều kiện bắt buộc để iOS bật app Facebook; không dùng
+                                 target="_blank" vì tab mới cũng làm hỏng universal link. -->
+                            <!-- Chưa qua bước 1 (kích hoạt YouTube) thì khoá — kể cả khi link reel đã
+                                 lấy sẵn (autoRedirect): bấm được là khách bỏ bước 1 rồi mất mã YTB.
+                                 KHÔNG mặc .btn-fire lúc bị khoá: cam đặc mờ 50% vẫn nặng mắt hơn
+                                 nút "Bước 1" viền mỏng phía trên, tức vật nổi nhất khung nhìn lại
+                                 là vật KHÔNG bấm được — khách bấm vào nó, không thấy gì xảy ra, rồi
+                                 tự mò sang Shopee mua thẳng và mất cả mã lẫn hoàn tiền. Lúc bị khoá
+                                 nó chỉ là một dòng trạng thái xám; cam quay lại ngay khi mở khoá. -->
+                            <button
+                                v-if="ytbBlocked"
+                                type="button"
+                                disabled
+                                class="w-full min-w-0 px-6 min-h-[52px] rounded-xl flex items-center justify-center gap-2 text-base font-bold border border-[var(--color-line)] bg-[var(--color-surface)] text-[var(--color-muted)] cursor-not-allowed"
+                            >
+                                <span>🔒</span>
+                                <span class="truncate">Bước 2: {{ viaFacebookComment ? 'Lấy mã qua Facebook' : 'Mua ngay' }}</span>
+                            </button>
+                            <!-- Bỏ animate-pulse-ring ở nút này: vòng sáng vàng nhấp nháy quanh một
+                                 nút cam gradient là màu thứ ba chen vào đúng chỗ đã sáng nhất thẻ,
+                                 và ở chế độ mã YTB nó chạy cùng lúc với vòng sáng của bước 1. Nút
+                                 nằm trọn bề ngang, cao 52px, là vật cam duy nhất trong khung nhìn
+                                 — không cần nhấp nháy mới thấy. -->
+                            <a
+                                v-else-if="readyLinks.result"
+                                :href="facebookAppLink(readyLinks.result)"
+                                @click="trackFacebookOpen(readyLinks.result, voucherResult.product?.product_name)"
+                                class="btn-fire w-full min-w-0 px-6 min-h-[52px] rounded-xl flex items-center justify-center gap-2 text-base no-underline"
+                            >
+                                <span>{{ isFacebookLink(readyLinks.result) ? '👉' : '🛒' }}</span>
+                                <span class="truncate">{{ isFacebookLink(readyLinks.result) ? 'Mở Facebook ngay' : 'Mua ngay (đã áp mã)' }}</span>
+                            </a>
+                            <button
+                                v-else
+                                @click="openVoucherLink({ key: 'result', ref: voucherResult.voucher_ref })"
+                                :disabled="shorteningKey === 'result'"
+                                class="btn-fire w-full min-w-0 px-6 min-h-[52px] rounded-xl flex items-center justify-center gap-2 text-base disabled:opacity-60"
+                            >
+                                <span>{{ viaFacebookComment ? '👉' : '🛒' }}</span>
+                                <span class="truncate">{{ ctaLabel }}</span>
+                            </button>
+                        </div>
                         <button
                             @click="copyVoucherLink({ key: 'result', ref: voucherResult.voucher_ref })"
                             :disabled="copyingKey === 'result'"
                             title="Sao chép link để dán lên Facebook/Zalo"
-                            class="flex-none w-12 rounded-xl flex items-center justify-center transition-all bg-[var(--color-peach-soft)] hover:bg-[var(--color-peach)] text-[var(--color-ink)] disabled:opacity-60"
+                            class="focus-ring mt-2 w-full min-h-[44px] rounded-xl flex items-center justify-center gap-2 text-sm font-semibold transition-all bg-transparent border border-[var(--color-line)] text-[var(--color-muted)] hover:text-[var(--color-ink)] disabled:opacity-60"
                         >
                             <svg v-if="copyingKey !== 'result'" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="w-4 h-4"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
                             <svg v-else viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="w-4 h-4 animate-spin"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg>
+                            <span>{{ copyingKey === 'result' ? 'Đang tạo link...' : 'Sao chép link để gửi bạn bè' }}</span>
                         </button>
                     </div>
                     <!-- v-if tường minh chứ không v-else: đang tự chuyển hướng thì đã có spinner
                          ở trên rồi, v-else sẽ hiện thêm dòng "chưa lấy được mã" gây hoang mang. -->
-                    <p v-if="!autoRedirecting && !voucherResult.voucher_ref" class="text-sm text-[var(--color-muted)] mb-4">Chưa lấy được mã cho sản phẩm này — có thể do lỗi kết nối tạm thời, thử dán lại link nhé.</p>
+                    <p v-if="!autoRedirecting && !voucherResult.voucher_ref" class="text-sm text-[var(--color-muted)] mt-3 mb-4">Chưa lấy được mã cho sản phẩm này — có thể do lỗi kết nối tạm thời, thử dán lại link nhé.</p>
 
-                    <div class="flex items-start gap-2 bg-[var(--color-peach-soft)] border border-[var(--color-accent)]/25 rounded-xl px-3 py-2.5">
+                    <!-- Lời dặn = vai "cần chú ý" (warn), không phải vai "hành động chính": nền
+                         cam nhạt + chữ accent-deep ở đây là màu của nút mua đem dùng cho một đoạn
+                         chữ không bấm được, làm loãng đúng thứ cần nổi. -->
+                    <div class="flex items-start gap-2 bg-[var(--color-warn-soft)] border border-[rgba(var(--color-warn-rgb),.3)] rounded-xl px-3 py-2.5">
                         <span class="text-sm leading-none">⚠️</span>
-                        <p v-if="viaFacebookComment" class="text-xs text-[var(--color-accent-deep)] leading-relaxed">Nhớ bấm <b>{{ linkLocation }}</b> thì mã mới được áp — bấm nhầm chỗ khác là mua không có giảm giá. Sang Shopee rồi thì đặt hàng bình thường, không cần nhập mã. Nếu Shopee báo mã hết lượt, thử lại sau ít phút nhé.</p>
-                        <p v-else class="text-xs text-[var(--color-accent-deep)] leading-relaxed">Mã đã gắn sẵn trong link — bấm "Mua ngay" rồi đặt hàng như bình thường, không cần nhập mã. Nếu Shopee báo mã hết lượt, thử lại sau ít phút nhé.</p>
+                        <p v-if="viaFacebookComment" class="text-xs text-[var(--color-ink)] leading-relaxed">Nhớ bấm <b>{{ linkLocation }}</b> thì mã mới được áp — bấm nhầm chỗ khác là mua không có giảm giá. Sang Shopee rồi thì đặt hàng bình thường, không cần nhập mã. Nếu Shopee báo mã hết lượt, thử lại sau ít phút nhé.</p>
+                        <p v-else class="text-xs text-[var(--color-ink)] leading-relaxed">Mã đã gắn sẵn trong link — bấm "Mua ngay" rồi đặt hàng như bình thường, không cần nhập mã. Nếu Shopee báo mã hết lượt, thử lại sau ít phút nhé.</p>
                     </div>
                 </div>
 
@@ -1029,6 +1133,11 @@ onUnmounted(() => {
                     <HowItWorksSteps :title="stepsTitle" :steps="steps" />
                 </div>
 
+                <!-- Khung giờ back mã: câu hỏi THỨ HAI của khách ("sao không ra mã / mấy giờ có
+                     mã mới"), nên đứng ngay sau bảng hướng dẫn chứ không đứng trên ô dán link.
+                     Chỉ cách màn hình đầu đúng một nhịp cuộn, vẫn thấy được trước khi rời trang. -->
+                <RestockSchedule class="mt-4" />
+
                 <!-- Điểm danh nhận quà: đứng ngay dưới công cụ chính, trước lịch sử/bảng xếp hạng.
                      Đây là lý do để quay lại vào ngày khách KHÔNG có gì để mua, nên nó phải nằm trong
                      màn hình đầu tiên sau khi cuộn một nhịp — nhét xuống cuối trang thì chỉ người đã quay
@@ -1039,23 +1148,27 @@ onUnmounted(() => {
                      Chỉ hiện thanh tab khi cả hai cùng có; thiếu một bên thì hiện thẳng bên còn lại
                      với tiêu đề thường, không bắt khách bấm tab để xem thứ duy nhất đang có. -->
                 <div v-if="history.length || hasLeaderboard" class="mt-8">
+                    <!-- Tab đang chọn dùng .nav-pill--active (viên thuốc cam nhạt của hệ) chứ không
+                         còn .btn-fire: btn-fire là nút cam đặc — dùng cho việc CHỌN TAB nghĩa là
+                         trên cùng một màn hình có hai vật cam đặc, mà chỉ một trong hai dẫn tới
+                         tiền. Bấm tab không phải hành động chính của trang này. -->
                     <div v-if="showTabs" class="flex gap-2 mb-3">
                         <button
                             @click="activeTab = 'history'"
-                            class="flex-1 px-3 py-2.5 rounded-xl text-sm font-bold transition flex items-center justify-center gap-1.5"
-                            :class="activeTab === 'history'
-                                ? 'btn-fire'
-                                : 'bg-[var(--color-surface)] text-[var(--color-muted)] border border-[var(--color-line)] hover:border-[var(--color-accent)] hover:text-[var(--color-accent)]'"
+                            class="nav-pill focus-ring flex-1 px-3 min-h-[44px] rounded-xl text-sm font-bold flex items-center justify-center gap-1.5"
+                            :class="activeTab === 'history' ? 'nav-pill--active' : 'bg-[var(--color-surface)] border-[var(--color-line)]'"
                         >
                             <span>🕘</span> Lịch sử
-                            <span class="text-[10px] font-mono px-1.5 py-0.5 rounded-full" :class="activeTab === 'history' ? 'bg-black/15' : 'bg-[var(--color-peach-soft)] text-[var(--color-accent)]'">{{ history.length }}</span>
+                            <!-- Badge đếm để màu trung tính, không cam: một là nó nằm ngay trong
+                                 viên thuốc đã cam sẵn khi tab đang chọn (cam chồng cam, không đọc
+                                 ra tầng bậc nào), hai là accent-deep trên nền cam 12% chỉ đạt
+                                 4.0:1 ở chế độ sáng. Đây là một con số đếm, không phải lời mời bấm. -->
+                            <span class="num text-xs font-mono px-1.5 py-0.5 rounded-full bg-[var(--color-line)] text-[var(--color-ink)]">{{ history.length }}</span>
                         </button>
                         <button
                             @click="activeTab = 'leaderboard'"
-                            class="flex-1 px-3 py-2.5 rounded-xl text-sm font-bold transition flex items-center justify-center gap-1.5"
-                            :class="activeTab === 'leaderboard'
-                                ? 'btn-fire'
-                                : 'bg-[var(--color-surface)] text-[var(--color-muted)] border border-[var(--color-line)] hover:border-[var(--color-accent)] hover:text-[var(--color-accent)]'"
+                            class="nav-pill focus-ring flex-1 px-3 min-h-[44px] rounded-xl text-sm font-bold flex items-center justify-center gap-1.5"
+                            :class="activeTab === 'leaderboard' ? 'nav-pill--active' : 'bg-[var(--color-surface)] border-[var(--color-line)]'"
                         >
                             <span>🏆</span> Bảng xếp hạng
                         </button>
@@ -1067,9 +1180,9 @@ onUnmounted(() => {
                         <div
                             v-for="(h, hi) in history"
                             :key="hi"
-                            class="card-glass rounded-xl px-4 py-3"
+                            class="card p-3"
                         >
-                            <div class="flex items-center gap-3 mb-2.5">
+                            <div class="flex items-center gap-3 mb-2">
                                 <div class="w-10 h-10 rounded-lg bg-[var(--color-peach-soft)] flex-none overflow-hidden">
                                     <img v-if="h.product_image" :src="h.product_image" :alt="h.product_name" class="w-full h-full object-cover" />
                                     <div v-else class="w-full h-full flex items-center justify-center text-lg">🛍️</div>
@@ -1084,7 +1197,7 @@ onUnmounted(() => {
                                 v-if="!historyRebuy"
                                 type="button"
                                 @click="focusVoucherTool"
-                                class="px-4 py-2 rounded-lg text-xs font-bold inline-flex items-center gap-1.5 border border-[var(--color-line)] text-[var(--color-muted)] hover:border-[var(--color-accent)] hover:text-[var(--color-accent)] transition"
+                                class="focus-ring px-4 min-h-[44px] rounded-lg text-sm font-bold inline-flex items-center gap-1.5 border border-[var(--color-line)] text-[var(--color-muted)] hover:border-[var(--color-accent)] hover:text-[var(--color-ink)] transition"
                             >
                                 <span>📋</span> Dán lại link để lấy mã
                             </button>
@@ -1094,7 +1207,7 @@ onUnmounted(() => {
                                 v-if="historyRebuy && h.ref && historyYtbBlocked(h)"
                                 :href="h.ytb_activate_url"
                                 @click="markYtbActivated(h.ref)"
-                                class="mb-2 px-4 py-2 rounded-lg text-xs inline-flex items-center gap-1.5 font-bold text-white bg-[#FF0000] no-underline"
+                                class="focus-ring mb-2 px-4 min-h-[44px] rounded-lg text-sm inline-flex items-center gap-1.5 font-bold bg-[var(--color-danger-soft)] border border-[rgba(var(--color-danger-rgb),.45)] text-[var(--color-danger)] no-underline"
                             >
                                 <span>▶️</span> Bước 1: Kích hoạt mã YouTube
                             </a>
@@ -1104,7 +1217,7 @@ onUnmounted(() => {
                                 v-if="historyRebuy && h.ref && historyYtbBlocked(h)"
                                 type="button"
                                 disabled
-                                class="btn-fire px-4 py-2 rounded-lg text-xs flex items-center gap-1.5 opacity-50 cursor-not-allowed"
+                                class="px-4 min-h-[44px] rounded-lg text-sm font-bold flex items-center gap-1.5 border border-[var(--color-line)] bg-[var(--color-surface)] text-[var(--color-muted)] cursor-not-allowed"
                             >
                                 <span>🔒</span> Bước 2: {{ viaFacebookComment ? 'Lấy mã qua Facebook' : 'Mua ngay' }}
                             </button>
@@ -1112,7 +1225,7 @@ onUnmounted(() => {
                                 v-else-if="historyRebuy && h.ref && readyLinks[`hist-${hi}`]"
                                 :href="facebookAppLink(readyLinks[`hist-${hi}`])"
                                 @click="trackFacebookOpen(readyLinks[`hist-${hi}`], h.product_name)"
-                                class="btn-fire px-4 py-2 rounded-lg text-xs inline-flex items-center gap-1.5 no-underline"
+                                class="btn-fire px-4 min-h-[44px] rounded-lg text-sm inline-flex items-center gap-1.5 no-underline"
                             >
                                 <span>{{ isFacebookLink(readyLinks[`hist-${hi}`]) ? '👉' : '🛒' }}</span>
                                 {{ isFacebookLink(readyLinks[`hist-${hi}`]) ? 'Mở Facebook ngay' : 'Mua ngay' }}
@@ -1121,7 +1234,7 @@ onUnmounted(() => {
                                 v-else-if="historyRebuy && h.ref"
                                 @click="openVoucherLink({ key: `hist-${hi}`, ref: h.ref }, h.product_name, h.product_image)"
                                 :disabled="shorteningKey === `hist-${hi}`"
-                                class="btn-fire px-4 py-2 rounded-lg text-xs flex items-center gap-1.5 disabled:opacity-60"
+                                class="btn-fire px-4 min-h-[44px] rounded-lg text-sm flex items-center gap-1.5 disabled:opacity-60"
                             >
                                 <span>{{ viaFacebookComment ? '👉' : '🛒' }}</span>
                                 {{ shorteningKey === `hist-${hi}` ? (viaFacebookComment ? 'Đang lấy mã...' : 'Đang mở...') : (viaFacebookComment ? 'Lấy mã qua Facebook' : 'Mua ngay') }}
@@ -1158,16 +1271,17 @@ onUnmounted(() => {
                     <p class="text-[var(--color-muted)] text-sm">Mã từ Facebook & YouTube đang có hiệu lực — copy và dùng ngay khi mua hàng.</p>
                 </div>
 
-                <!-- Platform filter -->
+                <!-- Platform filter — cùng lý do với thanh tab lịch sử: lọc theo sàn là việc phụ,
+                     không được mặc áo cam đặc của nút mua. Dùng viên thuốc chọn/không chọn của hệ. -->
                 <div class="flex flex-wrap justify-center gap-2 mb-8">
                     <button
                         v-for="tab in platformTabs"
                         :key="tab.key"
                         @click="activePlatform = tab.key"
                         :class="activePlatform === tab.key
-                            ? 'btn-fire'
-                            : 'bg-[var(--color-surface)] text-[var(--color-ink)] border border-[var(--color-line)] hover:border-[var(--color-accent)] hover:text-[var(--color-accent)]'"
-                        class="px-4 py-2 rounded-xl text-sm font-semibold transition"
+                            ? 'nav-pill--active'
+                            : 'bg-[var(--color-surface)] border-[var(--color-line)]'"
+                        class="nav-pill focus-ring inline-flex items-center px-4 min-h-[44px] rounded-xl text-sm font-semibold"
                     >
                         {{ tab.label }}
                     </button>
@@ -1202,19 +1316,19 @@ onUnmounted(() => {
                     <div
                         v-for="(faq, i) in faqs"
                         :key="i"
-                        class="card-glass rounded-2xl overflow-hidden"
+                        class="card overflow-hidden"
                     >
                         <button
                             @click="openFaq = openFaq === i ? null : i"
                             :aria-expanded="openFaq === i"
                             :aria-controls="`faq-panel-${i}`"
-                            class="w-full px-6 py-4 text-left flex justify-between items-center font-semibold text-[var(--color-ink)] text-sm"
+                            class="focus-ring w-full px-5  min-h-[44px] text-left flex justify-between items-center gap-4 font-semibold text-[var(--color-ink)] text-sm"
                         >
                             {{ faq.q }}
-                            <span class="text-[var(--color-muted)] ml-4 transition-transform" :class="openFaq === i ? 'rotate-180' : ''">▾</span>
+                            <span class="text-[var(--color-muted)] transition-transform" :class="openFaq === i ? 'rotate-180' : ''">▾</span>
                         </button>
                         <Transition name="fade-up">
-                            <div v-if="openFaq === i" :id="`faq-panel-${i}`" class="px-6 pb-4 text-sm text-[var(--color-muted)] leading-relaxed">
+                            <div v-if="openFaq === i" :id="`faq-panel-${i}`" class="px-5 pb-4 text-sm text-[var(--color-muted)] leading-relaxed">
                                 {{ faq.a }}
                             </div>
                         </Transition>
@@ -1223,8 +1337,13 @@ onUnmounted(() => {
             </div>
         </section>
 
-        <!-- CTA -->
-        <section class="py-16 px-4 bg-gradient-to-br from-[var(--color-accent)] to-[var(--color-accent-deep)]">
+        <!-- CTA cuối trang.
+             Nền cam đặc + chữ trắng đã bỏ vì nó hỏng ở CẢ HAI chế độ: ở sáng, chữ trắng trên
+             #F5511E chỉ được 3.4:1 (đoạn văn để white/80 còn 2.7:1 — trượt AA rõ ràng), còn ở
+             tối --color-accent là cam nhạt #fb923c nên chữ trắng trên đó còn tệ hơn. Đổi thành
+             dải nền peach-soft + chữ ink/muted: đúng tương phản ở cả hai chế độ, và để dành màu
+             cam đặc cho ĐÚNG MỘT vật trong khung nhìn — cái nút. -->
+        <section class="py-14 px-4 bg-[var(--color-peach-soft)] border-t border-[var(--color-line)]">
             <div class="max-w-xl mx-auto text-center">
                 <!-- Khách vãng lai + đang có hoàn tiền: đây là lời mời TẠO TÀI KHOẢN, nên nút phải
                      dẫn thẳng tới /register. Trước đây nút ghi "Tham gia ngay hôm nay" mà bấm vào
@@ -1232,27 +1351,27 @@ onUnmounted(() => {
                      Con số "hơn 1.2 triệu mã đã được tạo" đã bỏ: không có nguồn nào trong hệ thống
                      đếm ra con số đó, mà cả trang này đang bán bằng sự minh bạch. -->
                 <template v-if="showGuestCashbackNudge">
-                    <h2 class="text-2xl md:text-3xl font-extrabold text-white mb-4">Mua thì vẫn phải mua — sao không lấy lại một phần?</h2>
+                    <h2 class="text-2xl md:text-3xl font-extrabold text-[var(--color-ink)] mb-4">Mua thì vẫn phải mua — sao không lấy lại một phần?</h2>
                     <!-- Không dùng chữ "khác mỗi việc đăng nhập": đăng nhập là điều kiện ĐẦU TIÊN
                          chứ không phải điều kiện duy nhất — sau nó còn đơn phải Hoàn thành, phải
                          qua kỳ đối soát, và muốn cầm được tiền thì còn mốc rút tối thiểu. Kể đúng
                          thứ tự các chặng, rồi lấy chính sự thẳng thắn đó làm câu chốt. -->
-                    <p class="text-white/80 mb-8">
+                    <p class="text-[var(--color-muted)] mb-8">
                         Vẫn dán link, vẫn được mã giảm giá như thường. Đăng nhập trước khi bấm mua thì đơn của bạn
                         còn được ghi nhận: Shopee chốt đơn ở trạng thái Hoàn thành, tụi mình đối soát báo cáo,
                         rồi {{ cashbackRate }}% hoa hồng của đơn đó vào ví bạn. Không nhanh, nhưng có thật —
                         và tụi mình nói trước cả những lúc bạn không được hoàn.
                     </p>
                     <Link :href="joinHref"
-                        class="inline-block bg-white text-[var(--color-accent)] font-bold px-8 py-4 rounded-2xl hover:shadow-xl transition no-underline">
+                        class="btn-fire inline-flex items-center justify-center px-8 min-h-[52px] rounded-2xl no-underline">
                         {{ joinLabel }}
                     </Link>
                 </template>
                 <template v-else>
-                    <h2 class="text-2xl md:text-3xl font-extrabold text-white mb-4">Sẵn sàng tiết kiệm tiền?</h2>
-                    <p class="text-white/80 mb-8">Dán link sản phẩm là có ngay mã giảm giá — miễn phí, không cần nhập tay.</p>
+                    <h2 class="text-2xl md:text-3xl font-extrabold text-[var(--color-ink)] mb-4">Sẵn sàng tiết kiệm tiền?</h2>
+                    <p class="text-[var(--color-muted)] mb-8">Dán link sản phẩm là có ngay mã giảm giá — miễn phí, không cần nhập tay.</p>
                     <button @click="focusVoucherTool"
-                        class="bg-white text-[var(--color-accent)] font-bold px-8 py-4 rounded-2xl hover:shadow-xl transition">
+                        class="btn-fire inline-flex items-center justify-center px-8 min-h-[52px] rounded-2xl">
                         Lấy link ngay — Miễn phí
                     </button>
                 </template>

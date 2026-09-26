@@ -59,19 +59,26 @@ watch(current, () => emit('close'))
                         type="button"
                         @click="emit('close')"
                         aria-label="Đóng menu"
-                        class="flex-none w-8 h-8 rounded-lg flex items-center justify-center text-[var(--color-muted)] hover:bg-[var(--color-peach-soft)] hover:text-[var(--color-ink)] transition"
+                        class="touch focus-ring flex-none rounded-xl flex items-center justify-center text-[var(--color-muted)] hover:bg-[var(--color-peach-soft)] hover:text-[var(--color-ink)] transition"
                     >
                         <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" class="w-5 h-5"><path d="M18 6 6 18M6 6l12 12" /></svg>
                     </button>
                 </div>
 
+                <!-- Số dư: cùng một khuôn với trang Tổng quan và Lịch sử số dư ví — cùng nhãn,
+                     cùng màu tiền, cùng .num. Bỏ nền gradient cam chữ trắng: cam để dành cho nút
+                     hành động, và ba nơi cùng hiện một con số mà vẽ ba kiểu thì khách đa nghi sẽ
+                     tưởng là ba con số khác nhau.
+                     Cỡ chữ nhỏ hơn hai nơi kia một bậc (2xl chứ không 3xl) vì ngăn kéo chỉ rộng
+                     82vw — ở 375px là ~243px lọt lòng, số dư bảy chữ số ở 3xl sẽ chạm mép. -->
                 <Link
                     v-if="balance !== null"
                     href="/vi/lich-su"
-                    class="m-4 rounded-2xl p-4 bg-gradient-to-r from-[var(--color-accent)] to-[var(--color-accent-deep)] text-white shadow-lg"
+                    class="card focus-ring m-4 p-4 block bg-[var(--color-money-soft)]"
                 >
-                    <p class="text-[11px] font-bold uppercase tracking-wide opacity-90">Số dư khả dụng</p>
-                    <p class="text-2xl font-extrabold mt-0.5">{{ vnd(balance) }}</p>
+                    <p class="text-xs font-bold uppercase tracking-wide text-[var(--color-muted)]">Số dư khả dụng</p>
+                    <p class="text-2xl font-extrabold num text-[var(--color-money)] mt-0.5">{{ vnd(balance) }}</p>
+                    <p class="text-xs font-semibold text-[var(--color-muted)] mt-1">Xem lịch sử số dư →</p>
                 </Link>
 
                 <nav class="flex-1 px-3 pb-3 space-y-0.5">
@@ -79,9 +86,9 @@ watch(current, () => emit('close'))
                         v-for="item in navItems"
                         :key="item.href"
                         :href="item.href"
-                        class="flex items-center gap-3 px-2 py-2.5 rounded-xl text-sm font-semibold transition"
+                        class="focus-ring flex items-center gap-3 px-2 min-h-[44px] rounded-xl text-sm font-semibold transition"
                         :class="isActive(item.href)
-                            ? 'bg-[var(--color-peach-soft)] text-[var(--color-accent)]'
+                            ? 'bg-[var(--color-peach-soft)] text-[var(--color-accent-deep)]'
                             : 'text-[var(--color-ink)] hover:bg-[var(--color-peach-soft)]/60'"
                     >
                         <span
@@ -92,11 +99,13 @@ watch(current, () => emit('close'))
                     </Link>
                 </nav>
 
-                <div class="p-3 border-t border-[var(--color-line)]">
+                <!-- safe-bottom: ngăn kéo cao hết màn, nút cuối cùng không được nằm dưới vạch
+                     home của iPhone. -->
+                <div class="p-3 border-t border-[var(--color-line)] safe-bottom">
                     <button
                         type="button"
                         @click="auth.logout()"
-                        class="w-full flex items-center gap-2.5 px-3 py-2.5 rounded-xl text-sm font-semibold text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-950/30 transition"
+                        class="focus-ring w-full flex items-center gap-2.5 px-3 min-h-[44px] rounded-xl text-sm font-semibold text-[var(--color-danger)] hover:bg-[var(--color-danger-soft)] transition"
                     >
                         <span>↩</span> Đăng xuất
                     </button>

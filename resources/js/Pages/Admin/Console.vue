@@ -109,12 +109,12 @@ function who(triggeredBy) {
                     <tbody>
                         <tr v-for="c in commands" :key="c.name" class="border-t border-[var(--color-line)] align-top">
                             <td class="px-4 py-3 whitespace-nowrap">
-                                <button type="button" @click="pick(c)" class="font-mono text-xs text-[var(--color-accent)] hover:underline text-left">{{ c.usage }}</button>
-                                <span v-if="c.app" class="ml-2 text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-[var(--color-peach-soft)] text-[var(--color-accent)]">app</span>
+                                <button type="button" @click="pick(c)" class="font-mono text-xs text-[var(--color-accent-deep)] hover:underline text-left">{{ c.usage }}</button>
+                                <span v-if="c.app" class="ml-2 text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-[var(--color-peach-soft)] text-[var(--color-accent-deep)]">app</span>
                             </td>
                             <td class="px-4 py-3 text-[var(--color-ink)]/80">{{ c.description }}</td>
                             <td class="px-4 py-3 text-right">
-                                <button type="button" @click="pick(c)" class="text-xs font-semibold text-[var(--color-muted)] hover:text-[var(--color-accent)] transition whitespace-nowrap">Điền ↑</button>
+                                <button type="button" @click="pick(c)" class="text-xs font-semibold text-[var(--color-muted)] hover:text-[var(--color-accent-deep)] transition whitespace-nowrap">Điền ↑</button>
                             </td>
                         </tr>
                     </tbody>

@@ -26,14 +26,14 @@ function submit() {
                 <div>
                     <label class="block text-sm font-semibold text-[var(--color-ink)] mb-1">Email</label>
                     <input v-model="form.email" type="email" required autofocus
-                        class="w-full border border-[var(--color-line)] rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-[var(--color-accent)] transition"
+                        class="w-full border border-[var(--color-line)] rounded-xl px-4 py-3 text-sm focus:border-[var(--color-accent)] transition"
                         placeholder="admin@example.com" />
                     <p v-if="form.errors.email" class="text-red-500 text-xs mt-1">{{ form.errors.email }}</p>
                 </div>
                 <div>
                     <label class="block text-sm font-semibold text-[var(--color-ink)] mb-1">Mật khẩu</label>
                     <input v-model="form.password" type="password" required
-                        class="w-full border border-[var(--color-line)] rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-[var(--color-accent)] transition"
+                        class="w-full border border-[var(--color-line)] rounded-xl px-4 py-3 text-sm focus:border-[var(--color-accent)] transition"
                         placeholder="••••••••" />
                 </div>
                 <label class="flex items-center gap-2 text-sm text-[var(--color-muted)]">

@@ -157,9 +157,9 @@ function askNotify() {
                 </p>
 
                 <div v-if="conversations?.last_page > 1" class="flex items-center justify-center gap-2 text-xs px-4 py-3 border-t border-[var(--color-line)]">
-                    <Link v-if="conversations.prev_page_url" :href="conversations.prev_page_url" class="text-[var(--color-accent)] font-semibold">← Mới hơn</Link>
+                    <Link v-if="conversations.prev_page_url" :href="conversations.prev_page_url" class="text-[var(--color-accent-deep)] font-semibold">← Mới hơn</Link>
                     <span class="text-[var(--color-muted)]">{{ conversations.current_page }}/{{ conversations.last_page }}</span>
-                    <Link v-if="conversations.next_page_url" :href="conversations.next_page_url" class="text-[var(--color-accent)] font-semibold">Cũ hơn →</Link>
+                    <Link v-if="conversations.next_page_url" :href="conversations.next_page_url" class="text-[var(--color-accent-deep)] font-semibold">Cũ hơn →</Link>
                 </div>
             </div>
 
@@ -170,7 +170,7 @@ function askNotify() {
             >
                 <template v-if="active">
                     <div class="px-4 py-3 border-b border-[var(--color-line)] flex items-center gap-3">
-                        <Link href="/admin/chats" class="md:hidden text-sm text-[var(--color-accent)] font-semibold flex-none">←</Link>
+                        <Link href="/admin/chats" class="md:hidden text-sm text-[var(--color-accent-deep)] font-semibold flex-none">←</Link>
                         <div class="min-w-0">
                             <p class="font-bold text-sm text-[var(--color-ink)] truncate">{{ active.user.name }}</p>
                             <p class="text-xs text-[var(--color-muted)] truncate">{{ active.user.email }}</p>

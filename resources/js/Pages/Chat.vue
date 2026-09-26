@@ -94,7 +94,11 @@ const peerTyping = computed(() => props.meta?.peer_typing ?? false)
                 </p>
             </div>
 
-            <div class="card-glass rounded-2xl overflow-hidden flex flex-col">
+            <!-- Khung chat CỐ Ý cao theo vh chứ không giãn hết màn hình: AppLayout giờ là flex-col
+                 và có chân trang ở cuối, nên một khung "toàn màn hình" ở đây sẽ đẩy chân trang
+                 ra ngoài tầm với và sinh hai vùng cuộn lồng nhau. 45–60vh trên máy 375px là
+                 khoảng 300–400px — đủ thấy vài tin, mà cuộn trang vẫn tới được chân trang. -->
+            <div class="card overflow-hidden flex flex-col">
                 <div ref="list" class="flex-1 overflow-y-auto px-4 py-5 min-h-[45vh] max-h-[60vh]">
                     <ChatMessages
                         :messages="messages"

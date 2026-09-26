@@ -190,6 +190,26 @@
         outline-offset: 2px;
     }
 
+    /* Hành động PHỤ. Có class này thì "một ngọn lửa mỗi màn hình" mới làm được: trước đây mọi
+       lời mời bấm đều phải chọn giữa .btn-fire (cam đặc) hoặc tự bịa một bộ class viền, nên
+       trang nào cũng có 2-3 nút cam tranh nhau và không nút nào nổi. */
+    .btn-outline {
+        background: transparent;
+        color: var(--color-ink);
+        border: 1px solid var(--color-line);
+        font-weight: 700;
+        min-height: var(--tap);
+        transition: border-color .15s ease, background-color .15s ease;
+    }
+    .btn-outline:hover:not(:disabled) {
+        border-color: rgba(var(--color-accent-rgb), .55);
+        background: var(--color-peach-soft);
+    }
+    .btn-outline:focus-visible {
+        outline: 2px solid rgba(var(--color-accent-rgb), .85);
+        outline-offset: 2px;
+    }
+
     /* Chữ gradient cam dùng cho tiêu đề nhấn mạnh */
     .text-fire {
         background: linear-gradient(135deg, var(--color-accent) 0%, var(--color-accent-deep) 60%, #fde68a 100%);
@@ -301,11 +321,13 @@
         border-radius: 999px;
         font-weight: 800;
     }
-    .step-badge--cyan { color: #0891b2; background: #22d3ee1f; border: 1px solid #22d3ee40; }
-    .dark .step-badge--cyan { color: #67e8f9; background: #22d3ee1f; border: 1px solid #22d3ee33; }
+    /* Ba biến thể giờ bám token ngữ nghĩa thay vì hex viết cứng. Hai màu cũ TRƯỢT AA ở chế độ
+       sáng — #0891b2 chỉ đạt 3.59:1 và #059669 đạt 3.68:1 trên nền nhạt của chính chúng — mà
+       badge này là số thứ tự bước, tức thứ khách phải đọc được để biết mình đang ở đâu.
+       Bám token cũng nghĩa là bản tối tự đúng, không phải khai riêng ba dòng .dark nữa. */
+    .step-badge--cyan { color: var(--color-info); background: var(--color-info-soft); border: 1px solid rgba(var(--color-info-rgb), .35); }
     .step-badge--orange { color: var(--color-accent-deep); background: rgba(var(--color-accent-rgb), .12); border: 1px solid rgba(var(--color-accent-rgb), .3); }
-    .step-badge--emerald { color: #059669; background: #34d3991f; border: 1px solid #34d39940; }
-    .dark .step-badge--emerald { color: #6ee7b7; background: #34d3991f; border: 1px solid #34d39933; }
+    .step-badge--emerald { color: var(--color-money); background: var(--color-money-soft); border: 1px solid rgba(var(--color-money-rgb), .35); }
 }
 
 @layer utilities {

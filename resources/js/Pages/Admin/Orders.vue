@@ -57,10 +57,10 @@ function approve(orderId) {
 
         <!-- Filters -->
         <div class="flex gap-2 mb-6">
-            <button @click="filter('')" :class="!filters?.status ? 'bg-[var(--color-accent)] text-white' : 'bg-[var(--color-surface)] text-[var(--color-ink)] border border-[var(--color-line)] hover:border-[var(--color-accent)] hover:text-[var(--color-accent)]'"
+            <button @click="filter('')" :class="!filters?.status ? 'bg-[var(--color-accent)] text-white' : 'bg-[var(--color-surface)] text-[var(--color-ink)] border border-[var(--color-line)] hover:border-[var(--color-accent)] hover:text-[var(--color-accent-deep)]'"
                 class="px-4 py-2 rounded-xl text-sm font-semibold transition">Tất cả ({{ totalCount }})</button>
             <button v-for="s in ['pending','approved','paid']" :key="s" @click="filter(s)"
-                :class="filters?.status === s ? 'bg-[var(--color-accent)] text-white' : 'bg-[var(--color-surface)] text-[var(--color-ink)] border border-[var(--color-line)] hover:border-[var(--color-accent)] hover:text-[var(--color-accent)]'"
+                :class="filters?.status === s ? 'bg-[var(--color-accent)] text-white' : 'bg-[var(--color-surface)] text-[var(--color-ink)] border border-[var(--color-line)] hover:border-[var(--color-accent)] hover:text-[var(--color-accent-deep)]'"
                 class="px-4 py-2 rounded-xl text-sm font-semibold transition">
                 {{ statusLabels[s] }} ({{ statusCounts?.[s] ?? 0 }})
             </button>

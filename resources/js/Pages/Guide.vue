@@ -129,7 +129,7 @@ const openFaq = ref(null)
             <!-- Chưa đặt video: nói thật là chưa có, không để một khung đen câm. Phần hướng dẫn
                  bằng chữ bên dưới vẫn đủ dùng nên đây chỉ là một dòng ghi chú. -->
             <div v-else class="max-w-3xl mx-auto">
-                <div class="card-glass rounded-2xl px-5 py-6 text-center">
+                <div class="card px-5 py-6 text-center">
                     <p class="text-sm font-semibold text-[var(--color-ink)] mb-1">Video hướng dẫn đang được cập nhật</p>
                     <p class="text-xs text-[var(--color-muted)] leading-relaxed">
                         Trong lúc chờ, bạn xem các bước bằng chữ ngay bên dưới — đầy đủ y như trong video.
@@ -137,7 +137,7 @@ const openFaq = ref(null)
                     <Link
                         v-if="auth.isAdmin"
                         href="/admin/settings"
-                        class="inline-block mt-3 text-xs font-semibold text-[var(--color-accent)] underline underline-offset-2"
+                        class="focus-ring inline-flex items-center min-h-[44px] px-2 rounded-lg mt-1 text-xs font-semibold text-[var(--color-accent-deep)] underline underline-offset-2"
                     >Đặt video ở Admin → Cài đặt →</Link>
                 </div>
             </div>
@@ -148,9 +148,13 @@ const openFaq = ref(null)
             <div class="max-w-3xl mx-auto">
                 <h2 class="text-lg font-extrabold text-[var(--color-ink)] mb-4">Các bước làm</h2>
 
+                <!-- Số bước dùng .step-badge sẵn có thay vì tròn đặc màu nhấn. Năm cái chấm cam
+                     to tướng chạy dọc trang là năm thứ tranh nhau với đúng một nút mà khách cần
+                     bấm ở cuối trang — mà bản thân số bước thì không bấm được. Tông đi theo
+                     nghĩa: xanh = làm bình thường, cam = bước quan trọng, lục = xong. -->
                 <ol class="space-y-3">
-                    <li class="card-glass rounded-2xl px-5 py-4 flex gap-4">
-                        <span class="flex-none w-8 h-8 rounded-full bg-[var(--color-accent)] text-white font-bold text-sm flex items-center justify-center">1</span>
+                    <li class="card px-4 sm:px-5 py-4 flex gap-3 sm:gap-4">
+                        <span class="step-badge step-badge--cyan flex-none w-8 h-8 text-sm flex items-center justify-center">1</span>
                         <div class="min-w-0">
                             <p class="font-bold text-[var(--color-ink)] text-sm mb-1">Copy link sản phẩm trên Shopee</p>
                             <p class="text-sm text-[var(--color-muted)] leading-relaxed">
@@ -159,8 +163,8 @@ const openFaq = ref(null)
                         </div>
                     </li>
 
-                    <li class="card-glass rounded-2xl px-5 py-4 flex gap-4">
-                        <span class="flex-none w-8 h-8 rounded-full bg-[var(--color-accent)] text-white font-bold text-sm flex items-center justify-center">2</span>
+                    <li class="card px-4 sm:px-5 py-4 flex gap-3 sm:gap-4">
+                        <span class="step-badge step-badge--cyan flex-none w-8 h-8 text-sm flex items-center justify-center">2</span>
                         <div class="min-w-0">
                             <p class="font-bold text-[var(--color-ink)] text-sm mb-1">Dán link vào ô tìm mã ở trang chủ</p>
                             <p class="text-sm text-[var(--color-muted)] leading-relaxed">
@@ -169,16 +173,20 @@ const openFaq = ref(null)
                         </div>
                     </li>
 
-                    <li class="card-glass rounded-2xl px-5 py-4 flex gap-4">
-                        <span class="flex-none w-8 h-8 rounded-full bg-[#FF0000] text-white font-bold text-sm flex items-center justify-center">3</span>
+                    <li class="card px-4 sm:px-5 py-4 flex gap-3 sm:gap-4">
+                        <span class="step-badge step-badge--orange flex-none w-8 h-8 text-sm flex items-center justify-center">3</span>
                         <div class="min-w-0">
                             <p class="font-bold text-[var(--color-ink)] text-sm mb-1">Kích hoạt mã YouTube — nếu trang hiện khung đỏ</p>
                             <p class="text-sm text-[var(--color-muted)] leading-relaxed mb-2">
                                 Bấm <b class="text-[var(--color-ink)]">Bước 1: Kích hoạt mã YouTube</b> → Shopee mở ra. Xem thấy là xong việc,
                                 <b class="text-[var(--color-ink)]">quay lại trang</b> để làm tiếp bước 4.
                             </p>
-                            <div class="rounded-lg bg-[#FF0000]/10 border border-[#FF0000]/30 px-3 py-2.5">
-                                <p class="text-xs font-bold text-[#c00000] leading-relaxed">⛔ Tuyệt đối không đặt hàng ở bước này</p>
+                            <!-- Đây là chỗ MẤT TIỀN nếu làm sai → --color-danger. Bản cũ gõ thẳng
+                                 #FF0000/#c00000: đỏ máy tính trên nền đỏ nhạt 10% không có bản
+                                 tối, ở chế độ tối (mặc định) chữ #c00000 gần như chìm hẳn — đúng
+                                 ngay cảnh báo đắt giá nhất cả trang. -->
+                            <div class="rounded-[var(--radius-ctl)] bg-[var(--color-danger-soft)] border border-[rgba(var(--color-danger-rgb),.35)] px-3 py-3">
+                                <p class="text-xs font-bold text-[var(--color-danger)] leading-relaxed">⛔ Tuyệt đối không đặt hàng ở bước này</p>
                                 <p class="text-xs text-[var(--color-ink)] leading-relaxed mt-1">
                                     Shopee mở ra đúng sản phẩm bạn định mua nên rất dễ bấm mua luôn — nhưng đặt hàng ngay tại đây
                                     dễ khiến tài khoản bị Shopee đánh dấu <b>F02</b>, mất cả mã lẫn hoàn tiền.
@@ -187,8 +195,8 @@ const openFaq = ref(null)
                         </div>
                     </li>
 
-                    <li class="card-glass rounded-2xl px-5 py-4 flex gap-4">
-                        <span class="flex-none w-8 h-8 rounded-full bg-[var(--color-accent)] text-white font-bold text-sm flex items-center justify-center">4</span>
+                    <li class="card px-4 sm:px-5 py-4 flex gap-3 sm:gap-4">
+                        <span class="step-badge step-badge--orange flex-none w-8 h-8 text-sm flex items-center justify-center">4</span>
                         <div class="min-w-0">
                             <p class="font-bold text-[var(--color-ink)] text-sm mb-1">Bấm nút bước 2 để nhận mã</p>
                             <p class="text-sm text-[var(--color-muted)] leading-relaxed">
@@ -199,8 +207,8 @@ const openFaq = ref(null)
                         </div>
                     </li>
 
-                    <li class="card-glass rounded-2xl px-5 py-4 flex gap-4">
-                        <span class="flex-none w-8 h-8 rounded-full bg-[var(--color-brand-green)] text-white font-bold text-sm flex items-center justify-center">5</span>
+                    <li class="card px-4 sm:px-5 py-4 flex gap-3 sm:gap-4">
+                        <span class="step-badge step-badge--emerald flex-none w-8 h-8 text-sm flex items-center justify-center">5</span>
                         <div class="min-w-0">
                             <p class="font-bold text-[var(--color-ink)] text-sm mb-1">Kiểm tra mã rồi đặt hàng</p>
                             <p class="text-sm text-[var(--color-muted)] leading-relaxed">
@@ -215,8 +223,11 @@ const openFaq = ref(null)
         <!-- Điều kiện hoàn tiền chỉ nói khi chương trình đang thật sự chạy (rate > 0) — xem useCashback. -->
         <section v-if="cashbackOn" class="px-4 pb-4">
             <div class="max-w-3xl mx-auto">
-                <div class="rounded-2xl border border-[var(--color-brand-green)]/30 bg-[var(--color-brand-green)]/10 px-5 py-4">
-                    <p class="font-bold text-[var(--color-ink)] text-sm mb-1">💰 Muốn được hoàn thêm {{ cashbackRate }}%?</p>
+                <!-- Khối tiền dùng --color-money (đã kiểm 5.35:1 sáng / 8.8:1 tối) thay cho
+                     --color-brand-green: biến đó chỉ được làm nền/viền, làm chữ ở chế độ sáng
+                     mới đạt 3.41:1. -->
+                <div class="rounded-[var(--radius-card)] border border-[rgba(var(--color-money-rgb),.3)] bg-[var(--color-money-soft)] px-5 py-4">
+                    <p class="font-bold text-[var(--color-money)] text-sm mb-1">💰 Muốn được hoàn thêm <span class="num">{{ cashbackRate }}%</span>?</p>
                     <p class="text-sm text-[var(--color-muted)] leading-relaxed">
                         Phải <b class="text-[var(--color-ink)]">đăng nhập TRƯỚC khi lấy mã</b> thì đơn mới ghi nhận được là của bạn.
                         Lấy mã lúc chưa đăng nhập rồi đăng nhập sau thì đơn đó không quy về ai được nữa.
@@ -224,7 +235,7 @@ const openFaq = ref(null)
                     <Link
                         v-if="missingOut"
                         :href="joinHref"
-                        class="btn-fire inline-block mt-3 px-5 py-2.5 rounded-xl text-sm no-underline"
+                        class="btn-outline inline-flex items-center justify-center mt-3 px-5 rounded-xl text-sm no-underline"
                     >{{ joinLabel }}</Link>
                 </div>
             </div>
@@ -234,16 +245,19 @@ const openFaq = ref(null)
             <div class="max-w-3xl mx-auto">
                 <h2 class="text-lg font-extrabold text-[var(--color-ink)] mb-4">Câu hỏi thường gặp</h2>
                 <div class="space-y-3">
-                    <div v-for="(faq, i) in faqs" :key="i" class="card-glass rounded-2xl overflow-hidden">
+                    <div v-for="(faq, i) in faqs" :key="i" class="card overflow-hidden">
                         <button
                             @click="openFaq = openFaq === i ? null : i"
-                            class="w-full px-5 py-4 text-left flex justify-between items-center gap-4 font-semibold text-[var(--color-ink)] text-sm"
+                            :aria-expanded="openFaq === i"
+                            class="focus-ring w-full px-4 sm:px-5 py-4 min-h-[44px] text-left flex justify-between items-center gap-4 font-semibold text-[var(--color-ink)] text-sm"
                         >
                             {{ faq.q }}
-                            <span class="text-[var(--color-muted)] flex-none transition-transform" :class="openFaq === i ? 'rotate-180' : ''">▾</span>
+                            <span aria-hidden="true" class="text-[var(--color-muted)] flex-none transition-transform" :class="openFaq === i ? 'rotate-180' : ''">▾</span>
                         </button>
                         <Transition name="fade-up">
-                            <div v-if="openFaq === i" class="px-5 pb-4 text-sm text-[var(--color-muted)] leading-relaxed">
+                            <!-- Đệm ngang phải bám theo đúng nút câu hỏi ở trên (px-4 sm:px-5),
+                                 không thì dưới 640px câu trả lời thụt vào 4px so với câu hỏi. -->
+                            <div v-if="openFaq === i" class="px-4 sm:px-5 pb-4 text-sm text-[var(--color-muted)] leading-relaxed">
                                 {{ faq.a }}
                             </div>
                         </Transition>
@@ -254,7 +268,7 @@ const openFaq = ref(null)
 
         <section class="px-4 pb-14">
             <div class="max-w-3xl mx-auto text-center">
-                <Link href="/" class="btn-fire inline-block px-8 py-4 rounded-2xl no-underline">
+                <Link href="/" class="btn-fire inline-flex items-center justify-center min-h-[52px] px-8 rounded-2xl no-underline">
                     Về trang chủ lấy mã →
                 </Link>
             </div>

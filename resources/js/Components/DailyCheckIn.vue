@@ -15,6 +15,12 @@ import { useAuthStore } from '@/Stores/useAuthStore'
  *
  * Khách VÃNG LAI vẫn thấy thẻ (state.can_claim = false): đây là mồi đăng ký tốt nhất trên trang,
  * ẩn đi với người chưa đăng nhập là vứt đúng nhóm mà nó nhắm tới.
+ *
+ * Thẻ ngoài cùng dùng class .card (bo góc + viền + bóng nằm sẵn trong đó). Trước đây nó tự gõ
+ * lại cả bốn thứ và chọn rounded-3xl trong khi mọi thẻ quanh nó bo 16px — lệch 8px, đủ để nhìn
+ * ra. Ghi chú này để trong <script> chứ không phải ngay trên thẻ: một comment đứng ở GỐC template
+ * biến component thành fragment ở bản dev, và Home.vue có truyền class="mt-4" vào đây — fragment
+ * thì cái class đó rơi mất.
  */
 const props = defineProps({
     state: { type: Object, required: true },
@@ -121,26 +127,32 @@ watch(() => props.state.today, () => { reveal.value = null })
 </script>
 
 <template>
-    <section class="rounded-3xl bg-[var(--color-surface)] border border-[var(--color-line)] p-5 md:p-6 shadow-[0_2px_12px_rgba(0,0,0,.04)]">
+    <section class="card p-5 md:p-6">
         <div class="flex items-start justify-between gap-3 mb-3">
             <div class="min-w-0">
                 <h2 class="text-base md:text-lg font-extrabold text-[var(--color-ink)] uppercase tracking-wide">
                     Điểm danh nhận quà
                 </h2>
+                <!-- Ba con số ở đây trước đây đều là màu lửa, cùng màu với cái nút ngay bên dưới
+                     — nên chẳng con nào nổi. Giờ chia vai: mệnh giá là TIỀN (--color-money), số
+                     phần còn lại là thứ sắp hết, cần chú ý (--color-warn). -->
                 <p class="text-sm font-semibold text-[var(--color-muted)] mt-1">
                     <template v-if="!soldOut">
-                        Giải cao nhất hôm nay: <b class="text-[var(--color-accent)]">{{ money(state.top_prize) }}</b>.
-                        Còn <b class="text-[var(--color-accent)]">{{ state.gifts_left.toLocaleString('vi-VN') }}</b> phần quà.
+                        Giải cao nhất hôm nay: <b class="num text-[var(--color-money)]">{{ money(state.top_prize) }}</b>.
+                        Còn <b class="num text-[var(--color-warn)]">{{ state.gifts_left.toLocaleString('vi-VN') }}</b> phần quà.
                     </template>
                     <template v-else>
                         Hết quà mệnh giá cao hôm nay — mỗi lượt vẫn chắc chắn có
-                        <b class="text-[var(--color-accent)]">{{ money(state.base_amount) }}</b>.
+                        <b class="num text-[var(--color-money)]">{{ money(state.base_amount) }}</b>.
                     </template>
                 </p>
+                <!-- Nút mở bảng quà: vùng chạm 44px (trước chỉ cao bằng dòng chữ, ~20px) và có
+                     viền focus dùng chung. -->
                 <button
                     type="button"
                     @click="showDetail = !showDetail"
-                    class="mt-1.5 text-sm font-bold text-[var(--color-accent)] inline-flex items-center gap-0.5 hover:underline"
+                    :aria-expanded="showDetail"
+                    class="focus-ring -ml-2 px-2 min-h-[44px] rounded-lg text-sm font-bold text-[var(--color-accent-deep)] inline-flex items-center gap-0.5 hover:underline"
                 >
                     Chi tiết
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" class="w-3.5 h-3.5 transition-transform" :class="showDetail ? 'rotate-90' : ''"><path d="m9 18 6-6-6-6"/></svg>
@@ -149,17 +161,21 @@ watch(() => props.state.today, () => { reveal.value = null })
 
             <!-- Chuỗi ngày: chỉ số này mới là thứ giữ khách quay lại, nên nó đứng ở góc dễ thấy
                  nhất chứ không nằm lẫn trong dòng chữ hướng dẫn phía dưới. -->
+            <!-- Chuỗi đang chạy = thành tích, để màu tiền; chuỗi bằng 0 thì là một ô chờ, để
+                 nền chìm. Bỏ nền cam chữ trắng: chữ trắng trên #F5511E chỉ đạt 3.5:1. -->
             <span
-                class="flex-none text-xs font-extrabold px-3 py-1.5 rounded-full whitespace-nowrap"
+                class="num flex-none text-xs font-extrabold px-3 min-h-[28px] inline-flex items-center rounded-full whitespace-nowrap"
                 :class="state.streak > 0
-                    ? 'bg-[var(--color-accent)] text-white'
-                    : 'bg-[var(--color-peach-soft)] text-[var(--color-accent)]'"
+                    ? 'bg-[var(--color-money-soft)] text-[var(--color-money)]'
+                    : 'panel rounded-full text-[var(--color-muted)]'"
             >Chuỗi: {{ state.streak }} ngày</span>
         </div>
 
         <!-- Bảng quà + luật chơi. Đóng sẵn: thẻ này phải bấm được trong một nhịp, ai muốn soi kỹ
              mới mở ra. -->
-        <div v-if="showDetail" class="mb-4 rounded-2xl bg-[var(--color-peach-soft)] border border-[var(--color-line)] p-4">
+        <!-- .panel: dải chìm TRONG thẻ, không viền không bóng. Trước đây đây là một thẻ lồng
+             trong thẻ (nền peach + viền riêng), làm thẻ điểm danh trông như hai khối chồng lên. -->
+        <div v-if="showDetail" class="mb-4 panel p-4">
             <p class="text-xs font-extrabold uppercase tracking-wide text-[var(--color-muted)] mb-2">Kho quà hôm nay</p>
             <ul class="space-y-1.5 mb-4">
                 <li
@@ -167,11 +183,11 @@ watch(() => props.state.today, () => { reveal.value = null })
                     :key="prize.amount"
                     class="flex items-center justify-between gap-3 text-sm"
                 >
-                    <span class="font-bold text-[var(--color-ink)]">{{ money(prize.amount) }}</span>
-                    <span v-if="prize.quantity === null" class="text-xs font-semibold text-[var(--color-brand-green)]">
+                    <span class="num font-bold text-[var(--color-ink)]">{{ money(prize.amount) }}</span>
+                    <span v-if="prize.quantity === null" class="text-xs font-semibold text-[var(--color-money)]">
                         Không giới hạn — ai điểm danh cũng có
                     </span>
-                    <span v-else class="text-xs font-semibold" :class="prize.left > 0 ? 'text-[var(--color-muted)]' : 'text-[var(--color-muted)] opacity-60'">
+                    <span v-else class="num text-xs font-semibold" :class="prize.left > 0 ? 'text-[var(--color-muted)]' : 'text-[var(--color-muted)] opacity-60'">
                         <template v-if="prize.left > 0">Còn {{ prize.left }}/{{ prize.quantity }} phần</template>
                         <template v-else>Đã hết hôm nay</template>
                     </span>
@@ -185,8 +201,8 @@ watch(() => props.state.today, () => { reveal.value = null })
                     :key="m.days"
                     class="flex items-center justify-between gap-3 text-sm"
                 >
-                    <span class="font-bold text-[var(--color-ink)]">{{ m.days }} ngày liên tiếp</span>
-                    <span class="text-xs font-extrabold text-[var(--color-accent)]">+{{ money(m.amount) }}</span>
+                    <span class="font-bold text-[var(--color-ink)]"><span class="num">{{ m.days }}</span> ngày liên tiếp</span>
+                    <span class="num text-xs font-extrabold text-[var(--color-money)]">+{{ money(m.amount) }}</span>
                 </li>
             </ul>
 
@@ -194,19 +210,19 @@ watch(() => props.state.today, () => { reveal.value = null })
                  hiện: cùng lý do với cột "KHÔNG được hoàn" ở CashbackExplainer. -->
             <ul class="space-y-1.5 text-xs text-[var(--color-muted)] leading-relaxed border-t border-[var(--color-line)] pt-3">
                 <li class="flex gap-1.5">
-                    <span class="flex-none text-[var(--color-accent)]">•</span>
+                    <span class="flex-none text-[var(--color-muted)]" aria-hidden="true">•</span>
                     <span>Mỗi tài khoản điểm danh <b class="text-[var(--color-ink)]">1 lần/ngày</b>, quà bốc ngẫu nhiên trong kho quà còn lại của ngày hôm đó.</span>
                 </li>
                 <li class="flex gap-1.5">
-                    <span class="flex-none text-[var(--color-accent)]">•</span>
+                    <span class="flex-none text-[var(--color-muted)]" aria-hidden="true">•</span>
                     <span>Kho quà <b class="text-[var(--color-ink)]">đầy lại lúc 0 giờ</b> mỗi ngày. Mệnh giá càng cao càng ít phần, hết thì hết tới sáng hôm sau.</span>
                 </li>
                 <li class="flex gap-1.5">
-                    <span class="flex-none text-[var(--color-accent)]">•</span>
+                    <span class="flex-none text-[var(--color-muted)]" aria-hidden="true">•</span>
                     <span>Nghỉ một ngày là <b class="text-[var(--color-ink)]">chuỗi về 0</b> và phải đếm lại từ đầu. Mốc thưởng lặp lại, nên đi tiếp sau mốc 7 vẫn có mốc.</span>
                 </li>
                 <li class="flex gap-1.5">
-                    <span class="flex-none text-[var(--color-accent)]">•</span>
+                    <span class="flex-none text-[var(--color-muted)]" aria-hidden="true">•</span>
                     <span>Tiền vào ví ngay, nhưng <b class="text-[var(--color-ink)]">muốn rút phải có ít nhất một đơn hàng được hoàn tiền thật</b> — quà điểm danh một mình không rút ra được.</span>
                 </li>
             </ul>
@@ -215,32 +231,39 @@ watch(() => props.state.today, () => { reveal.value = null })
         <!-- Bảy ngày trong tuần. grid-cols-7 ở mọi khổ màn hình: xuống dòng giữa tuần là mất
              cảm giác "một chuỗi liền mạch", đúng thứ mà khối này tồn tại để tạo ra. -->
         <div class="grid grid-cols-7 gap-1.5 md:gap-2.5 mb-4">
+            <!-- Ba vai ba màu, thay vì xanh-lá-thương-hiệu và cam cho mọi thứ:
+                   done  → --color-money (đã nhận tiền)
+                   today → --color-warn  (đang chờ bạn bấm — đúng vai "cần chú ý")
+                   còn lại giữ nền chìm.
+                 Màu lửa rút khỏi đây hẳn: nó là màu của cái nút ngay bên dưới, mà bảy ô này
+                 không bấm được ô nào. -->
             <div
                 v-for="day in state.week"
                 :key="day.date"
                 class="rounded-xl md:rounded-2xl border py-2.5 px-1 flex flex-col items-center gap-1.5 transition-colors"
                 :class="{
-                    'border-[var(--color-brand-green)] bg-[var(--color-green-soft)]': day.state === 'done',
-                    'border-[var(--color-accent)] bg-[var(--color-peach-soft)] ring-1 ring-[var(--color-accent)]': day.state === 'today',
+                    'border-[var(--color-money)]/40 bg-[var(--color-money-soft)]': day.state === 'done',
+                    'border-[var(--color-warn)] ring-1 ring-[var(--color-warn)] bg-[var(--color-warn-soft)]': day.state === 'today',
                     'border-dashed border-[var(--color-line)] bg-[var(--color-bg)] opacity-70': day.state === 'missed',
                     'border-[var(--color-line)] bg-[var(--color-bg)]': day.state === 'upcoming',
                 }"
             >
                 <span
-                    class="text-[11px] md:text-xs font-extrabold"
-                    :class="day.state === 'done' ? 'text-[var(--color-brand-green)]'
-                        : day.state === 'today' ? 'text-[var(--color-accent)]'
+                    class="text-xs font-extrabold"
+                    :class="day.state === 'done' ? 'text-[var(--color-money)]'
+                        : day.state === 'today' ? 'text-[var(--color-warn)]'
                         : 'text-[var(--color-muted)]'"
                 >{{ day.label }}</span>
 
-                <svg v-if="day.state === 'done'" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" class="w-5 h-5 text-[var(--color-brand-green)]"><circle cx="12" cy="12" r="10" stroke-width="2"/><path d="m8 12 3 3 5-6"/></svg>
-                <svg v-else-if="day.state === 'today'" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="w-5 h-5 text-[var(--color-accent)]"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/><path d="m9 16 2 2 4-4" stroke-width="2.5"/></svg>
+                <svg v-if="day.state === 'done'" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" class="w-5 h-5 text-[var(--color-money)]"><circle cx="12" cy="12" r="10" stroke-width="2"/><path d="m8 12 3 3 5-6"/></svg>
+                <svg v-else-if="day.state === 'today'" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="w-5 h-5 text-[var(--color-warn)]"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/><path d="m9 16 2 2 4-4" stroke-width="2.5"/></svg>
                 <svg v-else viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="w-5 h-5 text-[var(--color-line)]"><circle cx="12" cy="12" r="9"/></svg>
 
+                <!-- 10px → 12px: đây là con số tiền, và tiếng Việt quanh nó có dấu. -->
                 <span
-                    class="text-[10px] md:text-xs font-extrabold tabular-nums"
-                    :class="day.state === 'done' ? 'text-[var(--color-brand-green)]'
-                        : day.state === 'today' ? 'text-[var(--color-accent)]'
+                    class="num text-xs font-extrabold"
+                    :class="day.state === 'done' ? 'text-[var(--color-money)]'
+                        : day.state === 'today' ? 'text-[var(--color-warn)]'
                         : 'text-[var(--color-muted)]'"
                 >+{{ Number(day.amount).toLocaleString('vi-VN') }}</span>
             </div>
@@ -248,25 +271,34 @@ watch(() => props.state.today, () => { reveal.value = null })
 
         <!-- Màn lật quà: chiếm chỗ của dòng hướng dẫn chứ không đè lên nó (overlay trên điện
              thoại là che mất chính cái nút vừa bấm). Tự tắt sau REVEAL_MS. -->
+        <!-- Nền xanh tiền thay gradient cam chữ trắng. Khoảnh khắc này là TIỀN VỪA VÀO VÍ —
+             đúng vai của --color-money — và chữ trắng trên nền cam chỉ đạt 3.5:1, tức con số
+             quan trọng nhất của cả thẻ lại là chỗ khó đọc nhất. -->
         <div
             v-if="reveal"
-            class="mb-4 rounded-2xl bg-gradient-to-br from-[var(--color-accent)] to-[var(--color-accent-deep)] text-white px-4 py-3.5 text-center"
+            class="mb-4 rounded-2xl bg-[var(--color-money-soft)] border border-[var(--color-money)]/40 px-4 py-3.5 text-center"
         >
-            <p class="text-xs font-bold uppercase tracking-wide opacity-90">
+            <!-- Chữ phụ trong ô này để --color-ink chứ không phải --color-muted: nền đã đổi sang
+                 money-soft, mà ở chế độ SÁNG money-soft là màu đặc (#E7F5EE) chứ không phải lớp
+                 mờ như ở chế độ tối — muted (#6B7280) đặt lên đó chỉ còn 4.36:1, trượt AA cho
+                 chữ 12px. Trên nền surface thì đúng 4.83:1 nên chỗ khác giữ muted vẫn ổn; riêng
+                 ô này đổi nền nên phải đổi theo. -->
+            <p class="text-xs font-bold uppercase tracking-wide text-[var(--color-ink)]">
                 {{ reveal.milestone ? `Mốc ${reveal.milestone} ngày liên tiếp!` : 'Bạn vừa nhận được' }}
             </p>
-            <p class="text-3xl font-extrabold leading-tight my-0.5 tabular-nums">{{ money(reveal.amount) }}</p>
-            <p v-if="reveal.bonus > 0" class="text-xs font-semibold opacity-90">
+            <p class="num text-3xl font-extrabold leading-tight my-0.5 text-[var(--color-money)]">{{ money(reveal.amount) }}</p>
+            <p v-if="reveal.bonus > 0" class="num text-xs font-semibold text-[var(--color-ink)]">
                 Gồm {{ money(reveal.prize) }} quà may mắn + {{ money(reveal.bonus) }} thưởng mốc
             </p>
-            <p v-else class="text-xs font-semibold opacity-90">Đã cộng vào ví · Chuỗi {{ reveal.streak }} ngày</p>
+            <p v-else class="num text-xs font-semibold text-[var(--color-ink)]">Đã cộng vào ví · Chuỗi {{ reveal.streak }} ngày</p>
         </div>
 
         <p v-else class="text-sm font-semibold text-[var(--color-muted)] text-center mb-3 leading-relaxed">
             <template v-if="claimed">
-                Đã nhận <b class="text-[var(--color-ink)]">{{ money(claimed.amount) }}</b> hôm nay.
+                Đã nhận <b class="num text-[var(--color-money)]">{{ money(claimed.amount) }}</b> hôm nay.
                 <template v-if="nextMilestone && nextMilestone.left > 0">
-                    Còn {{ nextMilestone.left }} ngày nữa tới mốc {{ nextMilestone.days }} ngày (+{{ money(nextMilestone.amount) }}).
+                    Còn <span class="num">{{ nextMilestone.left }}</span> ngày nữa tới mốc
+                    <span class="num">{{ nextMilestone.days }}</span> ngày (<span class="num">+{{ money(nextMilestone.amount) }}</span>).
                 </template>
                 <template v-else>Quay lại vào ngày mai để giữ chuỗi nhé.</template>
             </template>
@@ -276,11 +308,14 @@ watch(() => props.state.today, () => { reveal.value = null })
             </template>
         </p>
 
-        <!-- Khách vãng lai: nút dẫn đi đăng nhập/đăng ký thay vì một nút bấm vào thì báo lỗi. -->
+        <!-- Khách vãng lai: nút dẫn đi đăng nhập/đăng ký thay vì một nút bấm vào thì báo lỗi.
+             Chiều cao đặt bằng min-h chứ không py-*: .btn-fire đã có sàn 44px, py-3.5 chồng lên
+             là hai nguồn cùng quyết một kích thước và chỉ lệch nhau vài pixel. -->
+
         <Link
             v-if="!auth.isLoggedIn"
             :href="joinHref"
-            class="btn-fire w-full py-3.5 rounded-2xl font-extrabold flex items-center justify-center gap-2 no-underline"
+            class="btn-fire w-full min-h-[52px] rounded-2xl font-extrabold flex items-center justify-center gap-2 no-underline"
         >
             <span>📅</span> {{ buttonLabel }}
         </Link>
@@ -289,7 +324,7 @@ watch(() => props.state.today, () => { reveal.value = null })
             type="button"
             @click="claim"
             :disabled="!state.can_claim || claiming"
-            class="btn-fire w-full py-3.5 rounded-2xl font-extrabold flex items-center justify-center gap-2 disabled:opacity-60 disabled:cursor-not-allowed"
+            class="btn-fire w-full min-h-[52px] rounded-2xl font-extrabold flex items-center justify-center gap-2 disabled:opacity-60 disabled:cursor-not-allowed"
         >
             <span>{{ claimed ? '✅' : '📅' }}</span> {{ buttonLabel }}
         </button>

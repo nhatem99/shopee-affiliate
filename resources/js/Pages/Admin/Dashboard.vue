@@ -58,7 +58,7 @@ const statusColors = {
             </div>
             <div class="bg-[var(--color-surface)] rounded-2xl border border-[var(--color-line)] p-5">
                 <p class="text-xs text-[var(--color-muted)] font-semibold uppercase tracking-wide mb-1">Đơn chờ duyệt</p>
-                <p class="text-2xl font-extrabold text-[var(--color-accent)]">{{ stats?.pending_orders || 0 }}</p>
+                <p class="text-2xl font-extrabold text-[var(--color-accent-deep)]">{{ stats?.pending_orders || 0 }}</p>
             </div>
             <div class="bg-[var(--color-surface)] rounded-2xl border border-[var(--color-line)] p-5">
                 <p class="text-xs text-[var(--color-muted)] font-semibold uppercase tracking-wide mb-1">Hoa hồng tuần</p>
@@ -163,7 +163,7 @@ const statusColors = {
         <div class="bg-[var(--color-surface)] rounded-2xl border border-[var(--color-line)] p-6">
             <div class="flex items-center justify-between mb-4">
                 <h2 class="font-extrabold text-[var(--color-ink)]">Đơn hàng gần đây</h2>
-                <Link href="/admin/orders" class="text-sm font-semibold text-[var(--color-accent)] hover:underline">Xem tất cả →</Link>
+                <Link href="/admin/orders" class="text-sm font-semibold text-[var(--color-accent-deep)] hover:underline">Xem tất cả →</Link>
             </div>
             <div class="overflow-x-auto">
                 <table class="w-full text-sm">

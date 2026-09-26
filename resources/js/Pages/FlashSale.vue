@@ -182,14 +182,20 @@ onBeforeUnmount(() => {
             <!-- Bộ lọc -->
             <section class="card-glass rounded-2xl p-4 mb-6 space-y-4">
                 <div v-if="slots.length > 1">
-                    <p class="text-[11px] uppercase tracking-wide font-bold text-[var(--color-muted)] mb-2">Khung giờ</p>
+                    <p class="text-xs uppercase tracking-wide font-bold text-[var(--color-muted)] mb-2">Khung giờ</p>
+                    <!-- Chiều cao nút đặt bằng min-h-[44px], không bằng py — cùng ngưỡng chạm
+                         với mọi hàng bấm được khác trong trang.
+                         Khung giờ đang chọn KHÔNG dùng btn-fire nữa: lưới bên dưới đã có
+                         hàng chục nút "Mua ngay →" màu lửa, thêm một ngọn ở bộ lọc thì mắt
+                         khách không biết đâu là việc cần làm. nav-pill--active là đúng cái
+                         Home.vue dùng cho cùng vai trò "tab đang chọn". -->
                     <div class="flex flex-wrap gap-2">
                         <button
                             type="button"
                             :class="slot === 'all'
-                                ? 'btn-fire'
-                                : 'bg-[var(--color-surface)] text-[var(--color-ink)] border border-[var(--color-line)] hover:border-[var(--color-accent)] hover:text-[var(--color-accent)]'"
-                            class="px-4 py-2 rounded-xl text-sm font-semibold transition"
+                                ? 'nav-pill--active'
+                                : 'bg-[var(--color-surface)] border-[var(--color-line)]'"
+                            class="nav-pill focus-ring inline-flex items-center justify-center min-h-[44px] px-4 rounded-xl text-sm font-semibold"
                             @click="selectSlot('all')"
                         >
                             Tất cả
@@ -199,28 +205,32 @@ onBeforeUnmount(() => {
                             :key="s"
                             type="button"
                             :class="slot === s
-                                ? 'btn-fire'
-                                : 'bg-[var(--color-surface)] text-[var(--color-ink)] border border-[var(--color-line)] hover:border-[var(--color-accent)] hover:text-[var(--color-accent)]'"
-                            class="px-4 py-2 rounded-xl text-sm font-semibold transition relative"
+                                ? 'nav-pill--active'
+                                : 'bg-[var(--color-surface)] border-[var(--color-line)]'"
+                            class="num nav-pill focus-ring relative inline-flex items-center justify-center min-h-[44px] px-4 rounded-xl text-sm font-semibold"
                             @click="selectSlot(s)"
                         >
                             {{ s }}
-                            <span v-if="slotStatus(s) === 'current'" class="absolute -top-1 -right-1 w-2.5 h-2.5 rounded-full bg-emerald-500 border-2 border-[var(--color-bg)]"></span>
+                            <!-- Chấm "khung giờ này đang chạy": màu tiền có sẵn cả bản sáng
+                                 lẫn tối, emerald-500 gõ thẳng thì chỉ đúng ở một chế độ. -->
+                            <span v-if="slotStatus(s) === 'current'" class="absolute -top-1 -right-1 w-2.5 h-2.5 rounded-full bg-[var(--color-money)] border-2 border-[var(--color-bg)]"></span>
                         </button>
                     </div>
                 </div>
 
+                <!-- Bỏ: đổi màu viền thôi thì người dùng bàn phím gần như
+                     không thấy ô nào đang được chọn. .focus-ring là viền focus dùng chung. -->
                 <label class="sr-only" for="flashsale-search">Tìm sản phẩm Flash Sale</label>
                 <input
                     id="flashsale-search"
                     v-model="keyword"
                     type="search"
                     placeholder="Tìm theo tên sản phẩm..."
-                    class="w-full rounded-xl border border-[var(--color-line)] bg-[var(--color-surface)] px-4 py-3 text-sm text-[var(--color-ink)] placeholder:text-[var(--color-muted)] focus:border-[var(--color-accent)] focus:outline-none"
+                    class="focus-ring w-full rounded-xl border border-[var(--color-line)] bg-[var(--color-surface)] px-4 min-h-[48px] text-sm text-[var(--color-ink)] placeholder:text-[var(--color-muted)] focus:border-[var(--color-accent)]"
                 />
             </section>
 
-            <p v-if="total" class="text-xs text-[var(--color-muted)] mb-3">
+            <p v-if="total" class="num text-xs text-[var(--color-muted)] mb-3">
                 {{ total }} sản phẩm đang giảm sâu
             </p>
 
@@ -244,7 +254,7 @@ onBeforeUnmount(() => {
 
             <div v-if="failed" class="text-center py-6">
                 <p class="text-sm text-[var(--color-muted)] mb-3">Không tải được thêm sản phẩm. Kiểm tra kết nối rồi thử lại nhé.</p>
-                <button type="button" class="btn-fire px-5 py-2 rounded-xl text-sm font-bold" @click="fetchPage(page + 1)">
+                <button type="button" class="btn-fire inline-flex items-center justify-center min-h-[44px] px-5 rounded-xl text-sm font-bold" @click="fetchPage(page + 1)">
                     Thử lại
                 </button>
             </div>

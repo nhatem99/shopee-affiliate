@@ -262,9 +262,9 @@ async function testConfig(config) {
                     </div>
                     <div class="flex gap-2">
                         <button @click="testConfig(config)"
-                            class="text-sm font-semibold text-[var(--color-accent)] hover:underline">Kiểm tra kết nối</button>
+                            class="text-sm font-semibold text-[var(--color-accent-deep)] hover:underline">Kiểm tra kết nối</button>
                         <button @click="editConfig(config)"
-                            class="text-sm font-semibold text-[var(--color-ink)] hover:text-[var(--color-accent)] transition">Chỉnh sửa</button>
+                            class="text-sm font-semibold text-[var(--color-ink)] hover:text-[var(--color-accent-deep)] transition">Chỉnh sửa</button>
                     </div>
                 </div>
 
@@ -554,7 +554,7 @@ async function testConfig(config) {
                                     và link trong bình luận bấm có ăn không? Đây đúng là link khách sẽ nhận.
                                 </p>
                                 <a :href="pendingProbe.url" target="_blank" rel="noopener"
-                                    class="block mt-2 font-mono text-xs text-[var(--color-accent)] break-all hover:underline">{{ pendingProbe.url }}</a>
+                                    class="block mt-2 font-mono text-xs text-[var(--color-accent-deep)] break-all hover:underline">{{ pendingProbe.url }}</a>
                                 <button type="button" @click.prevent="deleteProbeComment" :disabled="deletingProbe"
                                     class="mt-2 text-xs font-bold px-3 py-1.5 rounded-lg border border-amber-400 text-amber-900 bg-white hover:bg-amber-100 disabled:opacity-50 transition">
                                     {{ deletingProbe ? 'Đang xoá…' : 'Xoá comment thử' }}

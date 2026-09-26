@@ -59,7 +59,7 @@ function openItem(n) {
                         v-if="unread"
                         type="button"
                         @click="readAll"
-                        class="text-xs font-semibold text-[var(--color-accent)] hover:underline"
+                        class="text-xs font-semibold text-[var(--color-accent-deep)] hover:underline"
                     >Đánh dấu đã đọc</button>
                 </div>
 
@@ -78,7 +78,7 @@ function openItem(n) {
                                     <span v-if="!n.read" class="w-2 h-2 rounded-full bg-[var(--color-accent)] flex-none"></span>
                                 </span>
                                 <span class="block text-xs text-[var(--color-muted)] leading-snug mt-0.5 line-clamp-2">{{ n.body }}</span>
-                                <span class="block text-[11px] text-[var(--color-muted)] mt-1">{{ n.ago }}</span>
+                                <span class="block text-xs text-[var(--color-muted)] mt-1">{{ n.ago }}</span>
                             </span>
                         </button>
                     </li>

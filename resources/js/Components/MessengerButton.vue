@@ -15,7 +15,7 @@ const messengerUrl = computed(() => page.props.settings?.messengerUrl ?? null)
         rel="noopener noreferrer"
         aria-label="Nhắn tin qua Messenger"
         title="Nhắn tin qua Messenger"
-        class="fixed right-4 md:right-6 bottom-20 md:bottom-6 z-40 w-12 h-12 md:w-14 md:h-14 rounded-full ring-4 ring-[var(--color-bg)] shadow-[0_6px_20px_rgba(0,90,255,0.35)] flex items-center justify-center transition-transform hover:scale-105 active:scale-95"
+        class="focus-ring fixed right-4 md:right-6 bottom-20 md:bottom-6 z-40 w-12 h-12 md:w-14 md:h-14 rounded-full ring-4 ring-[var(--color-bg)] shadow-[0_6px_20px_rgba(0,90,255,0.35)] flex items-center justify-center transition-transform hover:scale-105 active:scale-95"
         style="background: linear-gradient(135deg, #00B2FF 0%, #006AFF 50%, #A033FF 100%);"
     >
         <svg viewBox="0 0 36 36" class="w-6 h-6 md:w-8 md:h-8" fill="white">

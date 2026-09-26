@@ -98,31 +98,37 @@ defineExpose({
 
 <template>
     <div class="border-t border-[var(--color-line)]">
-        <div v-if="pinnedOrder" class="px-3 pt-3 flex items-start gap-2">
-            <div class="flex-1 min-w-0 rounded-xl bg-[var(--color-peach-soft)] px-3 py-2">
-                <p class="text-[11px] font-bold text-[var(--color-accent)]">🧾 Đang hỏi về đơn {{ pinnedOrder.order_id }}</p>
+        <!-- Thẻ ghim là THÔNG TIN chứ không phải nút bấm nên bỏ màu nhấn, về nền .panel trung
+             tính — màu lửa trong ô soạn để dành đúng cho nút Gửi. Nút ✕ lên 44px: trước là 28px,
+             nằm sát mép phải nơi ngón cái hay trượt. -->
+        <div v-if="pinnedOrder" class="px-3 pt-3 flex items-center gap-2">
+            <div class="flex-1 min-w-0 panel px-3 py-2">
+                <p class="text-xs font-bold text-[var(--color-ink)]">🧾 Đang hỏi về đơn <span class="num">{{ pinnedOrder.order_id }}</span></p>
                 <p v-if="pinnedOrder.product_name" class="text-xs text-[var(--color-muted)] truncate">{{ pinnedOrder.product_name }}</p>
             </div>
             <button
                 type="button"
                 @click="emit('unpin')"
                 aria-label="Bỏ ghim đơn hàng"
-                class="flex-none w-7 h-7 rounded-lg flex items-center justify-center text-[var(--color-muted)] hover:bg-[var(--color-peach-soft)] hover:text-[var(--color-ink)] transition"
+                class="focus-ring touch flex-none rounded-xl flex items-center justify-center text-[var(--color-muted)] hover:bg-[var(--color-peach-soft)] hover:text-[var(--color-ink)] transition"
             >✕</button>
         </div>
 
-        <div v-if="imagePreview" class="px-3 pt-3">
-            <div class="relative inline-block">
-                <img :src="imagePreview" alt="Ảnh sắp gửi" class="h-20 w-auto rounded-xl border border-[var(--color-line)]" />
-                <button
-                    type="button"
-                    @click="removeImage"
-                    aria-label="Bỏ ảnh"
-                    class="absolute -top-2 -right-2 w-6 h-6 rounded-full bg-[var(--color-ink)] text-[var(--color-surface)] text-xs font-bold flex items-center justify-center shadow"
-                >✕</button>
-            </div>
+        <!-- Nút bỏ ảnh tách hẳn ra cạnh ảnh thay vì dán chồng lên góc: một nút 44px đè lên ảnh
+             xem trước 80px là che mất nửa cái ảnh khách vừa chọn, mà 24px như cũ thì lại quá nhỏ
+             để bấm trúng bằng ngón cái. -->
+        <div v-if="imagePreview" class="px-3 pt-3 flex items-center gap-3">
+            <img :src="imagePreview" alt="Ảnh sắp gửi" class="h-20 w-auto rounded-xl border border-[var(--color-line)]" />
+            <button
+                type="button"
+                @click="removeImage"
+                class="focus-ring inline-flex items-center min-h-[44px] px-3 rounded-xl border border-[var(--color-line)] text-xs font-semibold text-[var(--color-ink)] hover:bg-[var(--color-peach-soft)] transition"
+            >✕ Bỏ ảnh</button>
         </div>
 
+        <!-- Cả ba thứ trong hàng này đều cao 44px: nút kẹp ảnh (trước 40px), ô gõ và nút Gửi.
+             Chiều cao đặt bằng min-h chứ không py-* — py-2.5 và py-3 đang chia đôi cùng một vai
+             trò khắp web và chênh nhau 4px. -->
         <div class="p-3 flex items-end gap-2">
             <input ref="fileInput" type="file" accept="image/jpeg,image/png,image/webp" class="hidden" @change="onFilePicked" />
             <button
@@ -130,7 +136,7 @@ defineExpose({
                 @click="pickImage"
                 aria-label="Đính kèm ảnh"
                 title="Đính kèm ảnh"
-                class="flex-none w-10 h-10 rounded-xl border border-[var(--color-line)] text-[var(--color-muted)] hover:text-[var(--color-accent)] hover:border-[var(--color-accent)] transition flex items-center justify-center"
+                class="focus-ring touch flex-none rounded-xl border border-[var(--color-line)] text-[var(--color-muted)] hover:text-[var(--color-accent-deep)] hover:border-[var(--color-accent)] transition flex items-center justify-center"
             >
                 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="w-5 h-5">
                     <path d="M21.44 11.05 12.25 20.24a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48" />
@@ -144,16 +150,17 @@ defineExpose({
                 rows="1"
                 maxlength="2000"
                 :placeholder="placeholder"
+                aria-label="Nội dung tin nhắn"
                 @input="onType"
                 @keydown.enter.exact.prevent="submit"
-                class="flex-1 min-w-0 resize-none px-4 py-2.5 rounded-xl border border-[var(--color-line)] bg-[var(--color-bg)] text-sm text-[var(--color-ink)] focus:outline-none focus:border-[var(--color-accent)]"
+                class="focus-ring flex-1 min-w-0 min-h-[44px] resize-none px-4 py-2.5 rounded-xl border border-[var(--color-line)] bg-[var(--color-bg)] text-sm text-[var(--color-ink)] focus:border-[var(--color-accent)]"
             ></textarea>
 
             <button
                 type="button"
                 @click="submit"
                 :disabled="sending || (!body.trim() && !image)"
-                class="btn-fire px-5 py-2.5 rounded-xl text-sm whitespace-nowrap disabled:opacity-60"
+                class="btn-fire inline-flex items-center justify-center px-5 rounded-xl text-sm whitespace-nowrap"
             >{{ sending ? 'Đang gửi...' : 'Gửi' }}</button>
         </div>
     </div>

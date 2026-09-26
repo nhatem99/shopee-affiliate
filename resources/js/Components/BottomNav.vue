@@ -71,7 +71,7 @@ const PATHS = {
             :href="item.href"
             :aria-current="current === item.href ? 'page' : undefined"
             class="focus-ring relative flex-1 min-w-0 flex flex-col items-center justify-center gap-1 px-1 pt-2.5 pb-1.5 text-xs font-semibold transition-colors"
-            :class="current === item.href ? 'text-[var(--color-accent)]' : 'text-[var(--color-muted)]'"
+            :class="current === item.href ? 'text-[var(--color-accent-deep)]' : 'text-[var(--color-muted)]'"
         >
             <!--
                 Mục đang đứng nhận một vạch 2px ở mép trên thay cho viên nền bo tròn + hào quang

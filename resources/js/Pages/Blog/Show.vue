@@ -13,11 +13,13 @@ const props = defineProps({
         <meta name="description" :content="post.excerpt" />
     </Head>
     <AppLayout>
-        <div class="max-w-2xl mx-auto px-4 py-10">
-            <Link href="/blog" class="text-sm text-[var(--color-muted)] hover:text-[var(--color-ink)] mb-6 inline-block">← Blog</Link>
-            <p class="text-xs text-[var(--color-muted)] mb-2">{{ new Date(post.published_at).toLocaleDateString('vi-VN') }}</p>
+        <div class="max-w-2xl mx-auto px-4 py-8">
+            <!-- Đường lùi về danh sách là hàng bấm được duy nhất của trang này nên nó phải đủ
+                 44px: trước là một dòng chữ 20px cao, trên điện thoại gần như bấm trượt. -->
+            <Link href="/blog" class="focus-ring inline-flex items-center min-h-[44px] -ml-2 px-2 rounded-lg mb-2 text-sm font-semibold text-[var(--color-muted)] hover:text-[var(--color-ink)]">← Tất cả bài viết</Link>
+            <p class="text-xs text-[var(--color-muted)] mb-2 num">{{ new Date(post.published_at).toLocaleDateString('vi-VN') }}</p>
             <h1 class="text-2xl font-extrabold text-[var(--color-ink)] mb-6">{{ post.title }}</h1>
-            <p class="text-[var(--color-ink)] leading-relaxed whitespace-pre-line mb-8">{{ post.body }}</p>
+            <p class="text-base text-[var(--color-ink)] leading-relaxed whitespace-pre-line mb-8">{{ post.body }}</p>
         </div>
     </AppLayout>
 </template>

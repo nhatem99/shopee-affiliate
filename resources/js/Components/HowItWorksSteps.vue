@@ -105,7 +105,7 @@ onUnmounted(() => observer?.disconnect())
                     <!-- Nhãn phải vừa một dòng ở 375px với 4-5 bước: cỡ chữ 11px, không truncate
                          (cắt mất chữ thì bước đó thành vô nghĩa) — chữ ngắn là việc của nơi
                          truyền dữ liệu vào. -->
-                    <span class="text-[11px] leading-tight font-bold text-center text-[var(--color-ink)]">{{ step.label }}</span>
+                    <span class="text-xs leading-tight font-bold text-center text-[var(--color-ink)]">{{ step.label }}</span>
                 </li>
             </ol>
         </div>

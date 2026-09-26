@@ -61,7 +61,7 @@ function isActive(href) {
                             :href="item.href"
                             class="flex items-center gap-3 px-2 py-2.5 rounded-xl text-sm font-semibold transition"
                             :class="isActive(item.href)
-                                ? 'bg-[var(--color-peach-soft)] text-[var(--color-accent)]'
+                                ? 'bg-[var(--color-peach-soft)] text-[var(--color-accent-deep)]'
                                 : 'text-[var(--color-ink)] hover:bg-[var(--color-peach-soft)]/60'"
                         >
                             <span

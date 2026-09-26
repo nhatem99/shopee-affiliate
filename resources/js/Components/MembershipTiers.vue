@@ -44,13 +44,17 @@ const { joinHref, joinLabel, vnd } = useCashback()
                     v-for="tier in tiers"
                     :key="tier.key"
                     class="relative rounded-2xl border p-4 text-center flex flex-col"
-                    :class="[tierStyle(tier.key).card, me && me.current.key === tier.key ? 'ring-2 ring-[var(--color-accent)]' : '']"
+                    :class="[tierStyle(tier.key).card, me && me.current.key === tier.key ? 'ring-2 ring-[var(--color-ink)]' : '']"
                 >
                     <!-- Dải nhãn ghim ở mép trên, không phải góc phải: thẻ chỉ rộng bằng nửa màn
-                         hình điện thoại nên nhãn ở góc sẽ đè lên biểu tượng hạng. -->
+                         hình điện thoại nên nhãn ở góc sẽ đè lên biểu tượng hạng.
+                         Nhãn + viền đánh dấu đổi từ cam sang mực: đây là chỉ dấu "bạn đang ở
+                         đây", không phải thứ để bấm — màu lửa trên trang này chỉ dành cho nút.
+                         Cặp ink/bg còn tự lật đúng ở cả hai chế độ (sáng: nền tối chữ sáng; tối:
+                         nền sáng chữ tối), trong khi chữ trắng trên cam chỉ được 3.5:1. -->
                     <span
                         v-if="me && me.current.key === tier.key"
-                        class="absolute -top-2.5 left-1/2 -translate-x-1/2 whitespace-nowrap text-[10px] font-extrabold px-2 py-0.5 rounded-full bg-[var(--color-accent)] text-white shadow"
+                        class="absolute -top-2.5 left-1/2 -translate-x-1/2 whitespace-nowrap text-xs font-extrabold px-2 py-0.5 rounded-full bg-[var(--color-ink)] text-[var(--color-bg)] shadow"
                     >HẠNG CỦA BẠN</span>
 
                     <div
@@ -61,10 +65,11 @@ const { joinHref, joinLabel, vnd } = useCashback()
                     <p class="font-extrabold mt-3 leading-tight" :class="tierStyle(tier.key).text">
                         Hạng {{ tier.label }}
                     </p>
-                    <p class="text-[10px] font-bold uppercase tracking-wide text-[var(--color-muted)] mt-1">
+                    <!-- 10px → 12px: nhãn viết hoa toàn bộ, có dấu (Ư, Ơ), dưới 12px là mất dấu. -->
+                    <p class="text-xs font-bold uppercase tracking-wide text-[var(--color-muted)] mt-1">
                         Thưởng thêm
                     </p>
-                    <p class="text-2xl font-extrabold leading-tight mb-3" :class="tierStyle(tier.key).text">
+                    <p class="num text-2xl font-extrabold leading-tight mb-3" :class="tierStyle(tier.key).text">
                         +{{ tier.bonus }}%
                     </p>
 
@@ -72,7 +77,7 @@ const { joinHref, joinLabel, vnd } = useCashback()
                          ghim dòng mốc xuống đáy thì sáu cái thẻ lệch nhau một nấc. -->
                     <div class="mt-auto pt-3 border-t border-[var(--color-line)] text-xs text-[var(--color-muted)] leading-relaxed">
                         <template v-if="tier.threshold > 0">
-                            Tích lũy <b class="text-[var(--color-ink)]">&gt; {{ vnd(tier.threshold) }}</b> tiền hoàn
+                            Tích lũy <b class="num text-[var(--color-ink)]">&gt; {{ vnd(tier.threshold) }}</b> tiền hoàn
                         </template>
                         <template v-else>Mặc định khi đăng ký</template>
                     </div>
@@ -83,33 +88,35 @@ const { joinHref, joinLabel, vnd } = useCashback()
                  đó không có lợi cho việc bán hàng: cùng một lý do với cột "KHÔNG được hoàn" ở
                  CashbackExplainer — khách đã gặp quá nhiều trang hứa rồi im lặng, nên nói trước
                  mấy điều bất lợi là thứ duy nhất làm phần còn lại đáng tin. -->
-            <div class="card-glass rounded-2xl p-5 mt-6">
+            <!-- .card thay "card-glass rounded-2xl": khối chữ tĩnh, không bấm được, nên không
+                 cần viền sáng lên khi rê chuột — và bo góc nằm sẵn trong .card. -->
+            <div class="card p-5 mt-6">
                 <p class="font-bold text-[var(--color-ink)] text-sm mb-3">ⓘ Cơ chế xét hạng</p>
                 <ul class="space-y-2 text-sm text-[var(--color-muted)] leading-relaxed">
                     <li class="flex gap-2">
-                        <span class="flex-none text-[var(--color-accent)]">•</span>
+                        <span class="flex-none text-[var(--color-muted)]" aria-hidden="true">•</span>
                         <span>Hạng thành viên được xét dựa trên <b class="text-[var(--color-ink)]">tổng số tiền hoàn đã duyệt trong một quý</b> (3 tháng).</span>
                     </li>
                     <li class="flex gap-2">
-                        <span class="flex-none text-[var(--color-accent)]">•</span>
+                        <span class="flex-none text-[var(--color-muted)]" aria-hidden="true">•</span>
                         <span>Bạn sẽ được nâng hạng hoặc bị hạ hạng tùy vào tổng số tiền hoàn tích lũy được trong <b class="text-[var(--color-ink)]">quý trước</b>.</span>
                     </li>
                     <li class="flex gap-2">
-                        <span class="flex-none text-[var(--color-accent)]">•</span>
+                        <span class="flex-none text-[var(--color-muted)]" aria-hidden="true">•</span>
                         <span>Hạng được cập nhật tự động vào ngày đầu tiên của mỗi quý (<b class="text-[var(--color-ink)]">1/1, 1/4, 1/7, 1/10</b>).</span>
                     </li>
                     <li class="flex gap-2">
-                        <span class="flex-none text-[var(--color-accent)]">•</span>
+                        <span class="flex-none text-[var(--color-muted)]" aria-hidden="true">•</span>
                         <span>Phần thưởng hạng áp cho các đơn được ghi hoàn tiền <b class="text-[var(--color-ink)]">kể từ lúc bạn đang ở hạng đó</b> — lên hạng không tính ngược lại các khoản đã vào ví.</span>
                     </li>
                     <li class="flex gap-2">
-                        <span class="flex-none text-[var(--color-accent)]">•</span>
+                        <span class="flex-none text-[var(--color-muted)]" aria-hidden="true">•</span>
                         <span v-if="auth.isLoggedIn">
                             Theo dõi tiến độ nâng hạng trong mục
-                            <Link href="/profile" class="font-semibold text-[var(--color-accent)] hover:underline">Tài khoản</Link>.
+                            <Link href="/profile" class="focus-ring rounded font-semibold text-[var(--color-accent-deep)] hover:underline">Tài khoản</Link>.
                         </span>
                         <span v-else>
-                            <Link :href="joinHref" class="font-semibold text-[var(--color-accent)] hover:underline">{{ joinLabel }}</Link>
+                            <Link :href="joinHref" class="focus-ring rounded font-semibold text-[var(--color-accent-deep)] hover:underline">{{ joinLabel }}</Link>
                             để bắt đầu tích lũy — mọi tài khoản mới đều vào hạng Tân binh.
                         </span>
                     </li>

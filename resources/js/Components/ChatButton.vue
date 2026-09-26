@@ -16,14 +16,19 @@ const show = computed(() => !page.url.startsWith('/ho-tro'))
         href="/ho-tro"
         aria-label="Chat với hỗ trợ"
         title="Chat với hỗ trợ"
-        class="fixed right-4 md:right-6 bottom-20 md:bottom-6 z-40 w-12 h-12 md:w-14 md:h-14 rounded-full ring-4 ring-[var(--color-bg)] shadow-[0_6px_20px_rgba(var(--color-accent-rgb),0.4)] flex items-center justify-center transition-transform hover:scale-105 active:scale-95 bg-gradient-to-br from-[var(--color-accent)] to-[var(--color-accent-deep)]"
+        class="focus-ring fixed right-4 md:right-6 bottom-20 md:bottom-6 z-40 w-12 h-12 md:w-14 md:h-14 rounded-full ring-4 ring-[var(--color-bg)] shadow-[0_6px_20px_rgba(var(--color-accent-rgb),0.4)] flex items-center justify-center transition-transform hover:scale-105 active:scale-95 bg-gradient-to-br from-[var(--color-accent)] to-[var(--color-accent-deep)]"
     >
         <svg viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="w-6 h-6 md:w-7 md:h-7">
             <path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z" />
         </svg>
+        <!-- Chữ trên huy hiệu lấy màu NỀN TRANG chứ không phải trắng cứng: trắng trên
+             --color-brand-green chỉ được 3.4:1 ở chế độ sáng, và ở chế độ tối brand-green sáng
+             lên thành #34d399 nên trắng trên đó gần như mất chữ. Lấy --color-bg thì cả hai chế
+             độ đều tự đúng chiều (nền sáng → chữ gần trắng trên lục sẫm; nền tối → chữ navy trên
+             lục sáng). Cỡ chữ 11px → text-xs. -->
         <span
             v-if="unread"
-            class="absolute -top-1 -right-1 min-w-[20px] h-[20px] px-1 rounded-full bg-[var(--color-brand-green)] text-white text-[11px] font-extrabold flex items-center justify-center ring-2 ring-[var(--color-bg)]"
+            class="num absolute -top-1 -right-1 min-w-[20px] h-[20px] px-1 rounded-full bg-[var(--color-money)] text-[var(--color-bg)] text-xs font-extrabold flex items-center justify-center ring-2 ring-[var(--color-bg)]"
         >{{ unread > 9 ? '9+' : unread }}</span>
     </Link>
 </template>

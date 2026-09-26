@@ -71,7 +71,7 @@ const accountDrawerOpen = ref(false)
                         type="button"
                         @click="accountDrawerOpen = true"
                         aria-label="Mở menu tài khoản"
-                        class="md:hidden flex-none w-11 h-11 rounded-xl bg-[var(--color-peach-soft)] text-[var(--color-accent)] flex items-center justify-center"
+                        class="md:hidden flex-none w-11 h-11 rounded-xl bg-[var(--color-peach-soft)] text-[var(--color-accent-deep)] flex items-center justify-center"
                     >
                         <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" class="w-5 h-5"><path d="M4 7h16M4 12h16M4 17h16" /></svg>
                     </button>
@@ -113,7 +113,7 @@ const accountDrawerOpen = ref(false)
                     <Link
                         v-if="auth.isAdmin"
                         href="/admin/dashboard"
-                        class="md:hidden w-11 h-11 inline-flex items-center justify-center rounded-xl border border-[var(--color-accent)] text-[var(--color-accent)] transition-colors"
+                        class="md:hidden w-11 h-11 inline-flex items-center justify-center rounded-xl border border-[var(--color-accent)] text-[var(--color-accent-deep)] transition-colors"
                         aria-label="Vào trang quản trị"
                         title="Trang quản trị"
                     >

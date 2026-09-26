@@ -166,7 +166,7 @@ onBeforeUnmount(() => {
         <title>{{ pageTitle }} mới nhất</title>
         <meta
             name="description"
-            :content="`Tổng hợp ${pageTitle.toLowerCase()} mới nhất: mã giảm giá, freeship và hoàn xu đang còn hiệu lực. Bấm áp dụng là mã tự lưu vào tài khoản, dùng ngay khi đặt hàng.`"
+            :content="`Tổng hợp ${pageTitle.toLowerCase()} mới nhất: mã giảm giá, freeship và hoàn xu đang còn hiệu lực. Bấm lấy mã là mã tự lưu vào tài khoản, dùng ngay khi đặt hàng.`"
         />
     </Head>
 
@@ -177,7 +177,7 @@ onBeforeUnmount(() => {
                     {{ pageTitle }}
                 </h1>
                 <p class="text-sm md:text-base text-[var(--color-muted)] leading-relaxed max-w-2xl">
-                    Mã giảm giá, freeship và hoàn xu mới nhất. Bấm “Áp dụng” là mã tự lưu vào tài
+                    Mã giảm giá, freeship và hoàn xu mới nhất. Bấm “Lấy mã” là mã tự lưu vào tài
                     khoản của bạn — không phải chép tay rồi dán lại lúc thanh toán.
                 </p>
                 <p v-if="syncedLabel" class="text-xs text-[var(--color-muted)] mt-2">
@@ -188,16 +188,22 @@ onBeforeUnmount(() => {
             <!-- Bộ lọc -->
             <section class="card-glass rounded-2xl p-4 mb-6 space-y-4">
                 <div v-if="showPlatformFilter">
-                    <p class="text-[11px] uppercase tracking-wide font-bold text-[var(--color-muted)] mb-2">Sàn</p>
+                    <p class="text-xs uppercase tracking-wide font-bold text-[var(--color-muted)] mb-2">Sàn</p>
+                    <!-- Chiều cao nút đặt bằng min-h-[44px], không bằng py: đây là hàng bấm
+                         được, và cả trang đang dùng chung một ngưỡng chạm.
+                         Tab đang chọn KHÔNG dùng btn-fire nữa: bên dưới đã có vài chục nút
+                         "Lấy mã →" cũng màu lửa, thêm một ngọn nữa ở bộ lọc thì không ngọn
+                         nào còn nghĩa. Dùng nav-pill--active — đúng cái Home.vue đang dùng
+                         cho cùng vai trò "tab sàn đang chọn". -->
                     <div class="flex flex-wrap gap-2">
                         <button
                             v-for="tab in visibleTabs"
                             :key="tab.key"
                             type="button"
                             :class="platform === tab.key
-                                ? 'btn-fire'
-                                : 'bg-[var(--color-surface)] text-[var(--color-ink)] border border-[var(--color-line)] hover:border-[var(--color-accent)] hover:text-[var(--color-accent)]'"
-                            class="px-4 py-2 rounded-xl text-sm font-semibold transition"
+                                ? 'nav-pill--active'
+                                : 'bg-[var(--color-surface)] border-[var(--color-line)]'"
+                            class="nav-pill focus-ring inline-flex items-center justify-center min-h-[44px] px-4 rounded-xl text-sm font-semibold"
                             @click="selectPlatform(tab.key)"
                         >
                             {{ tab.label }}
@@ -205,17 +211,19 @@ onBeforeUnmount(() => {
                     </div>
                 </div>
 
+                <!-- Bỏ: đổi màu viền thôi thì người dùng bàn phím gần như
+                     không thấy ô nào đang được chọn. .focus-ring là viền focus dùng chung. -->
                 <label class="sr-only" for="voucher-search">Tìm mã giảm giá</label>
                 <input
                     id="voucher-search"
                     v-model="keyword"
                     type="search"
                     placeholder="Tìm theo mã, mô tả hoặc tên shop..."
-                    class="w-full rounded-xl border border-[var(--color-line)] bg-[var(--color-surface)] px-4 py-3 text-sm text-[var(--color-ink)] placeholder:text-[var(--color-muted)] focus:border-[var(--color-accent)] focus:outline-none"
+                    class="focus-ring w-full rounded-xl border border-[var(--color-line)] bg-[var(--color-surface)] px-4 min-h-[48px] text-sm text-[var(--color-ink)] placeholder:text-[var(--color-muted)] focus:border-[var(--color-accent)]"
                 />
             </section>
 
-            <p v-if="total" class="text-xs text-[var(--color-muted)] mb-3">
+            <p v-if="total" class="num text-xs text-[var(--color-muted)] mb-3">
                 {{ total }} mã đang có hiệu lực
             </p>
 
@@ -242,7 +250,7 @@ onBeforeUnmount(() => {
                  lại liên tục trong khi mạng đang lỗi. -->
             <div v-if="failed" class="text-center py-6">
                 <p class="text-sm text-[var(--color-muted)] mb-3">Không tải được thêm mã. Kiểm tra kết nối rồi thử lại nhé.</p>
-                <button type="button" class="btn-fire px-5 py-2 rounded-xl text-sm font-bold" @click="fetchPage(page + 1)">
+                <button type="button" class="btn-fire inline-flex items-center justify-center min-h-[44px] px-5 rounded-xl text-sm font-bold" @click="fetchPage(page + 1)">
                     Thử lại
                 </button>
             </div>

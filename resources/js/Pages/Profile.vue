@@ -5,6 +5,7 @@ import AccountLayout from '@/Layouts/AccountLayout.vue'
 import MembershipTierProgress from '@/Components/MembershipTierProgress.vue'
 import DailyCheckIn from '@/Components/DailyCheckIn.vue'
 import UserAvatar from '@/Components/UserAvatar.vue'
+import StatusBadge from '@/Components/StatusBadge.vue'
 import { useToast } from '@/composables/useToast'
 
 const toast = useToast()
@@ -68,12 +69,8 @@ function submitWithdraw() {
 }
 
 // --- Lịch sử rút ---
-const statusColors = {
-    pending: 'bg-yellow-100 text-yellow-700',
-    approved: 'bg-green-100 text-green-700',
-    completed: 'bg-blue-100 text-blue-700',
-    rejected: 'bg-red-100 text-red-600',
-}
+// Màu trạng thái đã chuyển hẳn sang Components/StatusBadge.vue — bảng chép tay ở đây trước đây
+// dùng bg-yellow-100/green-100/blue-100/red-100 trần, không có bản tối nào.
 const statusLabels = {
     pending: 'Chờ duyệt',
     approved: 'Đã duyệt',
@@ -93,7 +90,7 @@ const providerLabels = { momo: 'MoMo', zalopay: 'ZaloPay' }
                  hasRealCashback (đã có sẵn cho điều kiện rút tiền) chứ không phải cờ riêng —
                  "mới" ở đây nghĩa là chưa có đơn hoàn tiền thật nào, đúng cái khách cần biết
                  (còn phải mua 1 đơn thì thưởng chào mừng mới rút được, xem khối bên dưới). -->
-            <div class="card-glass rounded-2xl p-5 flex items-center gap-4">
+            <div class="card p-5 flex items-center gap-4">
                 <UserAvatar
                     :src="profile.avatar"
                     :name="profile.name || profile.email"
@@ -102,32 +99,43 @@ const providerLabels = { momo: 'MoMo', zalopay: 'ZaloPay' }
                 <div class="min-w-0">
                     <div class="flex items-center flex-wrap gap-x-2 gap-y-1">
                         <p class="font-bold text-[var(--color-ink)] truncate">{{ profile.name || profile.email }}</p>
-                        <span v-if="!balance.hasRealCashback" class="flex-none text-[10px] font-bold px-2 py-0.5 rounded-full bg-[var(--color-peach-soft)] text-[var(--color-accent)]">🔥 LÍNH MỚI</span>
+                        <!-- Trước là chữ cam trên nền peach-soft: ở chế độ sáng cặp đó chỉ được
+                             3.5:1, trượt AA ngay trên một huy hiệu 10px. Đổi sang cặp warn (4.9:1)
+                             vừa đọc được vừa giữ được tông ấm của chữ "lính mới". -->
+                        <span v-if="!balance.hasRealCashback" class="flex-none text-xs font-bold px-2 py-0.5 rounded-full bg-[var(--color-warn-soft)] text-[var(--color-warn)]">🔥 LÍNH MỚI</span>
                     </div>
                     <p class="text-xs text-[var(--color-muted)] truncate">{{ profile.email }}</p>
                     <p class="text-xs text-[var(--color-muted)]">Thành viên từ: {{ profile.member_since }}</p>
                 </div>
             </div>
 
-            <!-- Số dư -->
-            <div class="card-glass rounded-2xl p-6">
+            <!-- Số dư. Cùng một cách trình bày với AccountDrawer và trang Lịch sử số dư ví: cùng
+                 nhãn "SỐ DƯ KHẢ DỤNG", cùng màu tiền, cùng .num. Trước đây ba nơi vẽ ba kiểu (ở
+                 đây là chữ xanh trên thẻ trắng, hai nơi kia là chữ trắng trên thẻ gradient cam) —
+                 khách đa nghi nhìn ba khuôn mặt khác nhau của cùng một con số thì bắt đầu ngờ là
+                 ba con số khác nhau. Gradient cam cũng bị bỏ: cam là của NÚT BẤM. -->
+            <div class="card p-6">
                 <div class="flex items-end justify-between flex-wrap gap-4">
                     <div>
                         <!-- Giữ nhãn "khả dụng" chứ không đổi thành "rút được": con số này là hiệu
                              của hoa hồng đã duyệt trừ phần đang giữ cho các lệnh rút, nên có thể
                              bằng 0 hoặc âm, và kể cả khi dương vẫn chưa rút được nếu chưa khai ví. -->
-                        <p class="text-sm text-[var(--color-muted)]">Số dư khả dụng</p>
-                        <p class="text-3xl font-extrabold text-[var(--color-brand-green)]">{{ vnd(balance.available) }}</p>
-                        <p class="text-xs text-[var(--color-muted)] mt-1">
+                        <p class="text-xs font-bold uppercase tracking-wide text-[var(--color-muted)]">Số dư khả dụng</p>
+                        <p class="text-3xl font-extrabold num text-[var(--color-money)] mt-0.5">{{ vnd(balance.available) }}</p>
+                        <p class="text-xs text-[var(--color-muted)] mt-1 num">
                             Đã duyệt: {{ vnd(balance.earned) }} · Đang giữ: {{ vnd(balance.reserved) }}
                         </p>
                         <!-- Con số ở trên là tổng; đây là đường tới phần giải thích nó được cộng
-                             từ những đơn nào. -->
+                             từ những đơn nào.
+                             Màu trung tính chứ không cam: hai lối này nằm CÙNG MỘT THẺ với nút
+                             "Rút tiền" — để cam thì trong một khung nhìn có ba vệt cam ngang hàng
+                             nhau và cái duy nhất khách cần bấm không còn nổi lên nữa. Dùng đúng
+                             --color-info như link phụ ở trang Đơn hàng. -->
                         <div class="flex flex-wrap gap-x-4 gap-y-1 mt-1">
-                            <Link href="/don-hang" class="text-xs font-semibold text-[var(--color-accent)] hover:underline">
+                            <Link href="/don-hang" class="focus-ring inline-flex items-center min-h-[44px] pr-2 rounded-xl text-xs font-semibold text-[var(--color-info)] hover:underline">
                                 Xem từng đơn và tiền hoàn →
                             </Link>
-                            <Link href="/vi/lich-su" class="text-xs font-semibold text-[var(--color-accent)] hover:underline">
+                            <Link href="/vi/lich-su" class="focus-ring inline-flex items-center min-h-[44px] pr-2 rounded-xl text-xs font-semibold text-[var(--color-info)] hover:underline">
                                 Lịch sử số dư ví →
                             </Link>
                         </div>
@@ -135,7 +143,7 @@ const providerLabels = { momo: 'MoMo', zalopay: 'ZaloPay' }
                     <button
                         @click="openWithdraw"
                         :disabled="!canWithdraw"
-                        class="btn-fire text-sm px-5 py-2.5 rounded-xl"
+                        class="btn-fire focus-ring inline-flex items-center justify-center text-sm px-5 rounded-xl"
                     >
                         Rút tiền
                     </button>
@@ -146,14 +154,14 @@ const providerLabels = { momo: 'MoMo', zalopay: 'ZaloPay' }
                      Điều kiện > 0 còn chặn luôn trường hợp số âm — availableBalance() là hiệu của
                      hoa hồng đã duyệt trừ phần đang giữ nên hoàn toàn có thể âm (xem User.php). -->
                 <div v-if="balance.available > 0 && balance.available < minWithdrawal" class="mt-4">
-                    <div class="h-2 rounded-full bg-[var(--color-peach-soft)] overflow-hidden">
+                    <div class="h-2 rounded-full bg-[var(--color-line)] overflow-hidden">
                         <div
-                            class="h-full rounded-full bg-[var(--color-brand-green)] transition-all duration-500"
+                            class="h-full rounded-full bg-[var(--color-money)] transition-all duration-500"
                             :style="{ width: Math.min(100, (balance.available / minWithdrawal) * 100) + '%' }"
                         ></div>
                     </div>
                     <p class="text-xs text-[var(--color-muted)] mt-2">
-                        Còn <b class="text-[var(--color-ink)]">{{ vnd(minWithdrawal - balance.available) }}</b> nữa là đủ mức rút tối thiểu{{ hasAnyAccount ? '' : ' — nhớ khai sẵn ví nhận tiền ở mục Thông tin cá nhân' }}.
+                        Còn <b class="text-[var(--color-ink)] num">{{ vnd(minWithdrawal - balance.available) }}</b> nữa là đủ mức rút tối thiểu{{ hasAnyAccount ? '' : ' — nhớ khai sẵn ví nhận tiền ở mục Thông tin cá nhân' }}.
                     </p>
                 </div>
 
@@ -184,36 +192,40 @@ const providerLabels = { momo: 'MoMo', zalopay: 'ZaloPay' }
                  ký, thấy ₫0 và nút Rút tiền xám ngắt. -->
             <!-- Dựa vào hasRealCashback chứ không phải earned: có thưởng người mới thì earned > 0
                  nhưng khách vẫn chưa làm gì cả — vẫn cần được chỉ đường. -->
-            <div v-if="!balance.hasRealCashback && !withdrawals?.length" class="card-glass rounded-2xl p-6">
+            <div v-if="!balance.hasRealCashback && !withdrawals?.length" class="card p-6">
                 <h2 class="font-bold text-[var(--color-ink)] mb-1">
                     {{ balance.earned > 0 ? 'Có quà chào mừng rồi — mua đơn đầu tiên để rút được' : 'Ví chưa có gì — bắt đầu thế nào?' }}
                 </h2>
                 <p class="text-xs text-[var(--color-muted)] mb-4">Ba bước, làm một lần rồi thôi.</p>
+                <!-- Ba số thứ tự trước đây tô cam. Trên cùng một thẻ đã có nút cam ở cuối, nên ba
+                     chấm cam phía trên chỉ chia bớt sự chú ý của đúng cái nút cần bấm. -->
                 <ol class="space-y-3 text-sm text-[var(--color-ink)]">
                     <li class="flex gap-3">
-                        <span class="flex-none w-6 h-6 rounded-full bg-[var(--color-peach-soft)] text-[var(--color-accent)] text-xs font-extrabold flex items-center justify-center">1</span>
-                        <span>Khai sẵn ví MoMo hoặc ZaloPay ở mục <Link href="/profile/thong-tin" class="underline font-semibold">Thông tin cá nhân</Link> — làm sớm cho xong, đừng đợi đủ tiền mới khai.</span>
+                        <span class="flex-none w-6 h-6 rounded-full bg-[var(--color-info-soft)] text-[var(--color-info)] text-xs font-extrabold flex items-center justify-center">1</span>
+                        <span>Khai sẵn ví MoMo hoặc ZaloPay ở mục <Link href="/profile/thong-tin" class="focus-ring rounded underline font-semibold">Thông tin cá nhân</Link> — làm sớm cho xong, đừng đợi đủ tiền mới khai.</span>
                     </li>
                     <li class="flex gap-3">
-                        <span class="flex-none w-6 h-6 rounded-full bg-[var(--color-peach-soft)] text-[var(--color-accent)] text-xs font-extrabold flex items-center justify-center">2</span>
+                        <span class="flex-none w-6 h-6 rounded-full bg-[var(--color-info-soft)] text-[var(--color-info)] text-xs font-extrabold flex items-center justify-center">2</span>
                         <span>Về trang chủ, dán link sản phẩm Shopee và bấm mua <b>trong lúc đang đăng nhập</b>.</span>
                     </li>
                     <li class="flex gap-3">
-                        <span class="flex-none w-6 h-6 rounded-full bg-[var(--color-peach-soft)] text-[var(--color-accent)] text-xs font-extrabold flex items-center justify-center">3</span>
+                        <span class="flex-none w-6 h-6 rounded-full bg-[var(--color-info-soft)] text-[var(--color-info)] text-xs font-extrabold flex items-center justify-center">3</span>
                         <span>Đợi đơn sang trạng thái Hoàn thành bên Shopee. Qua kỳ đối soát gần nhất là tiền hiện ở đây.</span>
                     </li>
                 </ol>
-                <Link href="/" class="btn-fire inline-block mt-5 px-5 py-2.5 rounded-xl text-sm no-underline">
+                <Link href="/" class="btn-fire focus-ring inline-flex items-center mt-5 px-5 rounded-xl text-sm no-underline">
                     Về trang chủ lấy mã →
                 </Link>
             </div>
 
             <!-- Lịch sử rút -->
-            <div class="card-glass rounded-2xl overflow-hidden">
+            <div class="card overflow-hidden">
                 <h2 class="font-bold text-[var(--color-ink)] p-6 pb-3">Lịch sử rút tiền</h2>
                 <div class="overflow-x-auto">
                 <table class="w-full text-sm">
-                    <thead class="bg-[var(--color-peach-soft)]">
+                    <!-- Nền peach-soft cũ là một vệt cam nữa trên trang; một đường kẻ là đủ để tách
+                         hàng tiêu đề, và nó sống được ở cả hai chế độ. -->
+                    <thead class="border-y border-[var(--color-line)]">
                         <tr class="text-left text-xs text-[var(--color-muted)]">
                             <th class="px-6 py-3 font-semibold">Ngày</th>
                             <th class="px-6 py-3 font-semibold">Ví</th>
@@ -223,16 +235,14 @@ const providerLabels = { momo: 'MoMo', zalopay: 'ZaloPay' }
                     </thead>
                     <tbody class="divide-y divide-[var(--color-line)]">
                         <tr v-for="w in withdrawals" :key="w.id">
-                            <td class="px-6 py-4 text-[var(--color-muted)] text-xs">{{ w.created_at }}</td>
+                            <td class="px-6 py-4 text-[var(--color-muted)] text-xs whitespace-nowrap">{{ w.created_at }}</td>
                             <td class="px-6 py-4 text-[var(--color-ink)]">
-                                {{ providerLabels[w.provider] }} · {{ w.account_number }}
+                                {{ providerLabels[w.provider] }} · <span class="num">{{ w.account_number }}</span>
                             </td>
-                            <td class="px-6 py-4 font-semibold text-[var(--color-brand-green)]">{{ vnd(w.amount) }}</td>
+                            <td class="px-6 py-4 font-semibold num text-[var(--color-money)] whitespace-nowrap">{{ vnd(w.amount) }}</td>
                             <td class="px-6 py-4">
-                                <span :class="statusColors[w.status]" class="px-2 py-1 rounded-full text-xs font-semibold">
-                                    {{ statusLabels[w.status] }}
-                                </span>
-                                <p v-if="w.status === 'rejected' && w.admin_note" class="text-xs text-red-500 mt-1">{{ w.admin_note }}</p>
+                                <StatusBadge :status="w.status" :label="statusLabels[w.status]" />
+                                <p v-if="w.status === 'rejected' && w.admin_note" class="text-xs text-[var(--color-danger)] mt-1">{{ w.admin_note }}</p>
                             </td>
                         </tr>
                         <tr v-if="!withdrawals?.length">
@@ -246,36 +256,44 @@ const providerLabels = { momo: 'MoMo', zalopay: 'ZaloPay' }
             </div>
         </div>
 
-        <!-- Modal rút tiền -->
-        <div v-if="showWithdraw" class="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
-            <div class="card-glass rounded-2xl p-6 w-full max-w-md">
+        <!-- Modal rút tiền.
+             z-[70] cho lớp che và z-[80] cho hộp, khớp thang z của AccountDrawer. Trước đây cả
+             cụm ở z-50 — ĐÚNG BẰNG BottomNav, mà BottomNav là thẻ anh em đứng SAU <main> nên
+             cùng z thì nó được vẽ đè lên: khách mở form rút tiền trên điện thoại thì thanh điều
+             hướng nằm chồng lên đáy hộp, che mất đúng hai nút Gửi yêu cầu / Huỷ. -->
+        <div v-if="showWithdraw" class="fixed inset-0 bg-black/50 z-[70] flex items-center justify-center p-4">
+            <div class="card relative z-[80] p-6 w-full max-w-md">
                 <h2 class="font-extrabold text-[var(--color-ink)] mb-1">Yêu cầu rút tiền</h2>
-                <p class="text-xs text-[var(--color-muted)] mb-5">Số dư khả dụng: {{ vnd(balance.available) }}</p>
+                <p class="text-xs text-[var(--color-muted)] mb-5">Số dư khả dụng: <span class="num font-bold text-[var(--color-money)]">{{ vnd(balance.available) }}</span></p>
                 <form @submit.prevent="submitWithdraw" class="space-y-4">
                     <div>
                         <label class="block text-xs font-semibold text-[var(--color-ink)] mb-1">Chọn ví nhận tiền</label>
                         <select v-model="withdrawForm.provider"
-                            class="w-full border border-[var(--color-line)] rounded-xl px-3 py-2.5 text-sm bg-[var(--color-bg)] text-[var(--color-ink)] focus:outline-none focus:border-[var(--color-accent)]">
+                            class="focus-ring w-full min-h-[44px] border border-[var(--color-line)] rounded-xl px-3 text-sm bg-[var(--color-bg)] text-[var(--color-ink)] focus:border-[var(--color-accent)]">
                             <option v-for="p in availableProviders" :key="p.key" :value="p.key">
                                 {{ p.label }} · {{ payoutAccounts[p.key].account_number }}
                             </option>
                         </select>
-                        <p v-if="withdrawForm.errors.provider" class="text-xs text-red-500 mt-1">{{ withdrawForm.errors.provider }}</p>
+                        <p v-if="withdrawForm.errors.provider" class="text-xs text-[var(--color-danger)] mt-1">{{ withdrawForm.errors.provider }}</p>
                     </div>
                     <div>
                         <label class="block text-xs font-semibold text-[var(--color-ink)] mb-1">Số tiền (₫)</label>
                         <input v-model="withdrawForm.amount" type="number" :min="minWithdrawal" :max="balance.available" step="1000"
-                            class="w-full border border-[var(--color-line)] rounded-xl px-3 py-2.5 text-sm bg-[var(--color-bg)] text-[var(--color-ink)] focus:outline-none focus:border-[var(--color-accent)]" />
+                            class="focus-ring num w-full min-h-[44px] border border-[var(--color-line)] rounded-xl px-3 text-sm bg-[var(--color-bg)] text-[var(--color-ink)] focus:border-[var(--color-accent)]" />
                         <p class="text-xs text-[var(--color-muted)] mt-1">Tối thiểu {{ vnd(minWithdrawal) }}</p>
-                        <p v-if="withdrawForm.errors.amount" class="text-xs text-red-500 mt-1">{{ withdrawForm.errors.amount }}</p>
+                        <p v-if="withdrawForm.errors.amount" class="text-xs text-[var(--color-danger)] mt-1">{{ withdrawForm.errors.amount }}</p>
                     </div>
                     <div class="flex gap-3 pt-2">
                         <button type="submit" :disabled="withdrawForm.processing"
-                            class="btn-fire flex-1 py-2.5 rounded-xl text-sm">
+                            class="btn-fire focus-ring flex-1 inline-flex items-center justify-center rounded-xl text-sm">
                             Gửi yêu cầu
                         </button>
+                        <!-- Hover đổi NỀN chứ không hạ opacity cả nút: opacity kéo tụt luôn chữ
+                             (và Safari trên iOS giữ trạng thái :hover sau khi chạm cho tới lúc
+                             chạm chỗ khác, nên nút sẽ đứng mờ giữa hộp). --color-line có sẵn bản
+                             sáng lẫn tối nên chỉ cần một lớp. -->
                         <button type="button" @click="showWithdraw = false"
-                            class="px-6 bg-[var(--color-peach-soft)] text-[var(--color-ink)] font-semibold py-2.5 rounded-xl text-sm hover:bg-[var(--color-peach)] transition">
+                            class="panel focus-ring inline-flex items-center justify-center min-h-[44px] px-6 border border-[var(--color-line)] text-[var(--color-ink)] font-semibold text-sm hover:bg-[var(--color-line)] transition">
                             Hủy
                         </button>
                     </div>

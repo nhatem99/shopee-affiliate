@@ -114,7 +114,7 @@ function discountText(v) {
                 </thead>
                 <tbody class="divide-y divide-[var(--color-line)]">
                     <tr v-for="v in vouchers" :key="v.id">
-                        <td class="px-5 py-3 font-mono font-bold text-[var(--color-accent)]">{{ v.code }}</td>
+                        <td class="px-5 py-3 font-mono font-bold text-[var(--color-accent-deep)]">{{ v.code }}</td>
                         <td class="px-5 py-3 text-[var(--color-ink)] max-w-[160px] truncate">{{ v.title || '—' }}</td>
                         <td class="px-5 py-3 font-semibold text-[var(--color-brand-green)]">{{ discountText(v) }}</td>
                         <td class="px-5 py-3">
@@ -133,7 +133,7 @@ function discountText(v) {
                             </span>
                         </td>
                         <td class="px-5 py-3 flex gap-3">
-                            <button @click="openEdit(v)" class="text-xs font-semibold text-[var(--color-accent)] hover:underline">Sửa</button>
+                            <button @click="openEdit(v)" class="text-xs font-semibold text-[var(--color-accent-deep)] hover:underline">Sửa</button>
                             <button @click="deleting = v" class="text-xs font-semibold text-red-500 hover:underline">Xóa</button>
                         </td>
                     </tr>
@@ -237,7 +237,7 @@ function discountText(v) {
             <div class="bg-[var(--color-surface)] rounded-2xl p-6 w-full max-w-md">
                 <h2 class="font-extrabold text-[var(--color-ink)] mb-1">Xóa voucher</h2>
                 <p class="text-xs text-[var(--color-muted)] mb-5">
-                    Mã <span class="font-mono font-bold text-[var(--color-accent)]">{{ deleting.code }}</span>
+                    Mã <span class="font-mono font-bold text-[var(--color-accent-deep)]">{{ deleting.code }}</span>
                     {{ deleting.is_active ? '— voucher này đang bật, khách có thể đang xem hoặc dùng.' : '' }}
                     Hành động này không thể hoàn tác.
                 </p>
