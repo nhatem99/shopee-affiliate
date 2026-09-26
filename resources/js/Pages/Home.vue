@@ -295,6 +295,7 @@ function resolveVoucher() {
             // autoRedirect: nhánh đó return sớm, trước đây vì thế mà chế độ Facebook (đi qua
             // goStraightToVoucher) không bao giờ cuộn, khách tìm xong vẫn đứng ở đầu trang.
             scrollToResult()
+            fetchCashbackEstimate(result)
             // Tìm ra mã thì lớp trang trí (nếu đang bật) cho trẻ con rước đèn đi ngang màn hình —
             // chỉ khi có mã thật, không ăn mừng lúc trả về "chưa lấy được mã".
             if (result?.voucher_ref) celebrate()
@@ -322,6 +323,31 @@ function resolveVoucher() {
             resolvingUrl = null
         },
     })
+}
+
+// --- Hoàn tiền dự kiến của sản phẩm vừa quét ---
+// Số tiền, không phải tỉ lệ: khách không quy đổi được "14% hoa hồng rồi chia lại 50%" thành tiền
+// trong đầu lúc đang phân vân bấm mua. Hỏi SAU khi kết quả đã hiện (xem
+// ShopeeVoucherController::commission) — nguồn hoa hồng là proxy bên thứ ba chậm và hay hỏng,
+// nhét vào lượt quét là bắt mọi khách chờ thêm để đổi lấy một con số ước tính.
+const cashbackEstimate = ref(null)
+
+async function fetchCashbackEstimate(result) {
+    cashbackEstimate.value = null
+
+    if (!cashbackOn.value || !result?.item_id) return
+
+    try {
+        const { data } = await axios.get(`/voucher/hoa-hong/${result.item_id}`)
+        // Server trả hoa hồng bằng tiền; phần của khách là cashbackRate% của khoản đó — đúng
+        // công thức CashbackService::award() dùng khi ghi tiền thật, để con số hứa ở đây và con
+        // số vào ví sau này không nói khác nhau.
+        if (data?.commission > 0) {
+            cashbackEstimate.value = Math.round(data.commission * cashbackRate.value / 100)
+        }
+    } catch (e) {
+        // Im lặng: đây là thông tin thêm, không phải điều kiện để mua hàng.
+    }
 }
 
 const shorteningKey = ref(null)
@@ -639,7 +665,7 @@ const faqs = computed(() => [
         : { q: 'Tôi có được hoàn tiền không?', a: 'Công cụ lấy mã giảm giá không tạo hoàn tiền — mục đích là giúp bạn được giảm giá ngay khi thanh toán trên Shopee.' },
     ...(cashbackOn.value ? [
         { q: 'Sao tôi mua rồi mà ví vẫn 0đ?', a: 'Bốn khả năng, xếp theo thứ tự hay gặp nhất. (1) Lúc bấm mua bạn chưa đăng nhập — đơn đó không gắn được mã định danh của bạn, trường hợp này tiếc thật nhưng không cứu được. (2) Đơn chưa "Hoàn thành" trên Shopee — còn đang giao hoặc còn trong hạn đổi trả thì chưa tính. (3) Đơn đã hoàn thành nhưng chưa tới kỳ đối soát — tụi mình nhập báo cáo Shopee theo đợt, không phải tức thì. (4) Hiếm hơn: link lúc đó không gắn được mã định danh của bạn do nguồn cấp mã đổi đường dẫn hoặc chuỗi chuyển hướng bị gãy — nhắn cho tụi mình kèm ngày đặt và mã đơn Shopee để đối chiếu. Lưu ý: trang Tài khoản chỉ hiện số dư đã đối soát xong, chưa hiện đơn đang chờ — nên mua xong vài ngày mà chưa thấy gì ở đó là bình thường, không phải mất.' },
-        { q: 'Tiền hoàn tính trên cái gì?', a: `Tính trên hoa hồng tiếp thị Shopee trả cho tụi mình vì đơn của bạn, không phải trên giá trị đơn hàng. Mức hoàn hiện tại là ${cashbackRate.value}% khoản hoa hồng đó. Hoa hồng mỗi ngành hàng mỗi khác nên số tiền hoàn của mỗi đơn cũng khác nhau — tụi mình không thể báo trước con số chính xác lúc bạn đang bấm mua. Mức hoàn này có thể được điều chỉnh; khi đổi thì các khoản chưa chi trả sẽ được tính lại theo mức mới.` },
+        { q: 'Tiền hoàn tính trên cái gì?', a: `Tính trên hoa hồng tiếp thị Shopee trả cho tụi mình vì đơn của bạn, không phải trên giá trị đơn hàng. Mức hoàn hiện tại là ${cashbackRate.value}% khoản hoa hồng đó. Hoa hồng mỗi ngành hàng mỗi khác nên số tiền hoàn của mỗi đơn cũng khác nhau. Sau khi dán link, tụi mình hiện luôn số tiền hoàn DỰ KIẾN của đúng sản phẩm đó ngay trên thẻ kết quả — đó là ước tính theo tỉ lệ hoa hồng Shopee đang công bố cho sản phẩm, con số cuối cùng chốt theo báo cáo đối soát nên có thể xê dịch. Mức hoàn này có thể được điều chỉnh; khi đổi thì các khoản chưa chi trả sẽ được tính lại theo mức mới.` },
     ] : []),
     { q: 'Có mất phí không?', a: 'Hoàn toàn miễn phí, bạn không mất phí gì khi dùng công cụ lấy mã.' },
     { q: 'Hỗ trợ những sàn nào?', a: 'Ô dán link ở đầu trang hiện chỉ hỗ trợ Shopee. Riêng mục "Mã giảm giá gợi ý" bên dưới có thêm mã cho Lazada, TikTok Shop và Tiki.' },
@@ -830,6 +856,14 @@ onUnmounted(() => {
                             <span class="inline-flex items-center justify-center w-5 h-5 rounded bg-[#F5511E] text-white text-[10px] font-black mb-1">S</span>
                             <p class="font-semibold text-[var(--color-ink)] text-sm line-clamp-2">{{ voucherResult.product.product_name || 'Sản phẩm' }}</p>
                             <p class="font-bold text-[var(--color-accent)] mt-1">{{ vnd(voucherResult.product.discounted_price) }}</p>
+
+                            <!-- Ước tính, KHÔNG phải cam kết: hoa hồng thật của đơn chỉ chốt sau
+                                 khi Shopee đối soát, và shop có thể đổi tỉ lệ giữa chừng. Chữ ở
+                                 đây phải nói đúng chừng đó — FAQ bên dưới cũng nói cùng một điều. -->
+                            <p v-if="cashbackEstimate" class="mt-1 text-[11px] leading-tight text-[var(--color-brand-green)] font-semibold">
+                                💸 Hoàn tiền dự kiến ~{{ vnd(cashbackEstimate) }}
+                                <span class="font-normal text-[var(--color-muted)]">— nhận sau khi đơn hoàn thành</span>
+                            </p>
                         </div>
                     </div>
                     <p v-else class="text-sm text-[var(--color-muted)] mb-5">Không lấy được thông tin sản phẩm, nhưng bạn vẫn có thể dùng link bên dưới.</p>

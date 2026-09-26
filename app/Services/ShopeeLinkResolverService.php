@@ -74,11 +74,21 @@ class ShopeeLinkResolverService
             $pool->as('proxy')->timeout(10)->get(ShopeeProductLookupService::BASE_URL, ['item_id' => $itemId]);
         });
 
+        $proxy = $this->productLookup->parseResponse($responses['proxy'] ?? null);
+
         if ($data = $this->parseDirectResponse($responses['direct'] ?? null)) {
+            // Thông tin sản phẩm lấy nhánh gọi thẳng (đáng tin hơn), nhưng TỈ LỆ HOA HỒNG thì chỉ
+            // nhánh proxy có — API item của Shopee không trả trường đó. Trước đây nhánh direct
+            // thắng là return luôn, nên con số hoa hồng vừa lấy được bị vứt đi ngay tại đây và
+            // giao diện không bao giờ ước tính được tiền hoàn cho khách.
+            if (($proxy['cashback_rate'] ?? 0) > 0) {
+                $data['cashback_rate'] = $proxy['cashback_rate'];
+            }
+
             return $data;
         }
 
-        return $this->productLookup->parseResponse($responses['proxy'] ?? null);
+        return $proxy;
     }
 
     private function parseDirectResponse(mixed $response): ?array

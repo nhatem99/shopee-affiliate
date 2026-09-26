@@ -93,6 +93,30 @@ const { cashbackRate, minWithdrawal, joinHref, joinLabel, vnd } = useCashback()
                             <span class="text-[var(--color-accent)] flex-none">✕</span>
                             <span>Đơn còn đang giao, chưa sang <b>Hoàn thành</b></span>
                         </li>
+
+                        <!-- Bốn ca dưới đây CHỈ hiện ở bản đầy đủ (/hoan-tien), không hiện ở
+                             trang chủ: bản compact nằm ngay trên màn hình điện thoại nơi khách
+                             đang muốn dán link, dài thêm bốn dòng là đẩy công cụ ra khỏi tầm mắt.
+                             Nhưng vẫn phải viết ra ở đâu đó — đây đều là ca có thật, khách mất
+                             tiền rồi mới biết thì tụi mình chỉ còn cách xin lỗi. -->
+                        <template v-if="!compact">
+                            <li class="flex gap-2">
+                                <span class="text-[var(--color-accent)] flex-none">✕</span>
+                                <span><b>Đặt hàng xong rồi</b> mới quay lại đây lấy link — không gắn ngược lại được cho đơn đã đặt</span>
+                            </li>
+                            <li class="flex gap-2">
+                                <span class="text-[var(--color-accent)] flex-none">✕</span>
+                                <span>Bấm thêm link của bên khác (quảng cáo, nhóm săn sale) <b>sau khi</b> bấm mua ở đây — lượt sau đè lượt trước</span>
+                            </li>
+                            <li class="flex gap-2">
+                                <span class="text-[var(--color-accent)] flex-none">✕</span>
+                                <span>Đơn đặt từ <b>LiveStream hoặc video</b> trong app Shopee</span>
+                            </li>
+                            <li class="flex gap-2">
+                                <span class="text-[var(--color-accent)] flex-none">✕</span>
+                                <span>Đổi máy, đổi trình duyệt hoặc đổi tài khoản Shopee giữa chừng</span>
+                            </li>
+                        </template>
                     </ul>
                 </div>
             </div>
