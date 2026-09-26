@@ -33,7 +33,7 @@ function openItem(n) {
         <button
             type="button"
             @click="open = !open"
-            class="relative w-9 h-9 inline-flex items-center justify-center rounded-xl border border-[var(--color-line)] text-[var(--color-muted)] hover:text-[var(--color-ink)] hover:bg-[var(--color-peach-soft)] transition-colors"
+            class="focus-ring relative w-11 h-11 inline-flex items-center justify-center rounded-xl border border-[var(--color-line)] text-[var(--color-muted)] hover:text-[var(--color-ink)] hover:bg-[var(--color-peach-soft)] transition-colors"
             :aria-label="unread ? `${unread} thông báo chưa đọc` : 'Thông báo'"
             aria-haspopup="true"
             :aria-expanded="open"

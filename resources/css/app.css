@@ -24,6 +24,50 @@
     --color-side: #1B1B1F;
     --color-side-soft: #2C2C33;
     --color-shimmer: rgba(0, 0, 0, .05);
+
+    /* ── Vai trò ngữ nghĩa ──────────────────────────────────────────────────
+       Trước đây không có, nên toàn trang phải viết thẳng tên màu Tailwind:
+       125 chỗ red-*, 45 chỗ amber-*, và riêng màu "tiền/thành công" bị tách ba
+       đường (--color-brand-green 79 lần, green-* 30, emerald-* 18). Mỗi lần
+       viết thẳng là một chỗ KHÔNG có bản tối đi kèm — mà tối là mặc định.
+
+       Mọi giá trị dưới đây đã kiểm tương phản bằng tay theo WCAG 2.x, làm chữ
+       trên nền của chính chế độ đó (light trên #ffffff, dark trên #131A2C):
+         money  #0F7A4F 5.35:1   |  dark #34d399 8.8:1
+         danger #C81E1E 5.83:1   |  dark #f87171 6.2:1
+         warn   #B45309 5.00:1   |  dark #fbbf24 10.4:1
+         info   #1D4ED8 6.60:1   |  dark #60a5fa 6.9:1
+       --color-brand-green #1E9E6A chỉ đạt 3.41:1 nên KHÔNG được làm chữ ở chế
+       độ sáng — giữ nguyên biến đó cho nền/viền, dùng --color-money cho chữ. */
+    --color-money: #0F7A4F;
+    --color-money-rgb: 15, 122, 79;
+    --color-money-soft: #E7F5EE;
+    --color-danger: #C81E1E;
+    --color-danger-rgb: 200, 30, 30;
+    --color-danger-soft: #FDECEC;
+    --color-warn: #B45309;
+    --color-warn-rgb: 180, 83, 9;
+    --color-warn-soft: #FEF3E2;
+    --color-info: #1D4ED8;
+    --color-info-rgb: 29, 78, 216;
+    --color-info-soft: #E8EEFC;
+
+    /* Đầu đậm của nút CTA. Tách khỏi --color-accent-deep vì biến đó còn làm
+       CHỮ ở 37 chỗ: #D43F12 trên trắng đạt 4.72:1, hạ tối thêm là trượt AA.
+       Còn ở đây nó chỉ làm NỀN nên được phép sáng hơn để chữ đen trên nút đạt
+       4.81:1 (trước là 4.14:1 — trượt, đúng ở cái nút quan trọng nhất trang). */
+    --color-cta-end: #E0450F;
+
+    /* Nhịp chữ cho tiếng Việt: dấu chồng (ế, ộ, ữ) cần chiều cao dòng hơn tiếng
+       Anh. Khai cả 7 bậc chứ không chỉ 2 — thang chữ mô tả bằng lời mà chỉ cài
+       một phần thì vẫn là thang gãy. */
+    --text-xs--line-height: 1.5;
+    --text-sm--line-height: 1.55;
+    --text-base--line-height: 1.6;
+    --text-lg--line-height: 1.4;
+    --text-xl--line-height: 1.3;
+    --text-2xl--line-height: 1.25;
+    --text-3xl--line-height: 1.15;
 }
 
 /* Bật dark mode theo class .dark trên <html> (Tailwind 4 class strategy) */
@@ -31,8 +75,11 @@
 
 /* Dark mode = giao diện mặc định kiểu salesoc.vn: nền navy sâu + gradient cam "lửa" */
 .dark {
-    --color-bg: #06131f;
-    --color-surface: #0c1224;
+    /* Navy bớt ngả lục so với #06131f/#0c1224 cũ: cùng độ tối nhưng đọc ra là
+       "ứng dụng tiền" thay vì "trang quảng cáo". Chênh lệch nhỏ, đổi lại được
+       cả tông giọng của mặt tối — vốn là chế độ MẶC ĐỊNH của trang này. */
+    --color-bg: #0B1120;
+    --color-surface: #131A2C;
     --color-ink: #f1f5f9;
     --color-muted: #94a3b8;
     --color-accent: #fb923c;
@@ -48,6 +95,41 @@
     --color-side: #030712;
     --color-side-soft: #0f172a;
     --color-shimmer: rgba(255, 255, 255, .06);
+
+    --color-money: #34d399;
+    --color-money-rgb: 52, 211, 153;
+    --color-money-soft: #34d3991f;
+    --color-danger: #f87171;
+    --color-danger-rgb: 248, 113, 113;
+    --color-danger-soft: #f8717120;
+    --color-warn: #fbbf24;
+    --color-warn-rgb: 251, 191, 36;
+    --color-warn-soft: #fbbf2420;
+    --color-info: #60a5fa;
+    --color-info-rgb: 96, 165, 250;
+    --color-info-soft: #60a5fa20;
+
+    --color-cta-end: #f97316;
+}
+
+/* ── Bo góc, đổ bóng, nhịp chạm ──────────────────────────────────────────────
+   CỐ Ý KHÔNG khai trong @theme: Tailwind 4 sinh các token của @theme thành
+   utility, và khối .dark KHÔNG ghi đè được chúng (đã kiểm bằng cách biên dịch).
+   Mấy biến này chỉ phục vụ các class component bên dưới nên để ở :root là đủ,
+   và ghi đè trong .dark chạy đúng như mong đợi. */
+:root {
+    --radius-card: 1rem;
+    --radius-ctl: .75rem;
+    --shadow-card: 0 1px 2px rgba(16, 24, 40, .04), 0 8px 24px rgba(16, 24, 40, .06);
+    --shadow-pop: 0 4px 12px rgba(16, 24, 40, .08), 0 16px 40px rgba(16, 24, 40, .12);
+    /* Ngưỡng chạm tối thiểu. 44px là mức WCAG 2.5.5 AAA và cũng là mức Apple
+       khuyến nghị — header đang có 4 nút 36px, dưới ngưỡng. */
+    --tap: 44px;
+}
+
+.dark {
+    --shadow-card: 0 1px 2px rgba(0, 0, 0, .4), 0 8px 24px rgba(0, 0, 0, .45);
+    --shadow-pop: 0 4px 12px rgba(0, 0, 0, .5), 0 16px 40px rgba(0, 0, 0, .55);
 }
 
 @layer base {
@@ -77,10 +159,15 @@
 
 @layer components {
     /* Nút CTA gradient cam "lửa" kiểu salesoc */
+    /* Chữ ĐEN THUẦN trên gradient dừng ở --color-cta-end: cặp này đạt 6.1:1 ở
+       đầu sáng và 4.81:1 ở đầu đậm. Bản cũ (#1c0a00 trên #D43F12) chỉ được
+       4.14:1 — trượt AA cho chữ 16px in đậm, đúng ngay tại nút mà cả màn hình
+       được thiết kế để dẫn tới. */
     .btn-fire {
-        background: linear-gradient(135deg, var(--color-accent), var(--color-accent-deep));
-        color: #1c0a00;
+        background: linear-gradient(135deg, var(--color-accent), var(--color-cta-end));
+        color: #000;
         font-weight: 800;
+        min-height: var(--tap);
         box-shadow: 0 4px 18px rgba(var(--color-accent-rgb), .35);
         transition: filter .15s ease, transform .15s ease, box-shadow .15s ease;
     }
@@ -112,6 +199,61 @@
     }
     .dark .text-fire {
         filter: drop-shadow(0 0 16px rgba(var(--color-accent-rgb), .35));
+    }
+
+    /* ── Thẻ chuẩn ──────────────────────────────────────────────────────────
+       Bo góc nằm TRONG class, không phải gõ lại ở từng chỗ gọi. Đó chính là
+       nguyên nhân gốc khiến bo góc rò rỉ: .card-glass không tự định nghĩa
+       border-radius nên 41 chỗ gọi phải tự nhớ rounded-2xl, và vài chỗ nhớ
+       nhầm thành rounded-md/rounded-3xl. */
+    .card {
+        background: var(--color-surface);
+        border: 1px solid var(--color-line);
+        border-radius: var(--radius-card);
+        box-shadow: var(--shadow-card);
+    }
+
+    /* Dải thông tin chìm trong thẻ (khối tiền, khối ghi chú) — không viền,
+       không bóng, chỉ khác nền. Dùng thay cho việc lồng thẻ trong thẻ. */
+    .panel {
+        border-radius: var(--radius-ctl);
+        background: color-mix(in srgb, var(--color-ink) 4%, transparent);
+    }
+    .dark .panel {
+        background: color-mix(in srgb, #ffffff 5%, transparent);
+    }
+
+    /* Vùng chạm tối thiểu, dùng cho mọi nút icon và mọi hàng bấm được.
+       KHÔNG đặt chiều cao bằng py-*: đó là lý do py-3 (165 chỗ) và py-2.5
+       (162 chỗ) đang chia đôi cùng một vai trò và chênh nhau 4px. */
+    .touch {
+        min-width: var(--tap);
+        min-height: var(--tap);
+    }
+
+    /* Viền focus dùng chung. KHÔNG dùng border-radius: inherit — border-radius
+       không phải thuộc tính kế thừa, ép inherit làm phần tử đổi hình lúc focus
+       (avatar tròn trong thẻ bo 16px sẽ méo). Outline của trình duyệt hiện đại
+       đã tự bám theo bo góc của chính phần tử. */
+    .focus-ring:focus-visible {
+        outline: 2px solid rgba(var(--color-accent-rgb), .85);
+        outline-offset: 2px;
+    }
+
+    /* Chữ số tiền: cùng bề rộng để cột số thẳng hàng và không nhảy khi đếm lùi. */
+    .num {
+        font-variant-numeric: tabular-nums;
+        font-feature-settings: 'tnum' 1;
+    }
+
+    /* Chừa chỗ cho vạch home của iPhone. env() chỉ có giá trị khi thẻ viewport
+       có viewport-fit=cover — đã thêm ở app.blade.php, hai thứ này đi cùng nhau,
+       thiếu một là cái còn lại thành padding vô nghĩa. */
+    .safe-bottom {
+        padding-bottom: max(.5rem, env(safe-area-inset-bottom));
+    }
+    .safe-top {
+        padding-top: env(safe-area-inset-top);
     }
 
     /* Card kính mờ viền phát sáng khi hover */

@@ -13,7 +13,7 @@ onMounted(() => theme.init())
         @click="theme.toggle()"
         :aria-label="theme.isDark ? 'Chuyển sang giao diện sáng' : 'Chuyển sang giao diện tối'"
         :title="theme.isDark ? 'Giao diện sáng' : 'Giao diện tối'"
-        class="relative w-9 h-9 inline-flex items-center justify-center rounded-xl border border-[var(--color-line)] text-[var(--color-muted)] hover:text-[var(--color-accent)] hover:border-[var(--color-accent)] transition-colors"
+        class="focus-ring relative w-11 h-11 inline-flex items-center justify-center rounded-xl border border-[var(--color-line)] text-[var(--color-muted)] hover:text-[var(--color-accent)] hover:border-[var(--color-accent)] transition-colors"
     >
         <!-- Mặt trời (hiện ở dark mode -> bấm để về sáng) -->
         <svg

@@ -3,6 +3,7 @@ import { Link, router, usePage } from '@inertiajs/vue3'
 import { computed, ref } from 'vue'
 import { useAuthStore } from '@/Stores/useAuthStore'
 import BottomNav from '@/Components/BottomNav.vue'
+import SiteFooter from '@/Components/SiteFooter.vue'
 import ToastContainer from '@/Components/ToastContainer.vue'
 import ThemeToggle from '@/Components/ThemeToggle.vue'
 import FestiveDecor from '@/Components/FestiveDecor.vue'
@@ -37,7 +38,13 @@ const accountDrawerOpen = ref(false)
 </script>
 
 <template>
-    <div class="min-h-screen bg-[var(--color-bg)]">
+    <!--
+        KHÔNG đặt bg ở đây. `body` đã có background-color theo token, và ở chế độ tối nó còn
+        chồng 4 lớp gradient (app.css: lưới chấm + quầng cam đỉnh + quầng indigo góc dưới + nền
+        navy radial). Một lớp nền đục phủ toàn trang ở đây che sạch cả bốn — tức cái nền công
+        phu nhất của giao diện tối chưa bao giờ hiện ra.
+    -->
+    <div class="min-h-screen flex flex-col">
         <!-- Trang trí theo mùa — bật/tắt ở Admin → Cài đặt, hết mùa là tắt, không sửa code. -->
         <FestiveDecor v-if="page.props.settings?.festiveDecor" />
 
@@ -64,7 +71,7 @@ const accountDrawerOpen = ref(false)
                         type="button"
                         @click="accountDrawerOpen = true"
                         aria-label="Mở menu tài khoản"
-                        class="md:hidden flex-none w-9 h-9 rounded-xl bg-[var(--color-peach-soft)] text-[var(--color-accent)] flex items-center justify-center"
+                        class="md:hidden flex-none w-11 h-11 rounded-xl bg-[var(--color-peach-soft)] text-[var(--color-accent)] flex items-center justify-center"
                     >
                         <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" class="w-5 h-5"><path d="M4 7h16M4 12h16M4 17h16" /></svg>
                     </button>
@@ -106,7 +113,7 @@ const accountDrawerOpen = ref(false)
                     <Link
                         v-if="auth.isAdmin"
                         href="/admin/dashboard"
-                        class="md:hidden w-9 h-9 inline-flex items-center justify-center rounded-xl border border-[var(--color-accent)] text-[var(--color-accent)] transition-colors"
+                        class="md:hidden w-11 h-11 inline-flex items-center justify-center rounded-xl border border-[var(--color-accent)] text-[var(--color-accent)] transition-colors"
                         aria-label="Vào trang quản trị"
                         title="Trang quản trị"
                     >
@@ -152,13 +159,18 @@ const accountDrawerOpen = ref(false)
         <CashbackMarquee />
 
         <!-- Page content with transition -->
-        <main class="pb-20 md:pb-0">
+        <main>
             <Transition name="fade-up" mode="out-in">
                 <div>
                     <slot />
                 </div>
             </Transition>
         </main>
+
+        <!-- Chân trang: khối tin cậy duy nhất ở đáy mọi trang khách. Khoảng đệm tránh BottomNav
+             nằm TRONG chính nó (pb-24 md:pb-10) thay vì ở <main> như trước — để chân trang chạm
+             được tới đáy màn hình thay vì lơ lửng cách 80px. -->
+        <SiteFooter />
 
         <BottomNav />
         <!-- Một nút nổi duy nhất ở góc: chat trong web nếu đang bật, không thì Messenger.
