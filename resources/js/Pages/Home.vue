@@ -717,7 +717,7 @@ const faqs = computed(() => [
         { q: 'Tiền hoàn tính trên cái gì?', a: `Tính trên hoa hồng tiếp thị Shopee trả cho tụi mình vì đơn của bạn, không phải trên giá trị đơn hàng. Mức hoàn hiện tại là ${cashbackRate.value}% khoản hoa hồng đó. Hoa hồng mỗi ngành hàng mỗi khác nên số tiền hoàn của mỗi đơn cũng khác nhau. Sau khi dán link, tụi mình hiện luôn số tiền hoàn DỰ KIẾN của đúng sản phẩm đó ngay trên thẻ kết quả — đó là ước tính theo tỉ lệ hoa hồng Shopee đang công bố cho sản phẩm, con số cuối cùng chốt theo báo cáo đối soát nên có thể xê dịch. Mức hoàn này có thể được điều chỉnh; khi đổi thì các khoản chưa chi trả sẽ được tính lại theo mức mới.` },
     ] : []),
     { q: 'Có mất phí không?', a: 'Hoàn toàn miễn phí, bạn không mất phí gì khi dùng công cụ lấy mã.' },
-    { q: 'Hỗ trợ những sàn nào?', a: 'Ô dán link ở đầu trang hiện chỉ hỗ trợ Shopee. Riêng mục "Mã giảm giá gợi ý" bên dưới có thêm mã cho Lazada, TikTok Shop và Tiki.' },
+    { q: 'Hỗ trợ những sàn nào?', a: 'Ô dán link ở đầu trang nhận link Shopee và TikTok Shop. Hai sàn cho hai thứ khác nhau: Shopee trả về link đã áp sẵn mã giảm giá (và có hoàn tiền nếu bạn đăng nhập trước khi bấm mua); TikTok Shop không có mã giảm giá áp sẵn, giá trị ở đó là phần hoa hồng được chia lại vào ví bạn. Riêng mục "Mã giảm giá gợi ý" bên dưới có thêm mã cho Lazada và Tiki.' },
 ])
 const openFaq = ref(null)
 
@@ -765,7 +765,7 @@ onUnmounted(() => {
         <meta
             name="description"
             :content="cashbackOn
-                ? `Dán link Shopee → nhận mã giảm giá áp sẵn, và được chia lại ${cashbackRate}% hoa hồng của đơn vào số dư trên web, rút về MoMo/ZaloPay khi đủ mức tối thiểu. Đăng nhập trước khi bấm mua thì đơn mới được ghi nhận.`
+                ? `Dán link Shopee hoặc TikTok Shop → Shopee có mã giảm giá áp sẵn, cả hai sàn đều được chia lại ${cashbackRate}% hoa hồng của đơn vào số dư trên web, rút về MoMo/ZaloPay khi đủ mức tối thiểu. Đăng nhập trước khi bấm mua thì đơn mới được ghi nhận.`
                 : 'Dán link sản phẩm Shopee → nhận link voucher độc quyền Facebook, YouTube, Instagram. Xem giá sau giảm ngay.'"
         />
     </Head>
@@ -812,10 +812,16 @@ onUnmounted(() => {
                                  + 2 dòng mô tả, riêng phần chữ đã ăn ~100px mà không giúp khách
                                  làm được gì thêm — họ đã biết mình vào đây để dán link. -->
                             <div class="overflow-hidden min-h-0">
+                                <!-- Nói ra CẢ HAI sàn ngay ở tiêu đề. Giao diện TikTok chỉ hiện sau khi
+                                     khách dán link TikTok — mà nếu mọi chữ trên trang đều bảo "dán link
+                                     Shopee" thì không ai nghĩ tới chuyện dán thứ khác, và tính năng coi
+                                     như không tồn tại với khách. -->
                                 <h1 class="text-xl md:text-2xl font-extrabold text-[var(--color-ink)] mb-1">
-                                    Dán link Shopee — lấy mã giảm giá
+                                    Dán link Shopee hoặc TikTok Shop
                                 </h1>
-                                <p class="text-sm text-[var(--color-muted)]">Miễn phí, không cần nhập mã.</p>
+                                <p class="text-sm text-[var(--color-muted)]">
+                                    Shopee: mã giảm giá áp sẵn. TikTok Shop: hoàn tiền về ví. Miễn phí.
+                                </p>
                             </div>
                         </div>
 
@@ -830,7 +836,7 @@ onUnmounted(() => {
                                     @keydown.enter="resolveVoucher"
                                     @paste="onVoucherUrlPaste"
                                     @input="onVoucherUrlInput"
-                                    placeholder="Dán link Shopee (shopee.vn hoặc s.shopee.vn)..."
+                                    placeholder="Dán link Shopee hoặc TikTok Shop..."
                                     class="focus-ring w-full pl-10 pr-24 border border-[var(--color-line)] rounded-xl text-sm bg-[var(--color-surface)] focus:border-[var(--color-accent)] transition-all duration-200"
                                     :class="stuck ? 'min-h-[48px]' : 'min-h-[56px]'"
                                 />
