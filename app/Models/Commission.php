@@ -8,7 +8,7 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 #[Fillable([
-    'user_id', 'affiliate_link_id', 'type', 'amount', 'tier_bonus_rate', 'status', 'order_id',
+    'user_id', 'affiliate_link_id', 'type', 'amount', 'tier_bonus_rate', 'status', 'platform', 'order_id',
     'confirmed_at', 'paid_at',
 ])]
 class Commission extends Model

@@ -4,10 +4,12 @@ namespace App\Http\Controllers;
 
 use App\Exceptions\AffiliateScanException;
 use App\Models\PlatformVoucher;
+use App\Services\AccessTradeService;
 use App\Services\CashbackService;
 use App\Services\FacebookRedirectFlagService;
 use App\Services\ShopeeLinkResolverService;
 use App\Services\ShopeeProductLookupService;
+use App\Services\TikTokLinkResolverService;
 use App\Services\TrackingService;
 use App\Services\UrlValidationService;
 use App\Services\VoucherFetchResult;
@@ -29,6 +31,8 @@ class ShopeeVoucherController extends Controller
         private VoucherRefService $refs,
         private TrackingService $tracking,
         private ShopeeProductLookupService $productLookup,
+        private TikTokLinkResolverService $tiktokResolver,
+        private AccessTradeService $accessTrade,
     ) {}
 
     public function resolve(Request $request): Response|RedirectResponse
@@ -53,7 +57,17 @@ class ShopeeVoucherController extends Controller
         // "Mua ngay" — xem AffiliateLinkRewriterService. Nguồn nào được gọi, gọi với link nào
         // (và chế độ mã YTB gọi cả hai ra sao) nằm trong VoucherFetchService.
         try {
-            $this->urlValidator->validateShopeeOnly($url);
+            $platform = $this->urlValidator->detectInputPlatform($url);
+
+            // TikTok Shop đi một đường HOÀN TOÀN KHÁC và kết thúc ngay tại đây: không có nguồn
+            // mã nào cả (TikTok không có "link đã áp sẵn mã" như Shopee), không vòng qua
+            // Facebook, và link affiliate do chính mạng ACCESSTRADE cấp nên cũng không phải đổi
+            // affiliate về của mình. Chỉ còn đúng hai việc: giải link ra id sản phẩm, rồi xin
+            // họ một link tracking có gắn mã khách.
+            if ($platform === 'tiktok') {
+                return $this->resolveTikTok($request, $url);
+            }
+
             $result = $this->fetcher->fetch($url);
         } catch (AffiliateScanException $e) {
             return back()->withErrors(['voucher_url' => $e->getMessage()]);
@@ -85,6 +99,9 @@ class ShopeeVoucherController extends Controller
         return Inertia::render('Home', [
             'vouchers' => PlatformVoucher::suggestedList(),
             'voucherResult' => [
+                // Luôn có mặt ở cả hai nhánh: giao diện rẽ theo khoá này, và một khoá lúc có lúc
+                // không là mời gọi `undefined === 'tiktok'` âm thầm trả false ở chỗ khác.
+                'platform' => 'shopee',
                 'canonical_url' => $canonicalUrl,
                 'product' => $product,
                 'voucher_ref' => $ref,
@@ -98,6 +115,65 @@ class ShopeeVoucherController extends Controller
                 'ytb_activate_url' => $ref && $result->ytbUrl ? route('voucher.ytb', $ref) : null,
             ],
             ...$this->facebookRedirectFlags(),
+        ]);
+    }
+
+    /**
+     * Nhánh TikTok Shop: link khách dán → link affiliate có gắn mã khách.
+     *
+     * Khác nhánh Shopee ở ba điểm, và cả ba đều phải nói đúng với khách ở giao diện:
+     *  • KHÔNG có mã giảm giá. TikTok không có chuyện "link đã áp sẵn mã" — giá trị duy nhất
+     *    của đường này là hoàn tiền. Hứa mã ở đây là hứa suông.
+     *  • KHÔNG vòng qua Facebook. Bước comment/reel tồn tại để mã Shopee có hiệu lực; với
+     *    TikTok nó vô nghĩa, bấm mua là đi thẳng.
+     *  • KHÔNG cần đổi affiliate. Link là của chính mạng ACCESSTRADE cấp cho tài khoản mình,
+     *    không phải đi mượn rồi bóc như bên kieushopee.
+     *
+     * Mã khách gắn NGAY TẠI ĐÂY chứ không đợi lúc bấm mua như bên Shopee: link ACCESSTRADE trả
+     * về đã cố định, không sửa được tham số sau đó mà không phá chữ ký của họ.
+     */
+    private function resolveTikTok(Request $request, string $url): Response|RedirectResponse
+    {
+        $giai = $this->tiktokResolver->resolve($url);
+
+        if ($giai === null) {
+            return back()->withErrors([
+                'voucher_url' => 'Đây không phải link SẢN PHẨM TikTok Shop. Mở sản phẩm trong app TikTok, bấm Chia sẻ → Sao chép liên kết rồi dán lại nhé.',
+            ]);
+        }
+
+        $link = $this->accessTrade->createProductLink($giai['canonical_url'], $request->user()?->sub_id);
+
+        if ($link === null) {
+            return back()->withErrors([
+                'voucher_url' => 'Chưa lấy được link hoàn tiền cho sản phẩm TikTok này, thử lại sau ít phút nhé.',
+            ]);
+        }
+
+        $this->tracking->log('url_paste', $request, [
+            'url' => $giai['canonical_url'],
+            'platform' => 'tiktok',
+            'product_name' => null,
+        ]);
+
+        return Inertia::render('Home', [
+            'vouchers' => PlatformVoucher::suggestedList(),
+            'voucherResult' => [
+                'platform' => 'tiktok',
+                'canonical_url' => $giai['canonical_url'],
+                'product' => null,
+                // Link đi thẳng, không qua /go/{code}: link của ACCESSTRADE đã là link tracking
+                // của mình rồi, bọc thêm một lớp chỉ thêm một chặng để rơi mã.
+                'buy_url' => $link['short_link'] ?: $link['aff_link'],
+                'voucher_ref' => null,
+                'ytb_activate_url' => null,
+                'item_id' => null,
+            ],
+            // Nhánh TikTok không bao giờ đi qua Facebook — ép cờ về false để giao diện không
+            // hứa bước "Mở Facebook" mà phía sau không có.
+            'viaFacebookComment' => false,
+            'autoRedirect' => false,
+            'facebookMode' => 'comment',
         ]);
     }
 

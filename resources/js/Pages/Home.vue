@@ -330,6 +330,11 @@ function resolveVoucher() {
 // trong đầu lúc đang phân vân bấm mua. Hỏi SAU khi kết quả đã hiện (xem
 // ShopeeVoucherController::commission) — nguồn hoa hồng là proxy bên thứ ba chậm và hay hỏng,
 // nhét vào lượt quét là bắt mọi khách chờ thêm để đổi lấy một con số ước tính.
+// Nhánh TikTok dùng chung thẻ kết quả nhưng KHÔNG dùng chung lời hứa: không mã giảm giá,
+// không bước Facebook, không short-link /go/{code}. Cờ này chặn mấy khối của khuôn Shopee khỏi
+// render nhầm ở đó — để nguyên thì khách mua TikTok đọc được câu "Mã đã gắn sẵn trong link".
+const isTikTokResult = computed(() => props.voucherResult?.platform === 'tiktok')
+
 const cashbackEstimate = ref(null)
 
 async function fetchCashbackEstimate(result) {
@@ -472,6 +477,36 @@ function isFacebookLink(url) {
  * (khách đã đi được tới bước cuối). Trang sẽ rời đi ngay sau cú bấm nên dùng fetch keepalive
  * để request vẫn hoàn tất; không await, không chặn điều hướng.
  */
+/**
+ * Ghi nhận cú bấm mua ở nhánh TikTok. Đây là điểm chuyển đổi DUY NHẤT của nhánh đó — không có
+ * bước tạo short-link như bên Shopee nên server không tự thấy được cú bấm này.
+ *
+ * Dùng 'voucher_claim' vì nó đã nằm trong ALLOWED_EVENTS của TrackingController; thêm một loại
+ * sự kiện mới đòi sửa cả trang Theo dõi bên admin, để dịp khác.
+ */
+function trackTikTokBuy() {
+    try {
+        fetch('/track/event', {
+            method: 'POST',
+            keepalive: true,
+            credentials: 'same-origin',
+            headers: {
+                'Content-Type': 'application/json',
+                'Accept': 'application/json',
+                'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.content ?? '',
+            },
+            body: JSON.stringify({
+                event_type: 'voucher_claim',
+                platform: 'tiktok',
+                source: 'accesstrade',
+                url: props.voucherResult?.buy_url ?? null,
+            }),
+        }).catch(() => {})
+    } catch (e) {
+        // Thống kê không được phép làm hỏng nút mua.
+    }
+}
+
 function trackFacebookOpen(url, productName) {
     ytbStep2Done.value = true
 
@@ -884,8 +919,53 @@ onUnmounted(() => {
                      một cột chữ nhỏ bên phải cái ảnh 64px, nên câu thứ hai — lý do duy nhất
                      khiến khách ở lại — nằm ở cỡ chữ 11px dưới cùng. -->
                 <div v-if="canUseVoucherTool && voucherResult" ref="voucherResultEl" class="mt-4 card p-4">
+                    <!--
+                        KHUÔN TIKTOK — khác hẳn khuôn Shopee và phải khác, vì ba lời hứa của
+                        trang này không áp dụng cho nó: không có mã giảm giá (TikTok không có
+                        chuyện "link đã áp sẵn mã"), không vòng qua Facebook, và chưa lấy được
+                        tên/giá sản phẩm (nguồn hoa hồng của ACCESSTRADE không tra được theo id).
+                        Nên thẻ này chỉ nói đúng thứ mình thật sự đưa: một link mua có gắn mã
+                        khách để đơn được ghi nhận hoàn tiền.
+                    -->
+                    <template v-if="voucherResult.platform === 'tiktok'">
+                        <div class="flex items-center gap-2">
+                            <span class="text-xs font-semibold text-[var(--color-muted)]">TikTok Shop</span>
+                        </div>
+                        <p class="mt-1 font-semibold text-[var(--color-ink)]">Link mua đã sẵn sàng</p>
+
+                        <div class="panel bg-[var(--color-money-soft)] mt-3 px-3 py-3">
+                            <p class="text-sm font-semibold text-[var(--color-ink)]">
+                                💸 Mua qua link này thì đơn được tính hoàn tiền
+                            </p>
+                            <p class="mt-1 text-xs text-[var(--color-ink)]/80">
+                                <template v-if="auth.isLoggedIn">
+                                    Đơn sẽ hiện ở mục <b>Đơn hàng</b> sau 24-36 giờ, tiền vào ví sau khi TikTok đối soát.
+                                </template>
+                                <template v-else>
+                                    Bạn <b>chưa đăng nhập</b> — mua lúc này thì đơn không quy về tài khoản nào được,
+                                    và sau đó không cứu lại được.
+                                </template>
+                            </p>
+                        </div>
+
+                        <a
+                            :href="voucherResult.buy_url"
+                            target="_blank"
+                            rel="noopener"
+                            @click="trackTikTokBuy"
+                            class="btn-fire mt-3 w-full px-6 min-h-[52px] rounded-xl flex items-center justify-center gap-2 text-base no-underline"
+                        >
+                            <span>🛒</span> Mua ngay trên TikTok Shop
+                        </a>
+
+                        <p class="mt-2 text-xs text-[var(--color-muted)]">
+                            TikTok Shop không có mã giảm giá áp sẵn như Shopee — giá trị ở đây là phần hoa hồng
+                            được chia lại vào ví bạn.
+                        </p>
+                    </template>
+
                     <!-- Tầng 1: MUA GÌ -->
-                    <div v-if="voucherResult.product" class="flex gap-3 items-start">
+                    <div v-else-if="voucherResult.product" class="flex gap-3 items-start">
                         <div class="w-16 h-16 rounded-xl bg-[var(--color-peach-soft)] flex-none overflow-hidden">
                             <img v-if="voucherResult.product.product_image" :src="voucherResult.product.product_image" :alt="voucherResult.product.product_name" class="w-full h-full object-cover" />
                             <div v-else class="w-full h-full flex items-center justify-center text-2xl">🛍️</div>
@@ -1113,12 +1193,12 @@ onUnmounted(() => {
                     </div>
                     <!-- v-if tường minh chứ không v-else: đang tự chuyển hướng thì đã có spinner
                          ở trên rồi, v-else sẽ hiện thêm dòng "chưa lấy được mã" gây hoang mang. -->
-                    <p v-if="!autoRedirecting && !voucherResult.voucher_ref" class="text-sm text-[var(--color-muted)] mt-3 mb-4">Chưa lấy được mã cho sản phẩm này — có thể do lỗi kết nối tạm thời, thử dán lại link nhé.</p>
+                    <p v-if="!isTikTokResult && !autoRedirecting && !voucherResult.voucher_ref" class="text-sm text-[var(--color-muted)] mt-3 mb-4">Chưa lấy được mã cho sản phẩm này — có thể do lỗi kết nối tạm thời, thử dán lại link nhé.</p>
 
                     <!-- Lời dặn = vai "cần chú ý" (warn), không phải vai "hành động chính": nền
                          cam nhạt + chữ accent-deep ở đây là màu của nút mua đem dùng cho một đoạn
                          chữ không bấm được, làm loãng đúng thứ cần nổi. -->
-                    <div class="flex items-start gap-2 bg-[var(--color-warn-soft)] border border-[rgba(var(--color-warn-rgb),.3)] rounded-xl px-3 py-2.5">
+                    <div v-if="!isTikTokResult" class="flex items-start gap-2 bg-[var(--color-warn-soft)] border border-[rgba(var(--color-warn-rgb),.3)] rounded-xl px-3 py-2.5">
                         <span class="text-sm leading-none">⚠️</span>
                         <p v-if="viaFacebookComment" class="text-xs text-[var(--color-ink)] leading-relaxed">Nhớ bấm <b>{{ linkLocation }}</b> thì mã mới được áp — bấm nhầm chỗ khác là mua không có giảm giá. Sang Shopee rồi thì đặt hàng bình thường, không cần nhập mã. Nếu Shopee báo mã hết lượt, thử lại sau ít phút nhé.</p>
                         <p v-else class="text-xs text-[var(--color-ink)] leading-relaxed">Mã đã gắn sẵn trong link — bấm "Mua ngay" rồi đặt hàng như bình thường, không cần nhập mã. Nếu Shopee báo mã hết lượt, thử lại sau ít phút nhé.</p>

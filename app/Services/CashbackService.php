@@ -53,11 +53,13 @@ class CashbackService
 
         // Gộp theo ĐƠN chứ không theo dòng: Shopee dồn hoa hồng cấp đơn vào dòng sản phẩm đầu
         // tiên và để các dòng sau bằng 0, nên cộng theo dòng mới ra đúng số của cả đơn.
+        // Gộp theo cả PLATFORM: hai sàn đánh số đơn trong hai không gian khác nhau, gom chung
+        // theo order_id là một ngày nào đó cộng tiền của đơn TikTok vào đơn Shopee trùng số.
         $orders = ShopeeOrder::query()
-            ->selectRaw('order_id, user_id, SUM(net_commission) as net_total, MAX(completed_at) as completed_at')
+            ->selectRaw('platform, order_id, user_id, SUM(net_commission) as net_total, MAX(completed_at) as completed_at')
             ->where('status', 'completed')
             ->whereNotNull('user_id')
-            ->groupBy('order_id', 'user_id')
+            ->groupBy('platform', 'order_id', 'user_id')
             ->get();
 
         $summary['orders'] = $orders->count();
@@ -74,6 +76,7 @@ class CashbackService
             }
 
             $this->award(
+                $order->platform,
                 $order->order_id,
                 (int) $order->user_id,
                 (float) $order->net_total,
@@ -127,10 +130,10 @@ class CashbackService
      * @param  float  $bonus  điểm phần trăm thưởng theo hạng thành viên, chỉ áp cho khoản GHI MỚI
      * @param  array<string, int|float>  $summary
      */
-    private function award(string $orderId, int $userId, float $netTotal, float $rate, float $bonus, array &$summary): void
+    private function award(string $platform, string $orderId, int $userId, float $netTotal, float $rate, float $bonus, array &$summary): void
     {
-        DB::transaction(function () use ($orderId, $userId, $netTotal, $rate, $bonus, &$summary) {
-            $commission = Commission::where('order_id', $orderId)->lockForUpdate()->first();
+        DB::transaction(function () use ($platform, $orderId, $userId, $netTotal, $rate, $bonus, &$summary) {
+            $commission = Commission::where('platform', $platform)->where('order_id', $orderId)->lockForUpdate()->first();
 
             // Khoản đã ghi giữ nguyên phần thưởng hạng của LÚC GHI (cột tier_bonus_rate), không
             // lấy hạng hiện tại: sync() tính lại toàn bộ đơn ở mỗi lượt chạy, nên đọc hạng hiện
@@ -150,6 +153,7 @@ class CashbackService
                 Commission::create([
                     'user_id' => $userId,
                     'affiliate_link_id' => null,
+                    'platform' => $platform,
                     'order_id' => $orderId,
                     'amount' => $amount,
                     'tier_bonus_rate' => $bonus,
@@ -206,7 +210,11 @@ class CashbackService
      */
     private function revokeCancelled(): int
     {
-        $cancelled = ShopeeOrder::where('status', 'cancelled')->distinct()->pluck('order_id');
+        // Lấy CẶP (sàn, mã đơn) chứ không chỉ mã đơn: đơn TikTok bị huỷ mà trùng số với một đơn
+        // Shopee đang hợp lệ thì thu hồi theo mã đơn trần sẽ rút tiền khỏi ví người không liên quan.
+        $cancelled = ShopeeOrder::where('status', 'cancelled')
+            ->distinct()
+            ->get(['platform', 'order_id']);
 
         if ($cancelled->isEmpty()) {
             return 0;
@@ -214,7 +222,13 @@ class CashbackService
 
         $revoked = 0;
 
-        foreach (Commission::whereIn('order_id', $cancelled)->get() as $commission) {
+        $query = Commission::query()->where(function ($q) use ($cancelled) {
+            foreach ($cancelled as $don) {
+                $q->orWhere(fn ($w) => $w->where('platform', $don->platform)->where('order_id', $don->order_id));
+            }
+        });
+
+        foreach ($query->get() as $commission) {
             if ($commission->status === 'paid') {
                 Log::warning('CashbackService: đơn bị huỷ nhưng hoa hồng đã chi trả', [
                     'order_id' => $commission->order_id,

@@ -81,6 +81,54 @@ class UrlValidationService
         throw new AffiliateScanException('Chỉ hỗ trợ link sản phẩm Shopee.');
     }
 
+    /** Host của TikTok Shop mà khách có thể dán vào — xem TikTokLinkResolverService. */
+    private array $tiktokInputDomains = [
+        'tiktok.com',
+        'vt.tiktok.com',
+        'vm.tiktok.com',
+        'shop.tiktok.com',
+        'm.tiktok.com',
+    ];
+
+    /**
+     * Ô dán link nhận sàn nào — thay cho validateShopeeOnly() ở cửa vào /voucher/resolve.
+     *
+     * Trả về TÊN SÀN thay vì void, để controller rẽ nhánh bằng chính kết quả kiểm tra này chứ
+     * không tự đoán lại từ URL một lần nữa. Hai nơi cùng suy ra "link này của sàn nào" là sớm
+     * muộn lệch nhau, và lúc lệch thì link TikTok đi vào nhánh Shopee rồi chết ở tận nguồn mã.
+     *
+     * @return string 'shopee' | 'tiktok'
+     *
+     * @throws AffiliateScanException Link không thuộc sàn nào đang hỗ trợ — thông điệp đã viết
+     *                                cho khách đọc, người gọi chỉ việc hiện ra.
+     */
+    public function detectInputPlatform(string $url): string
+    {
+        $parsed = parse_url($url);
+
+        if (! $parsed || empty($parsed['host'])) {
+            throw new AffiliateScanException('URL không hợp lệ.');
+        }
+
+        $host = preg_replace('/^www\./', '', strtolower($parsed['host']));
+
+        $khop = fn (array $domains) => array_reduce(
+            $domains,
+            fn (bool $co, string $d) => $co || $host === $d || str_ends_with($host, '.'.$d),
+            false,
+        );
+
+        if ($khop($this->shopeeInputDomains)) {
+            return 'shopee';
+        }
+
+        if ($khop($this->tiktokInputDomains)) {
+            return 'tiktok';
+        }
+
+        throw new AffiliateScanException('Chỉ hỗ trợ link sản phẩm Shopee và TikTok Shop. Mở app, bấm Chia sẻ → Sao chép liên kết rồi dán lại nhé.');
+    }
+
     // Domain được phép làm đích cho short-link /go/{code}: link sản phẩm Shopee trực tiếp,
     // hoặc link voucher do kieushopee phát ra — thực tế là short-link của chính Shopee
     // (shp.ee/shope.ee/s.shopee.vn) hoặc của mạng affiliate (s.afp.ad) đứng trước một
