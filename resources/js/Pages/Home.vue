@@ -140,10 +140,15 @@ async function pasteVoucherUrl() {
                 }
             }
         }
-        if (text) {
-            voucherUrl.value = extractUrl(text)
-            resolveVoucher()
+        // Không có gì để dán thì phải nói ra: im lặng là khách tưởng nút hỏng, bấm thêm vài
+        // lần rồi tải lại trang.
+        if (!text) {
+            toast.info('Bộ nhớ tạm đang trống — copy link sản phẩm Shopee rồi bấm Dán nhé.')
+
+            return
         }
+        voucherUrl.value = extractUrl(text)
+        resolveVoucher()
     } catch (e) {
         toast.error('Không thể đọc clipboard. Hãy dán thủ công (Ctrl+V).')
     }
@@ -239,6 +244,12 @@ function focusVoucherTool() {
 // link khác đè lên) vẫn được gọi onFinish, không có số thì nó tắt cờ `resolving` của lượt mới.
 let resolvingUrl = null
 let resolveSeq = 0
+// Mốc bắt đầu của lượt đang chạy. Request bị iOS cắt ngầm khi Safari nằm nền (khách đi sang app
+// Facebook/Shopee rồi quay lại) không gọi callback nào — kể cả onFinish — nên `resolving` kẹt
+// true mãi; không có mốc này thì dán lại cùng link chỉ nhận toast "đang tìm rồi" cho tới khi
+// tải lại trang. nginx cắt ở 60 giây, vậy lượt nào quá 90 giây chắc chắn đã chết, cho chạy lại.
+let resolvingSince = 0
+const RESOLVE_STALE_MS = 90_000
 
 function resolveVoucher() {
     const url = voucherUrl.value.trim()
@@ -249,19 +260,33 @@ function resolveVoucher() {
     // Chỉ chặn khi CÙNG link: dán link KHÁC trong lúc đang chờ là ý khách đã đổi, cho đi luôn
     // (router.post tự huỷ lượt cũ) — khoá cứng là khách đứng nhìn ô im lặng suốt 20-45 giây.
     // Nói cho khách biết vì sao không có gì xảy ra: nút "Đang tìm mã..." bị ẩn khi khung đã dính.
-    if (resolving.value && url === resolvingUrl) {
+    if (resolving.value && url === resolvingUrl && Date.now() - resolvingSince < RESOLVE_STALE_MS) {
         toast.info('Đang tìm mã cho link này rồi, đợi thêm chút nhé...')
 
         return
     }
     const seq = ++resolveSeq
     resolvingUrl = url
+    resolvingSince = Date.now()
     resolving.value = true
     voucherError.value = null
+    // Bỏ mốc "đã tìm xong" ngay lúc bắt đầu, không đợi kết quả: dán lại ĐÚNG link cũ (mã hết
+    // lượt, khách thử lại) mà giữ mốc thì alreadyResolved vẫn true suốt lúc chờ → nút "Tìm mã
+    // ngay" bị ẩn (khung đã dính), không thấy vòng quay, không thấy gì đổi — khách tưởng nút
+    // Dán chết. Quét lỗi thì mốc vẫn trống, nút mở lại cho khách thử tiếp.
+    resolvedUrl.value = null
     // Xoá link đã lấy của lần quét trước: nút kết quả dùng chung key 'result', còn các dòng
     // lịch sử đánh key theo chỉ số nên bị dịch đi khi có mục mới chèn lên đầu — không xoá là
     // khách bấm phải comment của sản phẩm khác.
     readyLinks.value = {}
+    // Trạng thái riêng của KẾT QUẢ TRƯỚC cũng phải xoá: nút mua kẹt "Đang lấy mã..." (request
+    // shorten bị cắt ngầm như trên), spinner tự chuyển hướng, lời nhắc bước 2 của sản phẩm cũ.
+    // Để nguyên là kết quả mới hiện ra với nút mua đã khoá sẵn — lại phải tải lại trang.
+    shorteningKey.value = null
+    copyingKey.value = null
+    autoRedirecting.value = false
+    ytbReturnNudge.value = false
+    ytbStep2Done.value = false
 
     router.post('/voucher/resolve', { url }, {
         preserveScroll: true,
@@ -499,10 +524,14 @@ async function fetchVoucherUrl(entry, productName = null, productImage = null) {
  * trả về nên đã mất "user gesture", window.open() lúc này chắc chắn bị trình duyệt chặn.
  */
 async function goStraightToVoucher() {
+    // Khách dán link khác trong lúc đang chờ thì lượt này thuộc sản phẩm cũ: resolveVoucher đã
+    // xoá trạng thái, ở đây không được ghi đè lên kết quả mới (xem readyLinks) hay điều hướng.
+    const seq = resolveSeq
     autoRedirecting.value = true
 
     try {
         const url = await fetchVoucherUrl({ ref: props.voucherResult.voucher_ref })
+        if (seq !== resolveSeq) return
 
         // Chế độ Facebook: dừng ở đây và hiện anchor thay vì tự điều hướng — window.location
         // sang facebook.com chỉ mở trình duyệt, không bật được app (xem readyLinks).
@@ -518,6 +547,7 @@ async function goStraightToVoucher() {
 
         window.location.href = url
     } catch (e) {
+        if (seq !== resolveSeq) return
         autoRedirecting.value = false
         toast.error('Không thể tạo link, vui lòng thử lại.')
     }
@@ -528,6 +558,9 @@ async function goStraightToVoucher() {
 async function openVoucherLink(entry, productName = null, productImage = null) {
     if (!entry?.ref || shorteningKey.value) return
 
+    // Cùng lý do với goStraightToVoucher: dán link khác giữa chừng là resolveVoucher đã xoá
+    // shorteningKey/readyLinks cho kết quả mới, lượt cũ về muộn không được đụng vào nữa.
+    const seq = resolveSeq
     ytbStep2Done.value = true
     shorteningKey.value = entry.key
 
@@ -535,11 +568,12 @@ async function openVoucherLink(entry, productName = null, productImage = null) {
     // — điều hướng bằng JS là lý do app Facebook không bao giờ được bật lên (xem readyLinks).
     if (props.viaFacebookComment) {
         try {
-            readyLinks.value[entry.key] = await fetchVoucherUrl(entry, productName, productImage)
+            const url = await fetchVoucherUrl(entry, productName, productImage)
+            if (seq === resolveSeq) readyLinks.value[entry.key] = url
         } catch (e) {
-            toast.error('Không thể tạo link, vui lòng thử lại.')
+            if (seq === resolveSeq) toast.error('Không thể tạo link, vui lòng thử lại.')
         } finally {
-            shorteningKey.value = null
+            if (seq === resolveSeq) shorteningKey.value = null
         }
 
         return
@@ -565,7 +599,7 @@ async function openVoucherLink(entry, productName = null, productImage = null) {
         newTab?.close()
         toast.error('Không thể tạo link, vui lòng thử lại.')
     } finally {
-        shorteningKey.value = null
+        if (seq === resolveSeq) shorteningKey.value = null
     }
 }
 

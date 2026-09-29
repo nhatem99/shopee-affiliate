@@ -93,16 +93,26 @@ Route::post('/logout', [LoginController::class, 'destroy'])->middleware('auth')-
 // qua được auth.admin; ImpersonationService tự kiểm tra id admin lưu trong session.
 Route::post('/impersonate/leave', [ImpersonationController::class, 'stop'])->middleware('auth')->name('impersonate.leave');
 
+// Hai route POST bên dưới trả Inertia::render thẳng từ POST, nên sau lần quét đầu URL của trang
+// chính là URL POST đó. Từ đó, lỗi trả bằng back() (kể cả ValidationException của validate())
+// đi vòng: POST → GET chính URL này → về /, và flash `errors` bị tiêu ở hop giữa — trang chủ
+// hiện "thành công" trống, khách tưởng nút Dán chết. reflash() giữ flash sống thêm đúng một hop.
+$redirectHomeKeepingFlash = function (Request $request) {
+    $request->session()->reflash();
+
+    return redirect()->route('home');
+};
+
 // Affiliate scan (throttled, open to all)
 // GET fallback: redirect home if user refreshes after a scan
-Route::get('/affiliate/scan', fn () => redirect()->route('home'));
+Route::get('/affiliate/scan', $redirectHomeKeepingFlash);
 Route::post('/affiliate/scan', [AffiliateController::class, 'scan'])
     ->middleware('throttle:affiliate-scan')
     ->name('affiliate.scan');
 
 // tietkiemvi.com public voucher tool — no auth required
 // GET fallback: redirect home if user refreshes after a resolve
-Route::get('/voucher/resolve', fn () => redirect()->route('home'));
+Route::get('/voucher/resolve', $redirectHomeKeepingFlash);
 Route::post('/voucher/resolve', [ShopeeVoucherController::class, 'resolve'])
     ->middleware('throttle:affiliate-scan')
     ->name('voucher.resolve');

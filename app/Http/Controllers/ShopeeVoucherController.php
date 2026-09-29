@@ -31,8 +31,12 @@ class ShopeeVoucherController extends Controller
         // Công cụ chỉ dành cho khách trên điện thoại (bấm link Facebook/Zalo) — admin luôn qua
         // được để test từ máy tính. Chặn ở đây để không ai gọi thẳng endpoint này bỏ qua giao
         // diện (ẩn khung tìm mã ở Home.vue chỉ là UI, không phải bảo mật thật).
+        // Lỗi thì về THẲNG trang chủ, không back(): sau lần quét thành công đầu tiên, URL của trang
+        // đã là /voucher/resolve (Inertia::render từ POST), nên back() đưa về đúng URL đó, route
+        // GET bên dưới redirect tiếp về /, và flash `errors` bị tiêu mất ở hop giữa — frontend nhận
+        // một trang "thành công" trống, không toast, khách tưởng nút Dán chết cho tới khi tải lại.
         if (! TrackingService::isMobile($request->userAgent()) && ! ($request->user()?->isAdmin() ?? false)) {
-            return back()->withErrors([
+            return redirect()->route('home')->withErrors([
                 'voucher_url' => 'Chức năng lấy mã chỉ dùng được trên điện thoại. Vui lòng mở tietkiemvi.com bằng trình duyệt trên điện thoại.',
             ]);
         }
@@ -51,7 +55,7 @@ class ShopeeVoucherController extends Controller
             $this->urlValidator->validateShopeeOnly($url);
             $result = $this->fetcher->fetch($url);
         } catch (AffiliateScanException $e) {
-            return back()->withErrors(['voucher_url' => $e->getMessage()]);
+            return redirect()->route('home')->withErrors(['voucher_url' => $e->getMessage()]);
         }
 
         $data = $result->data;
