@@ -2,7 +2,9 @@
 
 namespace App\Console\Commands;
 
+use App\Models\ApiConfig;
 use App\Services\KieuShopeeService;
+use App\Services\LaymaVoucherService;
 use Illuminate\Console\Command;
 
 /**
@@ -11,25 +13,46 @@ use Illuminate\Console\Command;
  * Điểm gãy hay gặp nhất của nguồn này là `next_action` — ID Server Action do bản build
  * Next.js của họ sinh ra, cứ deploy lại là đổi. Command này cho biết ngay "còn chạy không"
  * trong 1 lệnh, thay vì phải tự dựng curl với đủ header + multipart.
+ *
+ * --source=laymavoucher gọi nguồn dự phòng cùng nền tảng (xem LaymaVoucherService) — dùng để
+ * chắc chắn nó chạy được TRƯỚC khi bật nó cho khách ở /admin/api-config.
  */
 class KieuShopeeCheck extends Command
 {
-    protected $signature = 'kieushopee:check {url : Link sản phẩm Shopee dùng để thử}';
+    protected $signature = 'kieushopee:check
+        {url : Link sản phẩm Shopee dùng để thử}
+        {--source=kieushopee : Nguồn cần gọi thử: kieushopee hoặc laymavoucher}';
 
-    protected $description = 'Gọi thử sansale.kieushopee.com từ server này và in kết quả';
+    protected $description = 'Gọi thử nguồn lấy mã afp.ad (kieushopee / laymavoucher) từ server này và in kết quả';
 
-    public function handle(KieuShopeeService $kieuShopee): int
+    public function handle(): int
     {
-        $this->line('Đang gọi '.config('services.kieushopee.endpoint').'...');
+        $service = match ($this->option('source')) {
+            KieuShopeeService::SOURCE => app(KieuShopeeService::class),
+            LaymaVoucherService::SOURCE => app(LaymaVoucherService::class),
+            default => null,
+        };
+
+        if ($service === null) {
+            $this->error('--source chỉ nhận kieushopee hoặc laymavoucher.');
+
+            return self::INVALID;
+        }
+
+        // Cùng thứ tự ưu tiên với service: bản ghi admin trước, config sau.
+        $endpoint = ApiConfig::where('platform', $service::SOURCE)->value('endpoint')
+            ?: config('services.'.$service::SOURCE.'.endpoint');
+
+        $this->line('Đang gọi '.$endpoint.'...');
         $this->newLine();
 
         $startedAt = microtime(true);
-        $result = $kieuShopee->fetchProductAndVoucherLink($this->argument('url'));
+        $result = $service->fetchProductAndVoucherLink($this->argument('url'));
         $durationMs = (int) ((microtime(true) - $startedAt) * 1000);
 
         if ($result === null) {
             $this->error("❌ Không lấy được link ({$durationMs}ms).");
-            $this->line('Lý do cụ thể nằm ở storage/logs/laravel.log (tìm "KieuShopeeService").');
+            $this->line('Lý do cụ thể nằm ở storage/logs/laravel.log (tìm "'.class_basename($service).'").');
             $this->line('Nghi ngờ đầu tiên: next_action đã đổi — lấy ID mới ở tab Network của site nguồn.');
 
             return self::FAILURE;

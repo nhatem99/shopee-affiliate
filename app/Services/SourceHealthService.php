@@ -14,9 +14,12 @@ use Illuminate\Support\Facades\Log;
  * khách vẫn dán link — chỉ có điều mọi lượt đều rơi sang nhánh dự phòng. Không ai biết cho tới
  * khi ngồi đọc báo cáo affiliate.
  *
- * Kiểm tra RIÊNG kieushopee, không quan tâm nguồn nào đang phục vụ (VoucherSourceResolver):
- * quyết định của admin là "hễ sansale.kieushopee.com/22 lỗi là đóng trang", kể cả khi ganma vẫn
- * ra mã được. Bật/tắt bảo trì dùng đúng Setting `maintenance_mode` mà MaintenanceMode middleware
+ * Kiểm tra kieushopee kể cả khi admin để ganma: quyết định của admin là "hễ sansale.kieushopee.com
+ * lỗi là đóng trang", kể cả khi ganma vẫn ra mã được (chế độ mã YTB vẫn đưa khách link kieushopee).
+ * Ngoại lệ duy nhất là laymavoucher: admin bật nó chính là để né lúc kieushopee chết, lúc đó
+ * không lượt quét nào đi qua kieushopee nữa — vẫn kiểm tra kieushopee thì trang bị đóng đúng
+ * lúc nguồn dự phòng đang chạy ngon. Nên khi đang để laymavoucher thì kiểm tra laymavoucher.
+ * Bật/tắt bảo trì dùng đúng Setting `maintenance_mode` mà MaintenanceMode middleware
  * và trang Cài đặt vẫn đọc — không thêm đường thứ hai để sớm muộn hai bên lệch nhau.
  *
  * Ranh giới với admin (quan trọng): lớp này chỉ được tắt CHÍNH lần bảo trì do nó bật. Admin bật
@@ -43,7 +46,23 @@ class SourceHealthService
      */
     public const FAILURES_BEFORE_MAINTENANCE = 2;
 
-    public function __construct(private KieuShopeeService $kieuShopee) {}
+    public function __construct(
+        private KieuShopeeService $kieuShopee,
+        private LaymaVoucherService $layma,
+        private VoucherSourceResolver $sources,
+    ) {}
+
+    /**
+     * Nguồn được đem ra kiểm tra — xem ghi chú đầu lớp. Theo lựa chọn của admin (configured),
+     * không theo activeSource(): lớp ghi đè khung giờ chỉ chuyển ganma sang kieushopee, không
+     * bao giờ đụng tới laymavoucher.
+     */
+    private function sourceUnderCheck(): KieuShopeeService
+    {
+        return $this->sources->configuredSource() === LaymaVoucherService::SOURCE
+            ? $this->layma
+            : $this->kieuShopee;
+    }
 
     public static function enabled(): bool
     {
@@ -61,16 +80,24 @@ class SourceHealthService
         // Dùng đúng testConnection() của nút "Kiểm tra kết nối" ở /admin/api-config: cùng tham
         // số, cùng đường đi với lượt lấy mã thật của khách. Tự dựng một request riêng ở đây là
         // tự tạo ra khả năng "check nói OK mà khách vẫn không lấy được mã".
-        $result = $this->kieuShopee->testConnection();
+        $service = $this->sourceUnderCheck();
+        $source = $service::SOURCE;
+        $result = $service->testConnection();
 
-        $failures = $result['ok'] ? 0 : $this->status()['consecutive_failures'] + 1;
+        // Vừa đổi nguồn thì đếm lỗi lại từ đầu: lỗi của nguồn cũ không phải bằng chứng gì về
+        // nguồn mới. Không reset thì admin chuyển sang laymavoucher lúc kieushopee đã lỗi 1 lượt,
+        // laymavoucher chỉ cần hụt một nhịp là trang đóng luôn.
+        $previous = $this->status();
+        $carried = ($previous['source'] ?? KieuShopeeService::SOURCE) === $source ? $previous['consecutive_failures'] : 0;
+        $failures = $result['ok'] ? 0 : $carried + 1;
 
         $status = [
             'checked_at' => now()->toIso8601String(),
+            'source' => $source,
             'ok' => $result['ok'],
             'message' => $result['message'],
             'consecutive_failures' => $failures,
-            'action' => $result['ok'] ? $this->onSourceUp() : $this->onSourceDown($failures),
+            'action' => $result['ok'] ? $this->onSourceUp($source) : $this->onSourceDown($failures, $source),
         ];
 
         Setting::set(self::STATUS_KEY, json_encode($status, JSON_UNESCAPED_UNICODE));
@@ -82,7 +109,9 @@ class SourceHealthService
      * Kết quả lần kiểm tra gần nhất. Chưa chạy lần nào thì trả về khung rỗng thay vì null — nơi
      * gọi khỏi phải tự phòng thủ, và trang Cài đặt hiện được "chưa kiểm tra lần nào".
      *
-     * @return array{checked_at: ?string, ok: ?bool, message: ?string, consecutive_failures: int, action: ?string}
+     * `source` null = lần kiểm tra lưu trước khi có laymavoucher, lúc đó chỉ có kieushopee.
+     *
+     * @return array{checked_at: ?string, source: ?string, ok: ?bool, message: ?string, consecutive_failures: int, action: ?string}
      */
     public function status(): array
     {
@@ -94,6 +123,7 @@ class SourceHealthService
 
         return [
             'checked_at' => $saved['checked_at'] ?? null,
+            'source' => $saved['source'] ?? null,
             'ok' => $saved['ok'] ?? null,
             'message' => $saved['message'] ?? null,
             'consecutive_failures' => (int) ($saved['consecutive_failures'] ?? 0),
@@ -135,7 +165,7 @@ class SourceHealthService
     }
 
     /** @return string|null Việc vừa làm, để command/trang Cài đặt nói lại cho người đọc. */
-    private function onSourceDown(int $failures): ?string
+    private function onSourceDown(int $failures, string $source): ?string
     {
         if ($failures < self::FAILURES_BEFORE_MAINTENANCE) {
             return 'cho_them_luot';
@@ -148,14 +178,14 @@ class SourceHealthService
         Setting::set('maintenance_mode', '1');
         Setting::set(self::AUTO_FLAG_KEY, '1');
 
-        Log::warning('SourceHealthService: nguồn kieushopee chết — đã tự bật chế độ bảo trì', [
+        Log::warning("SourceHealthService: nguồn {$source} chết — đã tự bật chế độ bảo trì", [
             'so_lan_loi_lien_tiep' => $failures,
         ]);
 
         return 'da_bat_bao_tri';
     }
 
-    private function onSourceUp(): ?string
+    private function onSourceUp(string $source): ?string
     {
         // Bảo trì do admin bật tay (hoặc không hề bảo trì) thì không đụng vào.
         if (! Setting::getBool(self::AUTO_FLAG_KEY, false)) {
@@ -165,7 +195,7 @@ class SourceHealthService
         Setting::set('maintenance_mode', '0');
         Setting::set(self::AUTO_FLAG_KEY, '0');
 
-        Log::info('SourceHealthService: nguồn kieushopee sống lại — đã tự tắt chế độ bảo trì');
+        Log::info("SourceHealthService: nguồn {$source} sống lại — đã tự tắt chế độ bảo trì");
 
         return 'da_tat_bao_tri';
     }

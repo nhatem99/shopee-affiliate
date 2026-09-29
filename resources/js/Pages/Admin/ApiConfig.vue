@@ -40,12 +40,30 @@ const pendingProbe = ref(null)
 // Comment thử có kèm link hay không — xem công tắc ở form Facebook.
 const probeWithLink = ref(true)
 
-// Hai nguồn lấy mã (kieushopee = mã FB/IG, ganma = mã YouTube). Chúng không dùng App ID/Secret
-// và loại trừ nhau — bật cái này thì server tự tắt cái kia, xem ApiConfigController::store().
-const VOUCHER_SOURCES = ['kieushopee', 'ganma']
+// Các nguồn lấy mã (kieushopee = mã FB/IG, ganma = mã YouTube, laymavoucher = dự phòng cho
+// kieushopee). Chúng không dùng App ID/Secret và loại trừ nhau — bật một cái thì server tự tắt
+// các cái còn lại, xem ApiConfigController::store().
+const VOUCHER_SOURCES = ['kieushopee', 'ganma', 'laymavoucher']
+
+// Nguồn chạy trên nền tảng tool afp.ad (Next.js Server Action): cùng bộ tham số next-action /
+// 1_toolId / field "0", cùng cách lấy giá trị mới — xem KieuShopeeService, LaymaVoucherService.
+const AFP_SOURCES = ['kieushopee', 'laymavoucher']
 
 function isVoucherSource(platform) {
     return VOUCHER_SOURCES.includes(platform)
+}
+
+function isAfpSource(platform) {
+    return AFP_SOURCES.includes(platform)
+}
+
+// Tên site để câu hướng dẫn chỉ đúng chỗ admin phải mở — mỗi nguồn một site.
+function siteHost(endpoint) {
+    try {
+        return new URL(endpoint).host
+    } catch (e) {
+        return 'site nguồn'
+    }
 }
 
 function editConfig(config) {
@@ -295,7 +313,7 @@ async function testConfig(config) {
                         </p>
                     </template>
 
-                    <template v-if="config.platform === 'kieushopee'">
+                    <template v-if="isAfpSource(config.platform)">
                         <p class="font-mono text-xs break-all"><span class="font-sans font-medium text-[var(--color-ink)]">next-action:</span> {{ config.meta?.next_action || '—' }}</p>
                         <p class="font-mono text-xs break-all"><span class="font-sans font-medium text-[var(--color-ink)]">1_toolId:</span> {{ config.meta?.tool_id || '—' }}</p>
                         <p class="font-mono text-xs break-all"><span class="font-sans font-medium text-[var(--color-ink)]">field "0":</span> {{ config.meta?.action_payload || '—' }}</p>
@@ -360,7 +378,7 @@ async function testConfig(config) {
                     <template v-if="editing.platform === 'ganma'">
                         <div class="rounded-xl bg-[var(--color-peach-soft)] border border-[var(--color-accent)]/25 px-3 py-2.5">
                             <p class="text-xs text-[var(--color-accent-deep)] leading-relaxed">
-                                Nguồn <b>mã YouTube</b>. Bật nguồn này lên là <b>tự động tắt kieushopee</b> —
+                                Nguồn <b>mã YouTube</b>. Bật nguồn này lên là <b>tự động tắt nguồn đang bật</b> —
                                 mỗi lúc chỉ một nguồn phục vụ khách.
                                 <br /><br />
                                 Hai điều khác hẳn kieushopee, cân nhắc trước khi bật:
@@ -387,11 +405,20 @@ async function testConfig(config) {
                         </div>
                     </template>
 
-                    <template v-if="editing.platform === 'kieushopee'">
+                    <template v-if="isAfpSource(editing.platform)">
+                        <div v-if="editing.platform === 'laymavoucher'" class="rounded-xl bg-[var(--color-peach-soft)] border border-[var(--color-accent)]/25 px-3 py-2.5">
+                            <p class="text-xs text-[var(--color-accent-deep)] leading-relaxed">
+                                <b>Nguồn dự phòng</b> khi kieushopee lỗi — cùng nền tảng afp.ad nên cách gọi y hệt.
+                                Bật nguồn này lên là <b>tự động tắt nguồn đang bật</b>; kieushopee sống lại thì bật nó
+                                lên là laymavoucher tự tắt, không phải dán lại tham số nào.
+                                Đang để nguồn này thì lượt kiểm tra "Tự bảo trì" (trang Cài đặt) gọi laymavoucher thay cho kieushopee.
+                            </p>
+                        </div>
+
                         <div class="rounded-xl bg-[var(--color-peach-soft)] border border-[var(--color-accent)]/25 px-3 py-2.5">
                             <p class="text-xs text-[var(--color-accent-deep)] leading-relaxed">
                                 Site nguồn deploy lại là <b>next-action đổi</b> và tính năng lấy mã chết ngay.
-                                Lấy giá trị mới: mở tool trên sansale.kieushopee.com bằng trình duyệt máy tính →
+                                Lấy giá trị mới: mở tool trên {{ siteHost(editing.endpoint) }} bằng trình duyệt máy tính →
                                 <b>F12 → tab Network</b> → bấm nút chuyển link → chọn request <span class="font-mono">POST</span> →
                                 copy header <span class="font-mono">next-action</span> và field <span class="font-mono">1_toolId</span> trong phần Payload.
                                 Lưu xong bấm <b>Kiểm tra kết nối</b> là biết ngay còn chạy không.

@@ -14,6 +14,8 @@ use Illuminate\Support\Facades\Log;
  *
  *  • kieushopee (mặc định): bung link ngắn rồi hỏi kieushopee, xong.
  *
+ *  • laymavoucher: y hệt kieushopee, chỉ đổi sang nguồn dự phòng cùng nền tảng afp.ad.
+ *
  *  • ganma — "chế độ mã YTB": gọi CẢ HAI nguồn. Link đưa cho khách — và sau đó đặt vào caption
  *    reel / comment Facebook — là link của kieushopee, đổi affiliate về của mình y như chế độ
  *    mặc định; link YouTube của ganma đi kèm trong ref, và lúc khách bấm mua nó được xâu vào
@@ -31,6 +33,7 @@ class VoucherFetchService
         private ShopeeLinkResolverService $resolver,
         private KieuShopeeService $kieuShopee,
         private GanmaService $ganma,
+        private LaymaVoucherService $layma,
     ) {}
 
     /**
@@ -39,14 +42,17 @@ class VoucherFetchService
      */
     public function fetch(string $url): VoucherFetchResult
     {
-        if ($this->sources->activeSource() !== GanmaService::SOURCE) {
+        $active = $this->sources->activeSource();
+
+        if ($active !== GanmaService::SOURCE) {
             $canonicalUrl = $this->resolver->resolveCanonicalUrl($url);
+            $service = $active === LaymaVoucherService::SOURCE ? $this->layma : $this->kieuShopee;
 
             return new VoucherFetchResult(
-                KieuShopeeService::SOURCE,
+                $service::SOURCE,
                 $canonicalUrl,
                 $canonicalUrl,
-                $this->kieuShopee->fetchProductAndVoucherLink($canonicalUrl),
+                $service->fetchProductAndVoucherLink($canonicalUrl),
             );
         }
 
@@ -80,5 +86,21 @@ class VoucherFetchService
         }
 
         return new VoucherFetchResult(GanmaService::SOURCE, $canonicalUrl, $url, $ytb);
+    }
+
+    /**
+     * Lấy lại mã MỚI lúc khách bấm mua, từ đúng nguồn đã phát ra ref (xem ShortLinkController::
+     * store). Theo nguồn GHI TRONG REF chứ không theo nguồn đang bật: ref laymavoucher đưa sang
+     * kieushopee là gửi link cho đúng nguồn đang chết — admin đổi nguồn chính vì lý do đó.
+     *
+     * @return array{voucher_link: string, shop_id: ?string, item_id: ?string, product: ?array}|null
+     */
+    public function refetch(string $source, string $sourceUrl): ?array
+    {
+        return match ($source) {
+            GanmaService::SOURCE => $this->ganma->fetchProductAndVoucherLink($sourceUrl),
+            LaymaVoucherService::SOURCE => $this->layma->fetchProductAndVoucherLink($sourceUrl),
+            default => $this->kieuShopee->fetchProductAndVoucherLink($sourceUrl),
+        };
     }
 }

@@ -9,6 +9,7 @@ use App\Services\FacebookCommentProbeService;
 use App\Services\FacebookPageService;
 use App\Services\GanmaService;
 use App\Services\KieuShopeeService;
+use App\Services\LaymaVoucherService;
 use App\Services\RestockScheduleService;
 use App\Services\ShopeeApiService;
 use App\Services\VoucherSourceResolver;
@@ -61,7 +62,7 @@ class ApiConfigController extends Controller
             // updateOrCreate bỏ qua cột và DB lấy default true — hai nguồn mã cùng bật, mà
             // makeExclusive() cũng không chạy vì $config->is_active còn null trong bộ nhớ.
             'is_active' => ['required', 'boolean'],
-            'platform' => ['required', 'in:shopee,lazada,tiktok,accesstrade,facebook,kieushopee,ganma'],
+            'platform' => ['required', 'in:shopee,lazada,tiktok,accesstrade,facebook,kieushopee,ganma,laymavoucher'],
             'meta' => ['nullable', 'array'],
             'meta.target_post_id' => ['nullable', 'string', 'max:255'],
             // Nhóm bài viết nhận comment. Nhiều bài để comment của các sản phẩm khác nhau rải
@@ -114,8 +115,10 @@ class ApiConfigController extends Controller
         try {
             // kieushopee trả kèm lý do hỏng cụ thể (thường là next_action đã đổi) chứ không chỉ
             // ok/không — đây là nguồn hay chết nhất nên thông báo phải chỉ thẳng việc cần làm.
-            if ($config->platform === KieuShopeeService::SOURCE) {
-                $result = app(KieuShopeeService::class)->testConnection();
+            // laymavoucher cùng nền tảng nên cùng kiểu hỏng, cùng cách báo.
+            if (in_array($config->platform, [KieuShopeeService::SOURCE, LaymaVoucherService::SOURCE], true)) {
+                $service = $config->platform === LaymaVoucherService::SOURCE ? LaymaVoucherService::class : KieuShopeeService::class;
+                $result = app($service)->testConnection();
 
                 return response()->json($result, $result['ok'] ? 200 : 422);
             }

@@ -21,12 +21,19 @@ use Illuminate\Support\Str;
  * Endpoint là một Next.js Server Action chứ không phải REST API: phải gửi multipart kèm
  * header `next-action` (ID của action) và body trả về là React Flight stream, không phải
  * JSON thuần — xem extractFlightPayload().
+ *
+ * Site nguồn thực chất là một "workspace" trên nền tảng tool affiliate afp.ad (link mã trả về
+ * đi qua s.afp.ad). Workspace khác trên cùng nền tảng gọi y hệt, chỉ khác endpoint/next_action/
+ * tool_id — nên lớp này đọc mọi thứ theo `static::SOURCE` và nguồn khác chỉ cần kế thừa, đổi
+ * SOURCE (xem LaymaVoucherService). Mọi tham số, bản ghi admin, config và nhãn log đều tách
+ * riêng theo SOURCE, sửa nguồn này không đụng tới nguồn kia.
  */
 class KieuShopeeService
 {
     /**
      * Giá trị `source` ghi vào short_links + tracking cho mọi link lấy từ đây. Trước đây
      * là tên nền tảng (facebook/zalo/...) vì salesoc trả nhiều kênh; giờ chỉ có một nguồn.
+     * Cũng là `platform` của bản ghi api_configs và khoá trong config/services.php.
      */
     public const SOURCE = 'kieushopee';
 
@@ -50,7 +57,7 @@ class KieuShopeeService
      */
     public function testConnection(): array
     {
-        $row = ApiConfig::where('platform', self::SOURCE)->first();
+        $row = ApiConfig::where('platform', static::SOURCE)->first();
         $testUrl = $row->meta['test_url'] ?? null;
 
         $result = $this->fetchProductAndVoucherLink($testUrl ?: self::FALLBACK_TEST_URL);
@@ -58,7 +65,7 @@ class KieuShopeeService
         if ($result === null) {
             return [
                 'ok' => false,
-                'message' => 'Không lấy được mã. Nghi ngờ đầu tiên: next_action đã đổi — mở tab Network trên site nguồn lấy ID mới. Chi tiết ở /admin/logs (tìm "KieuShopeeService").',
+                'message' => 'Không lấy được mã. Nghi ngờ đầu tiên: next_action đã đổi — mở tab Network trên site nguồn lấy ID mới. Chi tiết ở /admin/logs (tìm "'.$this->logTag().'").',
             ];
         }
 
@@ -101,12 +108,12 @@ class KieuShopeeService
      */
     private function params(): array
     {
-        $row = ApiConfig::where('platform', self::SOURCE)->first();
+        $row = ApiConfig::where('platform', static::SOURCE)->first();
         $meta = $row->meta ?? [];
 
         $pick = fn (?string $fromDb, string $configKey) => filled($fromDb)
             ? trim($fromDb)
-            : (string) config("services.kieushopee.{$configKey}");
+            : (string) config('services.'.static::SOURCE.'.'.$configKey);
 
         return [
             'endpoint' => $pick($row->endpoint ?? null, 'endpoint'),
@@ -139,7 +146,7 @@ class KieuShopeeService
                     ['name' => '0', 'contents' => $params['action_payload']],
                 ]);
         } catch (\Exception $e) {
-            Log::error('KieuShopeeService: lỗi kết nối tới '.$endpoint.': '.$e->getMessage(), [
+            Log::error($this->logTag().': lỗi kết nối tới '.$endpoint.': '.$e->getMessage(), [
                 'shopee_url' => $shopeeUrl,
             ]);
 
@@ -147,7 +154,7 @@ class KieuShopeeService
         }
 
         if (! $response->successful()) {
-            Log::error('KieuShopeeService: bị từ chối', [
+            Log::error($this->logTag().': bị từ chối', [
                 'status' => $response->status(),
                 'shopee_url' => $shopeeUrl,
                 'body' => Str::limit($response->body(), 300),
@@ -164,7 +171,7 @@ class KieuShopeeService
         $payload = $this->extractFlightPayload($body);
 
         if ($payload === null || ! ($payload['success'] ?? false)) {
-            Log::error('KieuShopeeService: response không đọc được hoặc success=false', [
+            Log::error($this->logTag().': response không đọc được hoặc success=false', [
                 'shopee_url' => $shopeeUrl,
                 'body' => Str::limit($body, 500),
             ]);
@@ -178,7 +185,7 @@ class KieuShopeeService
         if (! is_string($link) || $link === '') {
             // HTTP 200 + success=true nhưng không có link — người dùng thấy "chưa lấy được mã"
             // y hệt lúc API lỗi, nên phải phân biệt được trong log.
-            Log::warning('KieuShopeeService: trả về success nhưng không có link', [
+            Log::warning($this->logTag().': trả về success nhưng không có link', [
                 'shopee_url' => $shopeeUrl,
                 'body' => Str::limit($body, 500),
             ]);
@@ -324,6 +331,16 @@ class KieuShopeeService
         return Str::startsWith($image, ['http://', 'https://'])
             ? $image
             : 'https://cf.shopee.vn/file/'.$image;
+    }
+
+    /**
+     * Tiền tố log = tên lớp thật đang chạy ("KieuShopeeService" / "LaymaVoucherService"). Hai
+     * nguồn chung một thân code, log mà cùng một nhãn thì đọc /admin/logs không biết nguồn nào
+     * đang hỏng — đúng lúc cần biết nhất (một nguồn chết, admin đang cân nhắc đổi sang nguồn kia).
+     */
+    private function logTag(): string
+    {
+        return class_basename(static::class);
     }
 
     private function originOf(string $endpoint): string

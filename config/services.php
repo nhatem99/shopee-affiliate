@@ -182,4 +182,14 @@ return [
         'action_payload' => env('KIEUSHOPEE_ACTION_PAYLOAD', '["$K1"]'),
     ],
 
+    // Nguồn dự phòng khi kieushopee lỗi — cùng nền tảng afp.ad nên cùng bộ tham số, ý nghĩa
+    // từng khoá y hệt khối trên (xem LaymaVoucherService). Giá trị đọc từ request thật trên
+    // trình duyệt ngày 29-09-2026; next_action đổi mỗi lần họ deploy, sửa ở /admin/api-config.
+    'laymavoucher' => [
+        'endpoint' => env('LAYMAVOUCHER_ENDPOINT', 'https://laymavoucher.afp.ad/'),
+        'next_action' => env('LAYMAVOUCHER_NEXT_ACTION', '4011f2fcab27c9becc215b92bff62e07ab779531d4'),
+        'tool_id' => env('LAYMAVOUCHER_TOOL_ID', 'cmulhbxmh007301qqu62phntq'),
+        'action_payload' => env('LAYMAVOUCHER_ACTION_PAYLOAD', '["$K1"]'),
+    ],
+
 ];

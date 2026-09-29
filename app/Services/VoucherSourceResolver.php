@@ -10,8 +10,10 @@ use Illuminate\Support\Facades\Log;
  * Quyết định nguồn lấy mã nào đang được dùng. Có hai nguồn chạy song song và admin chọn ở
  * /admin/api-config bằng công tắc is_active của từng bản ghi:
  *
- *  • kieushopee — mã Facebook/Instagram, đồng bộ, nhận mọi link Shopee.
- *  • ganma      — mã YouTube, bất đồng bộ (~20 giây), CHỈ nhận link ngắn từ app Shopee.
+ *  • kieushopee   — mã Facebook/Instagram, đồng bộ, nhận mọi link Shopee.
+ *  • ganma        — mã YouTube, bất đồng bộ (~20 giây), CHỈ nhận link ngắn từ app Shopee.
+ *  • laymavoucher — dự phòng cho kieushopee, cùng nền tảng afp.ad nên gọi y hệt
+ *                   (xem LaymaVoucherService).
  *
  * Gom vào một chỗ vì cả ShopeeVoucherController (lúc lấy mã) lẫn ShortLinkController (lúc ghi
  * `source` vào short-link và tracking) đều phải trả lời cùng một câu hỏi — hai nơi tự suy ra
@@ -31,8 +33,10 @@ class VoucherSourceResolver
      * kieushopee đứng trước vì nó là nguồn đang phục vụ khách và nhận MỌI dạng link Shopee.
      * Để ganma trước thì một lần lệch dữ liệu sẽ đẩy toàn bộ khách sang nguồn chỉ nhận link
      * ngắn từ app — tức phần lớn khách dán link thường sẽ bị từ chối thẳng.
+     *
+     * laymavoucher đứng cuối: nó là nguồn dự phòng, lệch dữ liệu thì thà về nguồn chính.
      */
-    public const SOURCES = [KieuShopeeService::SOURCE, GanmaService::SOURCE];
+    public const SOURCES = [KieuShopeeService::SOURCE, GanmaService::SOURCE, LaymaVoucherService::SOURCE];
 
     /** Setting bật/tắt lớp ghi đè theo khung giờ — xem activeSource(). */
     public const AUTO_SWITCH_KEY = 'fbig_window_auto_switch';

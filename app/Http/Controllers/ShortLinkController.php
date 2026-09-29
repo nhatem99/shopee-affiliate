@@ -14,6 +14,7 @@ use App\Services\ProductKeyService;
 use App\Services\ShortLinkService;
 use App\Services\TrackingService;
 use App\Services\UrlValidationService;
+use App\Services\VoucherFetchService;
 use App\Services\VoucherRefService;
 use Illuminate\Contracts\Cache\LockTimeoutException;
 use Illuminate\Http\JsonResponse;
@@ -35,8 +36,7 @@ class ShortLinkController extends Controller
         private TrackingService $tracking,
         private VoucherRefService $refs,
         private ProductKeyService $productKeys,
-        private KieuShopeeService $kieuShopee,
-        private GanmaService $ganma,
+        private VoucherFetchService $fetcher,
     ) {}
 
     public function store(Request $request): JsonResponse
@@ -67,9 +67,7 @@ class ShortLinkController extends Controller
         // lấy mã mới nhất tại đúng lúc khách bấm mua. Fetch lỗi/không có mã (null) thì rơi về
         // đúng $url đã lưu, không chặn đường mua hàng của khách.
         if ($voucherRef->source_url) {
-            $fresh = $source === GanmaService::SOURCE
-                ? $this->ganma->fetchProductAndVoucherLink($voucherRef->source_url)
-                : $this->kieuShopee->fetchProductAndVoucherLink($voucherRef->source_url);
+            $fresh = $this->fetcher->refetch($source, $voucherRef->source_url);
 
             if (! empty($fresh['voucher_link'])) {
                 $url = $fresh['voucher_link'];

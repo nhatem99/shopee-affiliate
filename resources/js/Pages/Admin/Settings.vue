@@ -151,10 +151,12 @@ const sourceHealthLine = computed(() => {
     }
 
     const at = new Date(health.checked_at).toLocaleString('vi-VN')
+    // Lần kiểm tra lưu trước khi có laymavoucher không ghi nguồn — lúc đó chỉ có kieushopee.
+    const source = health.source || 'kieushopee'
 
     return health.ok
-        ? `Nguồn bình thường — kiểm tra lúc ${at}.`
-        : `Nguồn đang lỗi ${health.consecutive_failures} lần liên tiếp — kiểm tra lúc ${at}. ${health.message || ''}`
+        ? `Nguồn ${source} bình thường — kiểm tra lúc ${at}.`
+        : `Nguồn ${source} đang lỗi ${health.consecutive_failures} lần liên tiếp — kiểm tra lúc ${at}. ${health.message || ''}`
 })
 
 function toggleFestive() {
@@ -530,10 +532,10 @@ function saveCashbackDisplayRate() {
                     <div class="min-w-0">
                         <h2 class="font-bold text-[var(--color-ink)] mb-1">🚑 Tự bảo trì khi nguồn mã lỗi</h2>
                         <p class="text-sm text-[var(--color-muted)] leading-relaxed">
-                            Cứ <b>5 phút</b> hệ thống gọi thử <span class="font-mono text-xs">sansale.kieushopee.com/22</span>.
+                            Cứ <b>5 phút</b> hệ thống gọi thử nguồn mã <b>kieushopee</b>.
                             Lỗi <b>2 lượt liên tiếp</b> (≈10 phút) thì tự bật chế độ bảo trì, nguồn sống lại thì tự tắt.
-                            Kiểm tra riêng kieushopee, <b>không quan tâm đang để nguồn nào</b> ở trang Cấu hình API —
-                            kể cả khi ganma vẫn ra mã được thì kieushopee chết vẫn đóng trang.
+                            Để ganma thì vẫn kiểm tra kieushopee — kể cả khi ganma ra mã được, kieushopee chết vẫn đóng trang.
+                            Riêng khi đang để <b>laymavoucher</b> (nguồn dự phòng) thì kiểm tra laymavoucher thay cho kieushopee.
                             Bạn tự tay gạt công tắc bảo trì ở trên thì hệ thống <b>không tắt hộ nữa</b>;
                             tắt công tắc này thì trang đang bảo trì tự động sẽ được mở lại ngay.
                         </p>
