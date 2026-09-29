@@ -1,6 +1,6 @@
 <script setup>
 import { ref, computed } from 'vue'
-import { Head, Link, useForm } from '@inertiajs/vue3'
+import { Head, Link, router, useForm } from '@inertiajs/vue3'
 import AccountLayout from '@/Layouts/AccountLayout.vue'
 import MembershipTierProgress from '@/Components/MembershipTierProgress.vue'
 import DailyCheckIn from '@/Components/DailyCheckIn.vue'
@@ -38,11 +38,26 @@ const hasAnyAccount = computed(() =>
 
 // --- Rút tiền ---
 const showWithdraw = ref(false)
-// Ba điều kiện: đủ mức tối thiểu, có ví nhận tiền, và đã có ít nhất một đơn hoàn tiền thật —
-// thưởng người mới không rút được một mình (server cũng chặn, xem WithdrawalController).
-const canWithdraw = computed(() =>
-    props.balance.available >= props.minWithdrawal && hasAnyAccount.value && props.balance.hasRealCashback
+// Ba điều kiện: đủ mức tối thiểu, đã có ít nhất một đơn hoàn tiền thật (thưởng người mới không
+// rút được một mình — server cũng chặn, xem WithdrawalController), và có ví nhận tiền.
+// Hai điều kiện đầu là chuyện TIỀN, khách chỉ có thể chờ → nút xám. Ví nhận tiền thì khách tự
+// khai được ngay, nên thiếu ví KHÔNG làm xám nút: bấm vào là được báo và dẫn sang chỗ khai. Để
+// xám thì khách nhìn số dư đã đủ mà không hiểu vì sao không bấm được, rồi đi hỏi hỗ trợ.
+const hasEnoughToWithdraw = computed(() =>
+    props.balance.available >= props.minWithdrawal && props.balance.hasRealCashback
 )
+const canWithdraw = computed(() => hasEnoughToWithdraw.value && hasAnyAccount.value)
+
+// Chỉ kể những gì CÒN THIẾU, không kể lại cả ba điều kiện: khách nhìn số dư đã đủ mà vẫn đọc
+// "cần số dư tối thiểu" thì không biết mình đang vướng cái gì.
+const missingForWithdraw = computed(() => {
+    const parts = []
+    if (props.balance.available < props.minWithdrawal) parts.push(`số dư tối thiểu ${vnd(props.minWithdrawal)}`)
+    if (!props.balance.hasRealCashback) parts.push('một đơn hàng đã được hoàn tiền')
+    if (!hasAnyAccount.value) parts.push('một ví nhận tiền (khai ở Thông tin cá nhân)')
+
+    return parts.join(', ')
+})
 
 const availableProviders = computed(() =>
     providers.filter(p => props.payoutAccounts?.[p.key])
@@ -53,7 +68,17 @@ const withdrawForm = useForm({
     amount: props.minWithdrawal,
 })
 
+// Hash để trang Thông tin cá nhân biết khách đến từ nút Rút tiền: cuộn tới thẻ ví, đặt con trỏ
+// vào ô trống và lưu xong đưa về lại đây — xem Profile/PersonalInfo.vue.
+const PAYOUT_SETUP_URL = '/profile/thong-tin#vi-nhan-tien'
+
 function openWithdraw() {
+    if (!hasAnyAccount.value) {
+        toast.info('Bạn chưa khai ví nhận tiền. Khai ví MoMo hoặc ZaloPay xong là rút được ngay.')
+        router.visit(PAYOUT_SETUP_URL)
+
+        return
+    }
     withdrawForm.clearErrors()
     withdrawForm.provider = availableProviders.value[0]?.key || 'momo'
     withdrawForm.amount = props.minWithdrawal
@@ -134,7 +159,7 @@ const providerLabels = { momo: 'MoMo', zalopay: 'ZaloPay' }
                     </div>
                     <button
                         @click="openWithdraw"
-                        :disabled="!canWithdraw"
+                        :disabled="!hasEnoughToWithdraw"
                         class="btn-fire text-sm px-5 py-2.5 rounded-xl"
                     >
                         Rút tiền
@@ -158,7 +183,12 @@ const providerLabels = { momo: 'MoMo', zalopay: 'ZaloPay' }
                 </div>
 
                 <p v-if="!canWithdraw" class="text-xs text-[var(--color-muted)] mt-3">
-                    Cần số dư tối thiểu {{ vnd(minWithdrawal) }}, ít nhất một ví nhận tiền{{ balance.hasRealCashback ? '' : ' và một đơn hàng đã được hoàn tiền' }} để rút.
+                    <template v-if="hasEnoughToWithdraw">
+                        Chưa có ví nhận tiền. Bấm <b class="text-[var(--color-ink)]">Rút tiền</b> để khai ví MoMo hoặc ZaloPay — lưu xong là rút được ngay.
+                    </template>
+                    <template v-else>
+                        Để rút cần: {{ missingForWithdraw }}.
+                    </template>
                 </p>
                 <!-- Nói trước việc duyệt tay. Đây là câu đứng giữa khách và cơn giận "gửi lệnh rút
                      cả tiếng rồi mà chưa thấy tiền đâu" — WithdrawalController tạo lệnh ở trạng

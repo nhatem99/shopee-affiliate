@@ -1,5 +1,5 @@
 <script setup>
-import { computed, ref } from 'vue'
+import { computed, nextTick, onMounted, ref } from 'vue'
 import { Head, router, useForm } from '@inertiajs/vue3'
 import AccountLayout from '@/Layouts/AccountLayout.vue'
 import UserAvatar from '@/Components/UserAvatar.vue'
@@ -109,10 +109,37 @@ const payoutForms = {
     }),
 }
 
+// Khách bấm "Rút tiền" ở Tổng quan khi chưa khai ví thì được đưa tới đây với hash #vi-nhan-tien
+// (xem Profile.vue::openWithdraw). Cuộn thẳng tới thẻ ví, viền nổi lên và đặt con trỏ vào ô đầu
+// tiên còn trống — khách đang dở việc rút tiền, đừng bắt họ tự tìm xem phải điền vào đâu.
+const PAYOUT_HASH = '#vi-nhan-tien'
+const fromWithdraw = ref(false)
+const payoutCard = ref(null)
+const accountInputs = {}
+
+onMounted(async () => {
+    if (window.location.hash !== PAYOUT_HASH) return
+    fromWithdraw.value = true
+    await nextTick()
+    payoutCard.value?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+    const firstEmpty = providers.find(p => !props.payoutAccounts?.[p.key]) ?? providers[0]
+    accountInputs[firstEmpty.key]?.focus({ preventScroll: true })
+})
+
 function savePayout(key) {
     payoutForms[key].post('/profile/payout', {
         preserveScroll: true,
-        onSuccess: () => toast.success('Đã lưu thông tin ví'),
+        onSuccess: () => {
+            if (!fromWithdraw.value) {
+                toast.success('Đã lưu thông tin ví')
+
+                return
+            }
+            // Đến từ nút Rút tiền thì việc của khách là rút, không phải ngắm trang này: đưa về
+            // Tổng quan luôn, nút Rút tiền lúc này đã sáng. Muốn khai thêm ví thứ hai thì quay lại sau.
+            toast.success('Đã lưu ví. Giờ bấm Rút tiền là xong.')
+            router.visit('/profile')
+        },
     })
 }
 </script>
@@ -192,10 +219,18 @@ function savePayout(key) {
                 </form>
             </div>
 
-            <!-- Ví nhận tiền -->
-            <div class="card-glass rounded-2xl p-6">
+            <!-- Ví nhận tiền. scroll-mt chừa chỗ cho header dính khi cuộn tới bằng hash. -->
+            <div
+                id="vi-nhan-tien"
+                ref="payoutCard"
+                class="card-glass rounded-2xl p-6 scroll-mt-24"
+                :class="fromWithdraw ? 'ring-2 ring-[var(--color-accent)]' : ''"
+            >
                 <h2 class="font-bold text-[var(--color-ink)] mb-1">Ví nhận tiền</h2>
                 <p class="text-xs text-[var(--color-muted)] mb-4">Thiết lập ví MoMo / ZaloPay để nhận hoa hồng khi rút.</p>
+                <div v-if="fromWithdraw" class="mb-4 rounded-xl bg-[var(--color-peach-soft)] border border-[var(--color-accent)]/25 px-4 py-3 text-sm text-[var(--color-ink)]">
+                    <b>Còn một bước là rút được tiền:</b> khai một trong hai ví bên dưới rồi bấm Lưu — mình đưa bạn về Tổng quan để bấm Rút tiền ngay.
+                </div>
                 <div class="grid md:grid-cols-2 gap-4">
                     <form v-for="p in providers" :key="p.key" @submit.prevent="savePayout(p.key)"
                         class="border border-[var(--color-line)] rounded-xl p-4 space-y-3">
@@ -203,6 +238,7 @@ function savePayout(key) {
                         <div>
                             <label class="block text-xs font-semibold text-[var(--color-ink)] mb-1">Số điện thoại ví</label>
                             <input v-model="payoutForms[p.key].account_number" type="tel" placeholder="VD: 0901234567"
+                                :ref="el => { accountInputs[p.key] = el }"
                                 class="w-full border border-[var(--color-line)] rounded-xl px-3 py-2 text-sm bg-[var(--color-bg)] text-[var(--color-ink)] focus:outline-none focus:border-[var(--color-accent)]" />
                             <p v-if="payoutForms[p.key].errors.account_number" class="text-xs text-red-500 mt-1">{{ payoutForms[p.key].errors.account_number }}</p>
                         </div>
