@@ -133,6 +133,7 @@ const navGroups = [
         items: [
             { href: '/admin/settings', icon: '🔧', label: 'Cài đặt' },
             { href: '/admin/api-config', icon: '⚙️', label: 'Cấu hình API' },
+            { href: '/admin/zalo-bot', icon: '🤖', label: 'Zalo Bot' },
             { href: '/admin/blocked-ips', icon: '🚫', label: 'Chặn IP' },
             { href: '/admin/logs', icon: '🐞', label: 'Nhật ký lỗi' },
             { href: '/admin/scheduler', icon: '⏱️', label: 'Lịch chạy' },

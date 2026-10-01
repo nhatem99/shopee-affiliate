@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\ZaloWebhookController;
 use App\Http\Middleware\AdminMiddleware;
 use App\Http\Middleware\BlockIps;
 use App\Http\Middleware\EnsureCustomerAuthEnabled;
@@ -15,12 +16,20 @@ use Illuminate\Foundation\Configuration\Exceptions;
 use Illuminate\Foundation\Configuration\Middleware;
 use Illuminate\Http\Exceptions\ThrottleRequestsException;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Route;
 
 return Application::configure(basePath: dirname(__DIR__))
     ->withRouting(
         web: __DIR__.'/../routes/web.php',
         commands: __DIR__.'/../routes/console.php',
         health: '/up',
+        then: function () {
+            // Webhook Zalo Bot nằm ngoài nhóm web: không CSRF, không session, không GeoBlock,
+            // không chế độ bảo trì. Xác thực bằng header secret trong controller.
+            Route::post('/webhooks/zalo', ZaloWebhookController::class)
+                ->middleware('throttle:120,1')
+                ->name('zalo.webhook');
+        },
     )
     ->withMiddleware(function (Middleware $middleware): void {
         $middleware->web(append: [

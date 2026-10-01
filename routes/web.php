@@ -17,6 +17,7 @@ use App\Http\Controllers\Admin\UserController as AdminUserController;
 use App\Http\Controllers\Admin\VoucherButtonConfigController;
 use App\Http\Controllers\Admin\VoucherController;
 use App\Http\Controllers\Admin\WithdrawalController as AdminWithdrawalController;
+use App\Http\Controllers\Admin\ZaloBotController;
 use App\Http\Controllers\AffiliateController;
 use App\Http\Controllers\Auth\AdminLoginController;
 use App\Http\Controllers\Auth\GoogleController;
@@ -244,6 +245,12 @@ Route::middleware(['auth', 'auth.admin'])->prefix('admin')->name('admin.')->grou
     Route::get('/blocked-ips', [BlockedIpController::class, 'index'])->name('blocked-ips');
     Route::post('/blocked-ips', [BlockedIpController::class, 'store'])->name('blocked-ips.store');
     Route::delete('/blocked-ips/{blockedIp}', [BlockedIpController::class, 'destroy'])->name('blocked-ips.destroy');
+    Route::get('/zalo-bot', [ZaloBotController::class, 'index'])->name('zalo-bot');
+    Route::post('/zalo-bot/token', [ZaloBotController::class, 'saveToken'])->name('zalo-bot.token');
+    Route::post('/zalo-bot/admins', [ZaloBotController::class, 'saveAdmins'])->name('zalo-bot.admins');
+    Route::post('/zalo-bot/test', [ZaloBotController::class, 'sendTest'])->name('zalo-bot.test');
+    Route::post('/zalo-bot/webhook', [ZaloBotController::class, 'setWebhook'])->name('zalo-bot.webhook');
+    Route::delete('/zalo-bot/webhook', [ZaloBotController::class, 'deleteWebhook'])->name('zalo-bot.webhook.delete');
     // Xem log lỗi production ngay trên web thay vì phải SSH lên server đọc storage/logs.
     Route::get('/logs', [LogController::class, 'index'])->name('logs');
     // Scheduler: cron có chạy không, job nào chạy lúc nào, bấm chạy ngay — cũng để khỏi SSH.
