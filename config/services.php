@@ -184,19 +184,23 @@ return [
 
     // Zalo Bot (bot.zaloplatforms.com) — KHÔNG phải Zalo OA. Bot không tự nhắn trước được cho
     // ai: chỉ gửi được tới chat_id đã từng nhắn cho bot (lưu ở bảng zalo_chats qua webhook).
+    //
+    // Cả ba giá trị dưới đây đều KHÔNG BẮT BUỘC: để trống thì lấy từ trang /admin/zalo-bot
+    // (lưu mã hoá trong bảng settings) — xem ZaloBotSettings. Repo là public nên không bao giờ
+    // ghi token làm giá trị mặc định ở đây.
     'zalo_bot' => [
         'token' => env('ZALO_BOT_TOKEN'),
 
         // chat_id của admin nhận báo, nhiều người thì ngăn bằng dấu phẩy. Lấy bằng cách nhắn
-        // cho bot rồi chạy `php artisan zalo:bot --updates` (chưa đặt webhook) hoặc xem bảng
-        // zalo_chats (đã đặt webhook).
+        // cho bot rồi chạy `php artisan zalo:bot --updates` (chưa đặt webhook) hoặc tick ở
+        // /admin/zalo-bot (đã đặt webhook).
         'admin_chat_ids' => array_values(array_filter(array_map(
             'trim',
             explode(',', (string) env('ZALO_BOT_ADMIN_CHAT_IDS', '')),
         ))),
 
         // Zalo gửi lại chuỗi này trong header X-Bot-Api-Secret-Token ở mọi request webhook.
-        // 8–256 ký tự. Đổi chuỗi này thì phải chạy lại `php artisan zalo:set-webhook`.
+        // 8–256 ký tự. Để trống thì tự sinh và lưu DB. Đổi chuỗi này thì phải đặt lại webhook.
         'webhook_secret' => env('ZALO_BOT_WEBHOOK_SECRET'),
 
         'api_base' => env('ZALO_BOT_API_BASE', 'https://bot-api.zaloplatforms.com'),

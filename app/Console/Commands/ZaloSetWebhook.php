@@ -3,6 +3,7 @@
 namespace App\Console\Commands;
 
 use App\Services\ZaloBotService;
+use App\Services\ZaloBotSettings;
 use Illuminate\Console\Command;
 use RuntimeException;
 
@@ -20,10 +21,10 @@ class ZaloSetWebhook extends Command
 
     protected $description = 'Đăng ký webhook Zalo Bot với Zalo';
 
-    public function handle(ZaloBotService $bot): int
+    public function handle(ZaloBotService $bot, ZaloBotSettings $settings): int
     {
         if (! $bot->isConfigured()) {
-            $this->error('Chưa cấu hình ZALO_BOT_TOKEN trong .env.');
+            $this->error('Chưa cấu hình token Zalo Bot — nhập ở /admin/zalo-bot.');
 
             return self::FAILURE;
         }
@@ -36,7 +37,8 @@ class ZaloSetWebhook extends Command
                 return self::SUCCESS;
             }
 
-            $secret = (string) config('services.zalo_bot.webhook_secret');
+            // Lấy từ .env nếu có, không thì dùng (hoặc tự sinh) secret lưu trong DB.
+            $secret = $settings->ensureWebhookSecret();
             $length = strlen($secret);
             if ($length < 8 || $length > 256) {
                 $this->error('ZALO_BOT_WEBHOOK_SECRET phải dài 8–256 ký tự.');

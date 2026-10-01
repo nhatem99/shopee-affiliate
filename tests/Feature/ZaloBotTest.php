@@ -9,6 +9,7 @@ use App\Models\Setting;
 use App\Models\User;
 use App\Models\ZaloChat;
 use App\Services\ZaloBotService;
+use App\Services\ZaloBotSettings;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Queue;
@@ -229,5 +230,106 @@ class ZaloBotTest extends TestCase
         $this->artisan('zalo:set-webhook', ['--url' => 'http://localhost:8000/webhooks/zalo'])->assertFailed();
 
         Http::assertNothingSent();
+    }
+    // ── Cấu hình lưu trong DB (/admin/zalo-bot), không cần .env ──────────────
+
+    private function withoutEnvConfig(): void
+    {
+        config([
+            'services.zalo_bot.token' => null,
+            'services.zalo_bot.webhook_secret' => null,
+            'services.zalo_bot.admin_chat_ids' => [],
+        ]);
+    }
+
+    public function test_admin_saves_token_after_checking_it(): void
+    {
+        $this->withoutEnvConfig();
+        Http::fake(['*' => Http::response(['ok' => true, 'result' => ['id' => '1', 'display_name' => 'Bot A', 'account_name' => 'bot.a']])]);
+
+        $this->actingAs($this->createAdmin())
+            ->post('/admin/zalo-bot/token', ['token' => '999:secret-token'])
+            ->assertSessionHasNoErrors();
+
+        $settings = app(ZaloBotSettings::class);
+        $this->assertSame('999:secret-token', $settings->token());
+        $this->assertNotNull($settings->webhookSecret());
+        // Lưu mã hoá, không để token trần trong DB.
+        $this->assertStringNotContainsString('secret-token', (string) Setting::get('zalo_bot_token'));
+        Http::assertSent(fn ($request) => str_ends_with($request->url(), '/bot999:secret-token/getMe'));
+    }
+
+    public function test_invalid_token_is_not_saved(): void
+    {
+        $this->withoutEnvConfig();
+        Http::fake(['*' => Http::response(['ok' => false, 'error_code' => 401, 'description' => 'Unauthorized'], 401)]);
+
+        $this->actingAs($this->createAdmin())
+            ->post('/admin/zalo-bot/token', ['token' => 'bad'])
+            ->assertSessionHasErrors('token');
+
+        $this->assertNull(app(ZaloBotSettings::class)->token());
+    }
+
+    public function test_admin_picks_admin_chats_from_people_who_messaged_bot(): void
+    {
+        $this->withoutEnvConfig();
+        ZaloChat::create(['chat_id' => 'chat-abc', 'display_name' => 'Ted']);
+        $admin = $this->createAdmin();
+
+        $this->actingAs($admin)
+            ->post('/admin/zalo-bot/admins', ['chat_ids' => ['chat-abc']])
+            ->assertSessionHasNoErrors();
+        $this->assertSame(['chat-abc'], app(ZaloBotSettings::class)->adminChatIds());
+
+        $this->actingAs($admin)
+            ->post('/admin/zalo-bot/admins', ['chat_ids' => ['nguoi-la']])
+            ->assertSessionHasErrors('chat_ids.0');
+    }
+
+    public function test_withdrawal_and_webhook_use_db_settings_when_env_empty(): void
+    {
+        $this->withoutEnvConfig();
+        Queue::fake();
+        $settings = app(ZaloBotSettings::class);
+        $settings->saveToken('999:db-token');
+        $settings->saveAdminChatIds(['admin-db']);
+
+        $this->actingAs($this->userReadyToWithdraw())
+            ->post('/withdrawals', ['provider' => 'momo', 'amount' => 20000])
+            ->assertSessionHasNoErrors();
+        Queue::assertPushed(SendZaloMessage::class, fn ($job) => $job->chatId === 'admin-db');
+
+        $this->postWebhook($this->update(), 'wrong')->assertForbidden();
+        $this->postWebhook($this->update(), $settings->webhookSecret())->assertOk();
+    }
+
+    public function test_admin_sets_webhook_from_page(): void
+    {
+        $this->withoutEnvConfig();
+        app(ZaloBotSettings::class)->saveToken('999:db-token');
+        url()->forceRootUrl('https://tietkiemvi.com');
+        url()->forceScheme('https');
+        Http::fake(['*' => Http::response(['ok' => true, 'result' => ['verification' => ['ok' => true]]])]);
+
+        $this->actingAs($this->createAdmin())
+            ->post('/admin/zalo-bot/webhook')
+            ->assertSessionHasNoErrors();
+
+        $secret = app(ZaloBotSettings::class)->webhookSecret();
+        Http::assertSent(fn ($request) => str_ends_with($request->url(), '/setWebhook')
+            && $request['url'] === 'https://tietkiemvi.com/webhooks/zalo'
+            && $request['secret_token'] === $secret);
+    }
+
+    public function test_page_is_admin_only_and_renders(): void
+    {
+        $this->withoutEnvConfig();
+
+        $this->actingAs($this->createUser())->get('/admin/zalo-bot')->assertForbidden();
+
+        $this->actingAs($this->createAdmin())->get('/admin/zalo-bot')
+            ->assertOk()
+            ->assertInertia(fn ($page) => $page->component('Admin/ZaloBot')->where('configured', false));
     }
 }

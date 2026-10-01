@@ -13,13 +13,15 @@ use App\Models\Withdrawal;
  */
 class ZaloAdminNotifier
 {
+    public function __construct(private ZaloBotSettings $settings) {}
+
     public function notify(string $text): void
     {
-        if (blank(config('services.zalo_bot.token'))) {
+        if ($this->settings->token() === null) {
             return;
         }
 
-        foreach (config('services.zalo_bot.admin_chat_ids', []) as $chatId) {
+        foreach ($this->settings->adminChatIds() as $chatId) {
             SendZaloMessage::dispatch($chatId, $text);
         }
     }

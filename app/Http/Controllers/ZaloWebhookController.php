@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Services\ZaloBotSettings;
 use App\Services\ZaloWebhookService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -13,9 +14,9 @@ use Illuminate\Http\Request;
  */
 class ZaloWebhookController extends Controller
 {
-    public function __invoke(Request $request, ZaloWebhookService $webhook): JsonResponse
+    public function __invoke(Request $request, ZaloWebhookService $webhook, ZaloBotSettings $settings): JsonResponse
     {
-        $secret = (string) config('services.zalo_bot.webhook_secret');
+        $secret = (string) $settings->webhookSecret();
 
         // Chưa đặt secret = coi như chưa bật webhook; không nhận request "không khoá".
         if ($secret === '' || ! hash_equals($secret, (string) $request->header('X-Bot-Api-Secret-Token'))) {

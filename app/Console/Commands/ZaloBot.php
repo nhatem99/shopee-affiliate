@@ -3,6 +3,7 @@
 namespace App\Console\Commands;
 
 use App\Services\ZaloBotService;
+use App\Services\ZaloBotSettings;
 use App\Services\ZaloWebhookService;
 use Illuminate\Console\Command;
 use RuntimeException;
@@ -19,10 +20,10 @@ class ZaloBot extends Command
 
     protected $description = 'Xem thông tin Zalo Bot, lấy chat_id, gửi thử tin cho admin';
 
-    public function handle(ZaloBotService $bot, ZaloWebhookService $webhook): int
+    public function handle(ZaloBotService $bot, ZaloWebhookService $webhook, ZaloBotSettings $settings): int
     {
         if (! $bot->isConfigured()) {
-            $this->error('Chưa cấu hình ZALO_BOT_TOKEN trong .env.');
+            $this->error('Chưa cấu hình token Zalo Bot — nhập ở /admin/zalo-bot.');
 
             return self::FAILURE;
         }
@@ -43,8 +44,8 @@ class ZaloBot extends Command
             $this->line('Webhook: (chưa đặt)');
         }
 
-        $admins = config('services.zalo_bot.admin_chat_ids', []);
-        $this->line('Admin chat_id: '.($admins ? implode(', ', $admins) : '(chưa có — đặt ZALO_BOT_ADMIN_CHAT_IDS)'));
+        $admins = $settings->adminChatIds();
+        $this->line('Admin chat_id: '.($admins ? implode(', ', $admins) : '(chưa có — chọn ở /admin/zalo-bot)'));
 
         if ($this->option('updates')) {
             return $this->pullUpdates($bot, $webhook);

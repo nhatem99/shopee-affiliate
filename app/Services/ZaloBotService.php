@@ -19,14 +19,25 @@ class ZaloBotService
     // Giới hạn của sendMessage theo tài liệu: 1–2000 ký tự.
     public const MAX_TEXT_LENGTH = 2000;
 
+    public function __construct(private ZaloBotSettings $settings) {}
+
     public function isConfigured(): bool
     {
-        return filled(config('services.zalo_bot.token'));
+        return $this->settings->token() !== null;
     }
 
     public function getMe(): array
     {
         return $this->call('getMe');
+    }
+
+    /**
+     * Gọi getMe bằng một token CHƯA lưu, để trang admin báo sai token ngay lúc nhập thay vì
+     * lưu xong mới phát hiện.
+     */
+    public function getMeWithToken(string $token): array
+    {
+        return $this->call('getMe', [], 15, trim($token));
     }
 
     public function getWebhookInfo(): array
@@ -107,11 +118,11 @@ class ZaloBotService
         return $parts;
     }
 
-    private function call(string $method, array $payload = [], int $timeout = 15): array
+    private function call(string $method, array $payload = [], int $timeout = 15, ?string $token = null): array
     {
-        $token = (string) config('services.zalo_bot.token');
+        $token ??= (string) $this->settings->token();
         if ($token === '') {
-            throw new RuntimeException('Chưa cấu hình ZALO_BOT_TOKEN.');
+            throw new RuntimeException('Chưa cấu hình token Zalo Bot (/admin/zalo-bot).');
         }
 
         $url = rtrim((string) config('services.zalo_bot.api_base'), '/')."/bot{$token}/{$method}";
@@ -119,7 +130,7 @@ class ZaloBotService
         try {
             $response = Http::timeout($timeout)->acceptJson()->asJson()->post($url, (object) $payload);
         } catch (Throwable $e) {
-            throw new RuntimeException("Zalo Bot {$method}: ".$this->scrub($e->getMessage()), 0);
+            throw new RuntimeException("Zalo Bot {$method}: ".$this->scrub($e->getMessage(), $token), 0);
         }
 
         $body = $response->json();
@@ -127,16 +138,14 @@ class ZaloBotService
             $code = is_array($body) ? ($body['error_code'] ?? $response->status()) : $response->status();
             $description = is_array($body) ? ($body['description'] ?? 'không rõ') : 'phản hồi không phải JSON';
 
-            throw new RuntimeException("Zalo Bot {$method} lỗi [{$code}]: ".$this->scrub((string) $description));
+            throw new RuntimeException("Zalo Bot {$method} lỗi [{$code}]: ".$this->scrub((string) $description, $token));
         }
 
         return is_array($body['result'] ?? null) ? $body['result'] : [];
     }
 
-    private function scrub(string $message): string
+    private function scrub(string $message, string $token): string
     {
-        $token = (string) config('services.zalo_bot.token');
-
         return $token === '' ? $message : str_replace($token, '***', $message);
     }
 }
