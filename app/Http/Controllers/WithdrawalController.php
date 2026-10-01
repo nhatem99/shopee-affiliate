@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\User;
 use App\Models\Withdrawal;
+use App\Services\ZaloAdminNotifier;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -11,7 +12,7 @@ use Illuminate\Validation\ValidationException;
 
 class WithdrawalController extends Controller
 {
-    public function store(Request $request): RedirectResponse
+    public function store(Request $request, ZaloAdminNotifier $zalo): RedirectResponse
     {
         abort_if($request->user()->isAdmin(), 403, 'Trang này dành cho khách hàng.');
 
@@ -20,7 +21,7 @@ class WithdrawalController extends Controller
             'amount' => ['required', 'numeric', 'min:'.ProfileController::MIN_WITHDRAWAL],
         ]);
 
-        DB::transaction(function () use ($request, $data) {
+        $withdrawal = DB::transaction(function () use ($request, $data) {
             /** @var User $user */
             $user = User::whereKey($request->user()->id)->lockForUpdate()->first();
 
@@ -45,7 +46,7 @@ class WithdrawalController extends Controller
                 ]);
             }
 
-            Withdrawal::create([
+            return Withdrawal::create([
                 'user_id' => $user->id,
                 'provider' => $account->provider,
                 'account_number' => $account->account_number,
@@ -54,6 +55,9 @@ class WithdrawalController extends Controller
                 'status' => 'pending',
             ]);
         });
+
+        // Sau commit: báo khi lệnh rút đã thật sự nằm trong DB.
+        $zalo->withdrawalRequested($withdrawal);
 
         return back()->with('success', 'Đã gửi yêu cầu rút tiền. Vui lòng chờ admin duyệt.');
     }

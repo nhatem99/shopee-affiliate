@@ -182,6 +182,26 @@ return [
         'action_payload' => env('KIEUSHOPEE_ACTION_PAYLOAD', '["$K1"]'),
     ],
 
+    // Zalo Bot (bot.zaloplatforms.com) — KHÔNG phải Zalo OA. Bot không tự nhắn trước được cho
+    // ai: chỉ gửi được tới chat_id đã từng nhắn cho bot (lưu ở bảng zalo_chats qua webhook).
+    'zalo_bot' => [
+        'token' => env('ZALO_BOT_TOKEN'),
+
+        // chat_id của admin nhận báo, nhiều người thì ngăn bằng dấu phẩy. Lấy bằng cách nhắn
+        // cho bot rồi chạy `php artisan zalo:bot --updates` (chưa đặt webhook) hoặc xem bảng
+        // zalo_chats (đã đặt webhook).
+        'admin_chat_ids' => array_values(array_filter(array_map(
+            'trim',
+            explode(',', (string) env('ZALO_BOT_ADMIN_CHAT_IDS', '')),
+        ))),
+
+        // Zalo gửi lại chuỗi này trong header X-Bot-Api-Secret-Token ở mọi request webhook.
+        // 8–256 ký tự. Đổi chuỗi này thì phải chạy lại `php artisan zalo:set-webhook`.
+        'webhook_secret' => env('ZALO_BOT_WEBHOOK_SECRET'),
+
+        'api_base' => env('ZALO_BOT_API_BASE', 'https://bot-api.zaloplatforms.com'),
+    ],
+
     // Nguồn dự phòng khi kieushopee lỗi — cùng nền tảng afp.ad nên cùng bộ tham số, ý nghĩa
     // từng khoá y hệt khối trên (xem LaymaVoucherService). Giá trị đọc từ request thật trên
     // trình duyệt ngày 29-09-2026; next_action đổi mỗi lần họ deploy, sửa ở /admin/api-config.
