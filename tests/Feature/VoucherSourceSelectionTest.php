@@ -3,6 +3,7 @@
 namespace Tests\Feature;
 
 use App\Models\ApiConfig;
+use App\Models\Setting;
 use App\Models\VoucherRef;
 use App\Services\GanmaService;
 use App\Services\KieuShopeeService;
@@ -263,6 +264,73 @@ class VoucherSourceSelectionTest extends TestCase
         $this->assertSame(self::SHORT_URL, $ref->source_url);
         // Chính url đã là link YTB — không xâu thêm lần nữa lúc bấm mua.
         $this->assertNull($ref->ytb_url);
+    }
+
+    /**
+     * Admin tắt "mã YTB gọi kèm kieushopee" (thường vì kieushopee đang lỗi): chỉ gọi ganma, khách
+     * nhận thẳng link ganma, không có bước 1 — và kieushopee tuyệt đối không bị gọi, đó là toàn bộ
+     * lý do có công tắc này. Ref ghi y hệt nhánh rơi về link ganma ở test trên.
+     */
+    public function test_ytb_mode_without_kieushopee_serves_the_ganma_link_directly(): void
+    {
+        $this->useSource(GanmaService::SOURCE);
+        Setting::set(VoucherSourceResolver::YTB_WITH_KIEUSHOPEE_KEY, '0');
+        [$kieu, $ganma] = $this->mockSources();
+
+        $ganma->shouldReceive('fetchProductAndVoucherLink')
+            ->once()
+            ->with(self::SHORT_URL)
+            ->andReturn(['voucher_link' => self::YTB_LINK, 'shop_id' => '1', 'item_id' => '2', 'product' => null]);
+        $kieu->shouldNotReceive('fetchProductAndVoucherLink');
+
+        $this->actingAs($this->createAdmin())
+            ->post('/voucher/resolve', ['url' => self::SHORT_URL])
+            ->assertOk()
+            ->assertInertia(fn ($page) => $page
+                ->has('voucherResult.voucher_ref')
+                ->where('voucherResult.ytb_activate_url', null)
+            );
+
+        $ref = $this->issuedRef();
+        $this->assertSame(self::YTB_LINK, $ref->url);
+        $this->assertSame(GanmaService::SOURCE, $ref->source);
+        $this->assertSame(self::SHORT_URL, $ref->source_url);
+        $this->assertNull($ref->ytb_url);
+    }
+
+    /** Ganma hụt mã thì khách nhận "chưa lấy được mã" — không lén gọi kieushopee bù vào. */
+    public function test_ytb_mode_without_kieushopee_does_not_fall_back_to_it(): void
+    {
+        $this->useSource(GanmaService::SOURCE);
+        Setting::set(VoucherSourceResolver::YTB_WITH_KIEUSHOPEE_KEY, '0');
+        [$kieu, $ganma] = $this->mockSources();
+
+        $ganma->shouldReceive('fetchProductAndVoucherLink')->once()->andReturnNull();
+        $kieu->shouldNotReceive('fetchProductAndVoucherLink');
+
+        $this->actingAs($this->createAdmin())
+            ->post('/voucher/resolve', ['url' => self::SHORT_URL])
+            ->assertOk()
+            ->assertInertia(fn ($page) => $page->where('voucherResult.voucher_ref', null));
+    }
+
+    /** Công tắc chỉ thuộc chế độ mã YTB — để kieushopee thì tắt nó cũng không đổi gì. */
+    public function test_ytb_switch_does_not_touch_kieushopee_mode(): void
+    {
+        $this->useSource(KieuShopeeService::SOURCE);
+        Setting::set(VoucherSourceResolver::YTB_WITH_KIEUSHOPEE_KEY, '0');
+        [$kieu, $ganma] = $this->mockSources();
+
+        $ganma->shouldNotReceive('fetchProductAndVoucherLink');
+        $kieu->shouldReceive('fetchProductAndVoucherLink')
+            ->once()
+            ->andReturn(['voucher_link' => self::KIEU_LINK, 'shop_id' => '1', 'item_id' => '2', 'product' => null]);
+
+        $this->actingAs($this->createAdmin())
+            ->post('/voucher/resolve', ['url' => self::FULL_URL])
+            ->assertOk();
+
+        $this->assertSame(self::KIEU_LINK, $this->issuedRef()->url);
     }
 
     /**

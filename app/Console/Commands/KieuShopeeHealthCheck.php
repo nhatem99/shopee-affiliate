@@ -32,7 +32,7 @@ class KieuShopeeHealthCheck extends Command
 
         $this->line(match ($status['action']) {
             'da_bat_bao_tri' => '🔴 Đã TỰ BẬT chế độ bảo trì — khách không vào được trang nữa.',
-            'da_tat_bao_tri' => '🟢 Nguồn sống lại — đã TỰ TẮT chế độ bảo trì.',
+            'da_tat_bao_tri' => '🟢 Đã TỰ TẮT chế độ bảo trì — khách vào lại được trang.',
             'cho_them_luot' => 'Lỗi lần đầu, chờ thêm một lượt nữa mới bật bảo trì (tránh đóng trang vì một nhịp timeout).',
             default => 'Không đổi gì.',
         });

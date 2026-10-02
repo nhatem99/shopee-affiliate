@@ -25,6 +25,9 @@ use Illuminate\Support\Facades\Log;
  *    nhận. Ganma không ra mã thì khách vẫn nhận link kieushopee bình thường, chỉ thiếu mã YTB.
  *    Chiều ngược lại — kieushopee không ra mã — thì rơi về link ganma, đúng hành vi cũ của chế
  *    độ này, thà có mã còn hơn không.
+ *
+ *    Admin tắt "mã YTB gọi kèm kieushopee" ở Admin > Cài đặt (VoucherSourceResolver::
+ *    ytbWithKieuShopee) thì bỏ hẳn kieushopee, đi thẳng nhánh rơi về link ganma đó.
  */
 class VoucherFetchService
 {
@@ -64,12 +67,19 @@ class VoucherFetchService
         }
 
         $ytb = $this->ganma->fetchProductAndVoucherLink($url);
+        $canonicalUrl = $this->resolver->resolveCanonicalUrl($url);
+
+        // Admin tắt "mã YTB gọi kèm kieushopee" (thường vì nguồn đó đang lỗi): đưa thẳng link
+        // ganma — một bước, vẫn có mã YTB vì mã nằm sẵn trong link đích. Y hệt nhánh rơi về
+        // cuối hàm, chỉ khỏi bắt khách chờ thêm một round-trip tới nguồn đang chết.
+        if (! VoucherSourceResolver::ytbWithKieuShopee()) {
+            return new VoucherFetchResult(GanmaService::SOURCE, $canonicalUrl, $url, $ytb);
+        }
 
         if (! $ytb) {
             Log::warning('VoucherFetchService: ganma không ra mã, khách chỉ nhận link kieushopee', ['url' => $url]);
         }
 
-        $canonicalUrl = $this->resolver->resolveCanonicalUrl($url);
         $data = $this->kieuShopee->fetchProductAndVoucherLink($canonicalUrl);
 
         if ($data) {

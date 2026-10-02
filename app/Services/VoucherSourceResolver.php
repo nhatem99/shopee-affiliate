@@ -41,6 +41,9 @@ class VoucherSourceResolver
     /** Setting bật/tắt lớp ghi đè theo khung giờ — xem activeSource(). */
     public const AUTO_SWITCH_KEY = 'fbig_window_auto_switch';
 
+    /** Setting cho chế độ mã YTB có gọi kèm kieushopee hay không — xem ytbWithKieuShopee(). */
+    public const YTB_WITH_KIEUSHOPEE_KEY = 'ytb_with_kieushopee';
+
     /**
      * Nguồn THẬT SỰ phục vụ khách ngay lúc này.
      *
@@ -53,16 +56,45 @@ class VoucherSourceResolver
      * admin đã chọn, không cần ai bật lại và không phụ thuộc cron còn sống. Đổi lại, trang
      * /admin/api-config phải tự nói ra lúc đang ghi đè, nếu không admin nhìn thấy ganma "đang
      * phục vụ khách" trong khi thực tế mọi lượt quét đi qua kieushopee.
+     *
+     * Admin đã tắt "mã YTB gọi kèm kieushopee" thì cũng không ghi đè: tắt công tắc đó thường là
+     * vì kieushopee đang chết, mà vẫn ghi đè thì cứ tới khung giờ là mọi lượt quét đổ về đúng
+     * nguồn đang chết.
      */
     public function activeSource(): string
     {
         $configured = $this->configuredSource();
 
-        if ($configured !== GanmaService::SOURCE || ! self::autoSwitchEnabled()) {
+        if ($configured !== GanmaService::SOURCE || ! self::autoSwitchEnabled() || ! self::ytbWithKieuShopee()) {
             return $configured;
         }
 
         return $this->restock->inFbIgWindow() ? KieuShopeeService::SOURCE : $configured;
+    }
+
+    /**
+     * Công tắc ở Admin > Cài đặt. Bật (mặc định): chế độ mã YTB gọi cả ganma lẫn kieushopee — khách
+     * đi hai bước, có cả mã YTB lẫn mã FB-IG (xem VoucherFetchService). Tắt: chỉ gọi ganma, khách
+     * nhận thẳng link ganma và đi một bước — dùng khi kieushopee đang lỗi, khỏi bắt khách chờ thêm
+     * một round-trip chắc chắn hỏng.
+     *
+     * Mặc định BẬT, khác lệ "hành vi tự động mặc định tắt" của repo: đây không phải hành vi tự
+     * động mới mà là giữ nguyên cách chạy vốn có — tắt sẵn mới là đổi hành vi của người không
+     * hề yêu cầu.
+     */
+    public static function ytbWithKieuShopee(): bool
+    {
+        return Setting::getBool(self::YTB_WITH_KIEUSHOPEE_KEY, true);
+    }
+
+    /**
+     * Không lượt quét nào của khách đi qua kieushopee: đang để ganma và đã tắt "gọi kèm
+     * kieushopee". Lượt kiểm tra sức khoẻ đọc cái này để khỏi đóng trang vì một nguồn không ai
+     * dùng — xem SourceHealthService::check().
+     */
+    public function ytbOnly(): bool
+    {
+        return $this->configuredSource() === GanmaService::SOURCE && ! self::ytbWithKieuShopee();
     }
 
     /**

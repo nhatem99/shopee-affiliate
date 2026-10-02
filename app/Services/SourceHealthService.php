@@ -19,6 +19,8 @@ use Illuminate\Support\Facades\Log;
  * Ngoại lệ duy nhất là laymavoucher: admin bật nó chính là để né lúc kieushopee chết, lúc đó
  * không lượt quét nào đi qua kieushopee nữa — vẫn kiểm tra kieushopee thì trang bị đóng đúng
  * lúc nguồn dự phòng đang chạy ngon. Nên khi đang để laymavoucher thì kiểm tra laymavoucher.
+ * Cùng lý do đó, để ganma mà đã tắt "mã YTB gọi kèm kieushopee" thì bỏ qua hẳn — xem
+ * skipWhileYtbOnly().
  * Bật/tắt bảo trì dùng đúng Setting `maintenance_mode` mà MaintenanceMode middleware
  * và trang Cài đặt vẫn đọc — không thêm đường thứ hai để sớm muộn hai bên lệch nhau.
  *
@@ -77,6 +79,10 @@ class SourceHealthService
      */
     public function check(): array
     {
+        if ($this->sources->ytbOnly()) {
+            return $this->skipWhileYtbOnly();
+        }
+
         // Dùng đúng testConnection() của nút "Kiểm tra kết nối" ở /admin/api-config: cùng tham
         // số, cùng đường đi với lượt lấy mã thật của khách. Tự dựng một request riêng ở đây là
         // tự tạo ra khả năng "check nói OK mà khách vẫn không lấy được mã".
@@ -106,12 +112,44 @@ class SourceHealthService
     }
 
     /**
+     * Đang để ganma và đã tắt "mã YTB gọi kèm kieushopee": không lượt quét nào đi qua kieushopee
+     * nữa — cùng lý do với ngoại lệ laymavoucher, kiểm tra nó thì trang bị đóng đúng lúc ganma đang
+     * phục vụ ngon (admin tắt công tắc đó thường chính vì kieushopee đang chết).
+     *
+     * Cũng không đem ganma ra kiểm tra thay: mỗi lượt mất ~20 giây, và hụt mã thường là do sản
+     * phẩm thử hết mã chứ không phải nguồn chết — đóng trang theo nó là đóng nhầm.
+     *
+     * Lần bảo trì do chính lớp này bật (lúc kieushopee chết) thì mở lại luôn: lý do đóng trang
+     * không còn chạm tới khách nữa, để nguyên thì admin tắt công tắc xong trang vẫn đóng.
+     *
+     * @return array{checked_at: string, ok: bool, message: string, consecutive_failures: int, action: ?string}
+     */
+    private function skipWhileYtbOnly(): array
+    {
+        $status = [
+            'checked_at' => now()->toIso8601String(),
+            'source' => KieuShopeeService::SOURCE,
+            'ok' => true,
+            'skipped' => true,
+            'message' => 'Bỏ qua — chế độ mã YTB đang không gọi kieushopee nên kieushopee lỗi cũng không ảnh hưởng khách.',
+            'consecutive_failures' => 0,
+            'action' => $this->reopen('SourceHealthService: chế độ mã YTB không gọi kieushopee nữa — đã tự tắt chế độ bảo trì'),
+        ];
+
+        Setting::set(self::STATUS_KEY, json_encode($status, JSON_UNESCAPED_UNICODE));
+
+        return $status;
+    }
+
+    /**
      * Kết quả lần kiểm tra gần nhất. Chưa chạy lần nào thì trả về khung rỗng thay vì null — nơi
      * gọi khỏi phải tự phòng thủ, và trang Cài đặt hiện được "chưa kiểm tra lần nào".
      *
      * `source` null = lần kiểm tra lưu trước khi có laymavoucher, lúc đó chỉ có kieushopee.
      *
-     * @return array{checked_at: ?string, source: ?string, ok: ?bool, message: ?string, consecutive_failures: int, action: ?string}
+     * `skipped` true = lần đó bỏ qua vì chế độ mã YTB không gọi kieushopee — xem skipWhileYtbOnly().
+     *
+     * @return array{checked_at: ?string, source: ?string, ok: ?bool, skipped: bool, message: ?string, consecutive_failures: int, action: ?string}
      */
     public function status(): array
     {
@@ -125,6 +163,7 @@ class SourceHealthService
             'checked_at' => $saved['checked_at'] ?? null,
             'source' => $saved['source'] ?? null,
             'ok' => $saved['ok'] ?? null,
+            'skipped' => (bool) ($saved['skipped'] ?? false),
             'message' => $saved['message'] ?? null,
             'consecutive_failures' => (int) ($saved['consecutive_failures'] ?? 0),
             'action' => $saved['action'] ?? null,
@@ -187,6 +226,12 @@ class SourceHealthService
 
     private function onSourceUp(string $source): ?string
     {
+        return $this->reopen("SourceHealthService: nguồn {$source} sống lại — đã tự tắt chế độ bảo trì");
+    }
+
+    /** Mở lại trang nếu lần bảo trì đang chạy là do chính lớp này bật. */
+    private function reopen(string $logMessage): ?string
+    {
         // Bảo trì do admin bật tay (hoặc không hề bảo trì) thì không đụng vào.
         if (! Setting::getBool(self::AUTO_FLAG_KEY, false)) {
             return null;
@@ -195,7 +240,7 @@ class SourceHealthService
         Setting::set('maintenance_mode', '0');
         Setting::set(self::AUTO_FLAG_KEY, '0');
 
-        Log::info("SourceHealthService: nguồn {$source} sống lại — đã tự tắt chế độ bảo trì");
+        Log::info($logMessage);
 
         return 'da_tat_bao_tri';
     }

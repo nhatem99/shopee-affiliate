@@ -2,9 +2,12 @@
 
 namespace Tests\Feature;
 
+use App\Models\ApiConfig;
 use App\Models\Setting;
+use App\Services\GanmaService;
 use App\Services\KieuShopeeService;
 use App\Services\SourceHealthService;
+use App\Services\VoucherSourceResolver;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Mockery;
 use Tests\TestCase;
@@ -190,5 +193,72 @@ class AutoMaintenanceOnSourceFailureTest extends TestCase
             ->assertRedirect();
 
         $this->assertTrue($this->inMaintenance());
+    }
+
+    /** Để ganma và đã tắt "mã YTB gọi kèm kieushopee" — không lượt quét nào đi qua kieushopee. */
+    private function useYtbOnly(): void
+    {
+        foreach (VoucherSourceResolver::SOURCES as $source) {
+            ApiConfig::updateOrCreate(['platform' => $source], [
+                'name' => $source,
+                'endpoint' => 'https://example.test',
+                'is_active' => $source === GanmaService::SOURCE,
+            ]);
+        }
+
+        Setting::set(VoucherSourceResolver::YTB_WITH_KIEUSHOPEE_KEY, '0');
+    }
+
+    /**
+     * Admin tắt "mã YTB gọi kèm kieushopee" chính vì kieushopee đang chết — kiểm tra nó lúc đó là
+     * đóng trang đúng lúc ganma đang phục vụ ngon. Cùng lý do với ngoại lệ laymavoucher.
+     */
+    public function test_ma_ytb_khong_goi_kieushopee_thi_bo_qua_kiem_tra(): void
+    {
+        $this->enableSwitch();
+        $this->useYtbOnly();
+
+        $mock = Mockery::mock(KieuShopeeService::class);
+        $mock->shouldNotReceive('testConnection');
+        $this->instance(KieuShopeeService::class, $mock);
+
+        $this->check();
+        $status = $this->check();
+
+        $this->assertFalse($this->inMaintenance());
+        $this->assertTrue($status['skipped']);
+        $this->assertTrue(app(SourceHealthService::class)->status()['skipped']);
+    }
+
+    /**
+     * kieushopee chết làm trang tự đóng, admin chuyển sang chỉ dùng ganma để mở bán lại: lượt kế
+     * tiếp phải mở trang, không thì tắt công tắc xong trang vẫn đóng mà không biết vì sao.
+     */
+    public function test_chuyen_sang_chi_ganma_thi_mo_lai_trang_dang_bao_tri_tu_dong(): void
+    {
+        $this->enableSwitch();
+        $this->sourceAnswers(false, false);
+        $this->check();
+        $this->check();
+        $this->assertTrue($this->inMaintenance());
+
+        $this->useYtbOnly();
+        $status = $this->check();
+
+        $this->assertFalse($this->inMaintenance());
+        $this->assertSame('da_tat_bao_tri', $status['action']);
+    }
+
+    /** Bỏ qua kiểm tra cũng không được mở hộ lần bảo trì do admin bật tay. */
+    public function test_bo_qua_kiem_tra_khong_dung_vao_bao_tri_cua_admin(): void
+    {
+        $this->enableSwitch();
+        $this->useYtbOnly();
+        Setting::set('maintenance_mode', '1');
+
+        $status = $this->check();
+
+        $this->assertTrue($this->inMaintenance());
+        $this->assertNull($status['action']);
     }
 }

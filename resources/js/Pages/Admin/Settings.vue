@@ -8,12 +8,13 @@ const props = defineProps({
     customerAuthEnabled: { type: Boolean, required: true },
     maintenanceMode: { type: Boolean, required: true },
     autoMaintenanceEnabled: { type: Boolean, default: false },
-    // { checked_at, ok, message, consecutive_failures, action } — null ở mọi trường khi chưa
-    // kiểm tra lần nào.
+    // { checked_at, ok, skipped, message, consecutive_failures, action } — null ở mọi trường khi
+    // chưa kiểm tra lần nào.
     sourceHealth: { type: Object, default: () => ({}) },
     festiveDecor: { type: Boolean, default: false },
     historyRebuyEnabled: { type: Boolean, default: false },
     fbigWindowAutoSwitch: { type: Boolean, default: false },
+    ytbWithKieuShopee: { type: Boolean, default: true },
     leaderboardDemo: { type: Boolean, default: true },
     // { url, fileName, video, maxUploadMb } — xem GuideVideoService::adminState().
     guideVideo: { type: Object, default: () => ({ url: '', fileName: null, video: null, maxUploadMb: 0 }) },
@@ -44,6 +45,8 @@ const historyRebuyEnabled = ref(props.historyRebuyEnabled)
 const savingHistoryRebuy = ref(false)
 const fbigWindowAutoSwitch = ref(props.fbigWindowAutoSwitch)
 const savingFbigAutoSwitch = ref(false)
+const ytbWithKieuShopee = ref(props.ytbWithKieuShopee)
+const savingYtbWithKieuShopee = ref(false)
 const leaderboardDemo = ref(props.leaderboardDemo)
 const savingLeaderboardDemo = ref(false)
 const guideVideoUrl = ref(props.guideVideo?.url ?? '')
@@ -74,6 +77,7 @@ watch(() => props.autoMaintenanceEnabled, (v) => { autoMaintenanceEnabled.value 
 watch(() => props.festiveDecor, (v) => { festiveDecor.value = v })
 watch(() => props.historyRebuyEnabled, (v) => { historyRebuyEnabled.value = v })
 watch(() => props.fbigWindowAutoSwitch, (v) => { fbigWindowAutoSwitch.value = v })
+watch(() => props.ytbWithKieuShopee, (v) => { ytbWithKieuShopee.value = v })
 watch(() => props.leaderboardDemo, (v) => { leaderboardDemo.value = v })
 watch(() => props.guideVideo, (v) => { guideVideoUrl.value = v?.url ?? '' })
 watch(() => props.communityUrl, (v) => { communityUrl.value = v })
@@ -154,6 +158,10 @@ const sourceHealthLine = computed(() => {
     // Lần kiểm tra lưu trước khi có laymavoucher không ghi nguồn — lúc đó chỉ có kieushopee.
     const source = health.source || 'kieushopee'
 
+    if (health.skipped) {
+        return `Tạm không kiểm tra — chế độ mã YTB đang không gọi kieushopee, kieushopee lỗi cũng không đóng trang (lúc ${at}).`
+    }
+
     return health.ok
         ? `Nguồn ${source} bình thường — kiểm tra lúc ${at}.`
         : `Nguồn ${source} đang lỗi ${health.consecutive_failures} lần liên tiếp — kiểm tra lúc ${at}. ${health.message || ''}`
@@ -208,6 +216,24 @@ function toggleFbigAutoSwitch() {
             toast.error('Không lưu được cài đặt, vui lòng thử lại.')
         },
         onFinish: () => { savingFbigAutoSwitch.value = false },
+    })
+}
+
+function toggleYtbWithKieuShopee() {
+    const next = !ytbWithKieuShopee.value
+    ytbWithKieuShopee.value = next
+    savingYtbWithKieuShopee.value = true
+
+    router.post('/admin/settings', { ytb_with_kieushopee: next }, {
+        preserveScroll: true,
+        onSuccess: () => toast.success(next
+            ? 'Đã bật — chế độ mã YTB gọi kèm kieushopee, khách đi 2 bước.'
+            : 'Đã tắt — chế độ mã YTB chỉ gọi ganma, khách đi 1 bước.'),
+        onError: () => {
+            ytbWithKieuShopee.value = !next // rollback nếu lưu lỗi
+            toast.error('Không lưu được cài đặt, vui lòng thử lại.')
+        },
+        onFinish: () => { savingYtbWithKieuShopee.value = false },
     })
 }
 
@@ -534,7 +560,8 @@ function saveCashbackDisplayRate() {
                         <p class="text-sm text-[var(--color-muted)] leading-relaxed">
                             Cứ <b>5 phút</b> hệ thống gọi thử nguồn mã <b>kieushopee</b>.
                             Lỗi <b>2 lượt liên tiếp</b> (≈10 phút) thì tự bật chế độ bảo trì, nguồn sống lại thì tự tắt.
-                            Để ganma thì vẫn kiểm tra kieushopee — kể cả khi ganma ra mã được, kieushopee chết vẫn đóng trang.
+                            Để ganma thì vẫn kiểm tra kieushopee — kể cả khi ganma ra mã được, kieushopee chết vẫn đóng trang
+                            (trừ khi đã tắt <b>Mã YTB gọi kèm kieushopee</b> — lúc đó không kiểm tra gì).
                             Riêng khi đang để <b>laymavoucher</b> (nguồn dự phòng) thì kiểm tra laymavoucher thay cho kieushopee.
                             Bạn tự tay gạt công tắc bảo trì ở trên thì hệ thống <b>không tắt hộ nữa</b>;
                             tắt công tắc này thì trang đang bảo trì tự động sẽ được mở lại ngay.
@@ -634,13 +661,53 @@ function saveCashbackDisplayRate() {
             <div class="bg-[var(--color-surface)] rounded-2xl border border-[var(--color-line)] p-6">
                 <div class="flex items-start justify-between gap-6">
                     <div class="min-w-0">
+                        <h2 class="font-bold text-[var(--color-ink)] mb-1">▶️ Mã YTB gọi kèm kieushopee</h2>
+                        <p class="text-sm text-[var(--color-muted)] leading-relaxed">
+                            Chỉ có tác dụng khi nguồn lấy mã đang là <b>ganma (mã YouTube)</b>.
+                            <b>Bật</b>: gọi cả ganma lẫn kieushopee — khách đi <b>2 bước</b> (kích hoạt YouTube rồi mới mua),
+                            có cả mã YTB lẫn mã FB-IG.
+                            <b>Tắt</b>: chỉ gọi ganma — khách nhận thẳng link ganma, đi <b>1 bước</b>, chỉ có mã YTB.
+                            Nên tắt khi <b>kieushopee đang lỗi</b>: khách khỏi chờ thêm tới 20 giây cho một nguồn chắc chắn hỏng,
+                            khung giờ FB-IG không tự chuyển sang kieushopee, và kieushopee lỗi cũng không làm trang tự bảo trì.
+                        </p>
+                    </div>
+
+                    <button
+                        type="button"
+                        role="switch"
+                        :aria-checked="ytbWithKieuShopee"
+                        @click="toggleYtbWithKieuShopee"
+                        :disabled="savingYtbWithKieuShopee"
+                        class="relative flex-none w-14 h-8 rounded-full transition-colors duration-200 disabled:opacity-60"
+                        :class="ytbWithKieuShopee ? 'bg-[var(--color-accent)]' : 'bg-[var(--color-line)]'"
+                    >
+                        <span
+                            class="absolute top-1 left-1 w-6 h-6 rounded-full bg-white shadow-md transition-transform duration-200"
+                            :class="ytbWithKieuShopee ? 'translate-x-6' : 'translate-x-0'"
+                        ></span>
+                    </button>
+                </div>
+
+                <div class="mt-4 pt-4 border-t border-[var(--color-line)] flex items-center gap-2 text-sm">
+                    <span class="w-2 h-2 rounded-full flex-none" :class="ytbWithKieuShopee ? 'bg-[var(--color-accent)]' : 'bg-[var(--color-muted)]'"></span>
+                    <span class="text-[var(--color-ink)] font-medium">
+                        {{ ytbWithKieuShopee
+                            ? 'Đang bật — chế độ mã YTB gọi cả ganma lẫn kieushopee.'
+                            : 'Đang tắt — chế độ mã YTB chỉ gọi ganma, không đụng tới kieushopee.' }}
+                    </span>
+                </div>
+            </div>
+
+            <div class="bg-[var(--color-surface)] rounded-2xl border border-[var(--color-line)] p-6">
+                <div class="flex items-start justify-between gap-6">
+                    <div class="min-w-0">
                         <h2 class="font-bold text-[var(--color-ink)] mb-1">⚡ Tự chuyển sang FB-IG trong khung giờ back mã</h2>
                         <p class="text-sm text-[var(--color-muted)] leading-relaxed">
                             Khi nguồn lấy mã đang là <b>ganma (mã YouTube)</b>: tới khung giờ back mã FB-IG
                             (<b>0h, 9h, 15h, 20h — mỗi khung 30 phút</b>, giờ VN) thì tạm chuyển sang
                             <b>kieushopee</b>, hết khung tự quay lại ganma. Đang để kieushopee sẵn thì không đổi gì.
                             Công tắc nguồn ở trang Cấu hình API <b>không bị sửa</b> — đây chỉ là lớp ghi đè tạm thời.
-                            Giao diện khách không đổi gì cả.
+                            Giao diện khách không đổi gì cả. Đã tắt <b>Mã YTB gọi kèm kieushopee</b> thì không chuyển.
                         </p>
                     </div>
 

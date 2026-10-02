@@ -146,6 +146,34 @@ class VoucherSourceAutoSwitchTest extends TestCase
         $this->assertSame(GanmaService::SOURCE, $this->activeSource());
     }
 
+    /**
+     * Admin tắt "mã YTB gọi kèm kieushopee" là vì kieushopee đang chết — vẫn ghi đè thì cứ tới
+     * khung giờ là mọi lượt quét đổ về đúng nguồn đang chết.
+     */
+    public function test_tat_ma_ytb_goi_kem_kieushopee_thi_khung_gio_khong_chuyen(): void
+    {
+        $this->useSource(GanmaService::SOURCE);
+        $this->enableAutoSwitch();
+        Setting::set(VoucherSourceResolver::YTB_WITH_KIEUSHOPEE_KEY, '0');
+        $this->atVn('09:15');
+
+        $this->assertSame(GanmaService::SOURCE, $this->activeSource());
+    }
+
+    /** Mặc định BẬT — giữ đúng cách chế độ mã YTB vẫn chạy trước khi có công tắc. */
+    public function test_ma_ytb_goi_kem_kieushopee_mac_dinh_bat_va_luu_duoc_o_trang_cai_dat(): void
+    {
+        $this->assertTrue(VoucherSourceResolver::ytbWithKieuShopee());
+
+        $admin = $this->createAdmin();
+
+        $this->actingAs($admin)->post('/admin/settings', ['ytb_with_kieushopee' => false])->assertRedirect();
+        $this->assertFalse(VoucherSourceResolver::ytbWithKieuShopee());
+
+        $this->actingAs($admin)->post('/admin/settings', ['ytb_with_kieushopee' => true])->assertRedirect();
+        $this->assertTrue(VoucherSourceResolver::ytbWithKieuShopee());
+    }
+
     public function test_admin_bat_tat_duoc_o_trang_cai_dat(): void
     {
         $admin = $this->createAdmin();
