@@ -108,17 +108,25 @@ function relogin() {
             <div v-if="state?.reachable && !state.loggedIn" class="mb-4">
                 <img v-if="state.qr?.image" :src="state.qr.image" alt="Mã QR đăng nhập Zalo"
                     class="w-64 h-64 border border-[var(--color-line)] rounded-xl bg-white p-2" />
-                <p v-else-if="state.qr?.status === 'scanned'" class="text-sm font-semibold text-green-600">
-                    ✓ {{ state.qr.scannedBy || 'Đã quét' }} — bấm xác nhận đăng nhập trên điện thoại…
-                </p>
+                <template v-else-if="state.qr?.status === 'scanned'">
+                    <p class="text-sm font-semibold text-green-600">
+                        ✓ {{ state.qr.scannedBy || 'Đã quét' }} — bấm xác nhận đăng nhập trên điện thoại…
+                    </p>
+                    <!-- Zalo từ chối ở bước xác nhận (vd lỗi -1005) thì cầu nối KHÔNG đổi trạng thái
+                         và không tự tạo mã mới — chữ trên đứng im mãi, phải cho bấm lấy mã lại. -->
+                    <p class="text-xs text-[var(--color-muted)] mt-1">
+                        Xác nhận rồi mà quá một phút vẫn chưa đăng nhập thì Zalo đã từ chối — bấm "Lấy mã QR mới" để thử lại.
+                    </p>
+                </template>
                 <p v-else-if="pending" class="text-sm text-[var(--color-muted)]">Đang tạo mã QR…</p>
-                <p v-else class="text-sm text-[var(--color-muted)]">Chưa có mã — bấm "Lấy mã QR".</p>
+                <p v-else class="text-sm text-[var(--color-muted)]">Chưa có mã — bấm "Lấy mã QR mới".</p>
             </div>
 
             <p v-if="errors.relogin" class="text-red-500 text-xs mb-3 break-all">{{ errors.relogin }}</p>
-            <button @click="relogin" :disabled="!state?.reachable || starting || pending"
+            <!-- Không khoá nút khi đang chờ quét: lượt QR có thể đã hỏng mà cầu nối không báo. -->
+            <button @click="relogin" :disabled="!state?.reachable || starting"
                 class="bg-[var(--color-accent)] hover:bg-[var(--color-accent-deep)] text-white font-semibold px-5 py-2.5 rounded-xl text-sm transition disabled:opacity-50">
-                {{ starting ? 'Đang gửi...' : (state?.loggedIn ? 'Đăng nhập lại / đổi nick' : 'Lấy mã QR') }}
+                {{ starting ? 'Đang gửi...' : (state?.loggedIn ? 'Đăng nhập lại / đổi nick' : 'Lấy mã QR mới') }}
             </button>
         </section>
 
