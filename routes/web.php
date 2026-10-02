@@ -18,6 +18,7 @@ use App\Http\Controllers\Admin\VoucherButtonConfigController;
 use App\Http\Controllers\Admin\VoucherController;
 use App\Http\Controllers\Admin\WithdrawalController as AdminWithdrawalController;
 use App\Http\Controllers\Admin\ZaloBotController;
+use App\Http\Controllers\Admin\ZaloNickController;
 use App\Http\Controllers\AffiliateController;
 use App\Http\Controllers\Auth\AdminLoginController;
 use App\Http\Controllers\Auth\GoogleController;
@@ -255,6 +256,10 @@ Route::middleware(['auth', 'auth.admin'])->prefix('admin')->name('admin.')->grou
     Route::post('/zalo-bot/test', [ZaloBotController::class, 'sendTest'])->name('zalo-bot.test');
     Route::post('/zalo-bot/webhook', [ZaloBotController::class, 'setWebhook'])->name('zalo-bot.webhook');
     Route::delete('/zalo-bot/webhook', [ZaloBotController::class, 'deleteWebhook'])->name('zalo-bot.webhook.delete');
+    // Nick Zalo cá nhân trả link trong nhóm: xem đăng nhập chưa, quét QR ngay trên web — khỏi SSH.
+    Route::get('/zalo-nick', [ZaloNickController::class, 'index'])->name('zalo-nick');
+    Route::get('/zalo-nick/status', [ZaloNickController::class, 'status'])->name('zalo-nick.status');
+    Route::post('/zalo-nick/relogin', [ZaloNickController::class, 'relogin'])->name('zalo-nick.relogin');
     // Xem log lỗi production ngay trên web thay vì phải SSH lên server đọc storage/logs.
     Route::get('/logs', [LogController::class, 'index'])->name('logs');
     // Scheduler: cron có chạy không, job nào chạy lúc nào, bấm chạy ngay — cũng để khỏi SSH.

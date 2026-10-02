@@ -35,28 +35,35 @@ class ZaloGroupListen extends Command
     /** @var array<string, true> nhóm đã báo "chưa trong danh sách" — mỗi nhóm báo một lần */
     private array $reportedGroups = [];
 
+    /** consume() đã mở được luồng SSE trong lượt nối này chưa */
+    private bool $connected = false;
+
     public function handle(ZaloPersonalBridge $bridge, ZaloGroupLinkReplyService $replies): int
     {
+        // Chỉ báo, KHÔNG thoát: cầu nối lên chậm sau khi reboot hay nick đang chờ admin quét QR ở
+        // /admin/zalo-nick đều là chuyện bình thường — vòng dưới tự nối lại, đăng nhập xong là
+        // tin tự về. Thoát ở đây thì supervisor khởi động lại vài lần rồi bỏ cuộc hẳn.
         try {
             $health = $bridge->health();
+            if (empty($health['loggedIn']) || ! empty($health['sessionDead'])) {
+                $this->warn('Cầu nối chưa đăng nhập Zalo — quét QR ở /admin/zalo-nick. Vẫn chờ tin.');
+            } else {
+                $this->info('Nick Zalo đang đăng nhập: '.($health['ownId'] ?? '?').'.');
+            }
         } catch (Throwable $e) {
-            $this->error('Không gọi được cầu nối '.config('services.zalo_personal.bridge_url').': '.$e->getMessage());
-
-            return self::FAILURE;
-        }
-
-        if (empty($health['loggedIn']) || ! empty($health['sessionDead'])) {
-            $this->error('Cầu nối chưa đăng nhập Zalo — mở '.config('services.zalo_personal.bridge_url').'/qr.png và quét bằng nick phụ.');
-
-            return self::FAILURE;
+            $this->warn('Chưa gọi được cầu nối '.config('services.zalo_personal.bridge_url').': '.$e->getMessage());
         }
 
         $groups = config('services.zalo_personal.group_ids');
-        $this->info('Đã nối nick Zalo '.($health['ownId'] ?? '?').'. Nhóm được trả lời: '.($groups ? implode(', ', $groups) : 'mọi nhóm').'.');
+        $this->info('Nhóm được trả lời: '.($groups ? implode(', ', $groups) : 'mọi nhóm').'.');
 
+        // Số lần liền nhau KHÔNG nối được. Chờ giãn dần 6, 12, 24, 48 rồi 60 giây: cầu nối tắt
+        // cả buổi thì log của supervisor không bị ngập mỗi 3 giây một dòng.
+        $failures = 0;
         while (true) {
+            $this->connected = false;
             try {
-                $this->consume($bridge, $replies);
+                $this->consume($bridge, $replies, $failures);
             } catch (Throwable $e) {
                 $this->warn('Mất kết nối cầu nối: '.$e->getMessage());
             }
@@ -65,13 +72,18 @@ class ZaloGroupListen extends Command
                 return self::SUCCESS;
             }
 
-            sleep(3);
+            $failures = $this->connected ? 0 : $failures + 1;
+            sleep(min(60, 3 * 2 ** min($failures, 5)));
         }
     }
 
-    private function consume(ZaloPersonalBridge $bridge, ZaloGroupLinkReplyService $replies): void
+    private function consume(ZaloPersonalBridge $bridge, ZaloGroupLinkReplyService $replies, int $failures): void
     {
         $body = $bridge->openEvents((int) Cache::get(self::LAST_EVENT_KEY, 0))->toPsrResponse()->getBody();
+        $this->connected = true;
+        if ($failures > 0) {
+            $this->info('Đã nối lại cầu nối.');
+        }
         $frame = [];
 
         // Đọc TỪNG DÒNG (Utils::readLine đọc 1 byte/lần), không đọc khúc lớn: cầu nối trả

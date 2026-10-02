@@ -24,6 +24,55 @@ class ZaloPersonalBridge
     }
 
     /**
+     * Trạng thái gộp cho trang /admin/zalo-nick: đăng nhập chưa, mã QR đang chờ quét (nếu có),
+     * `zalo:group-listen` có đang nghe không. Cầu nối không chạy thì trả reachable=false chứ
+     * không ném lỗi — trang gọi lại vài giây một lần, lúc nào cũng phải có cái để hiện.
+     *
+     * @return array{reachable: bool, error?: string, loggedIn?: bool, sessionDead?: bool,
+     *     sessionDeadReason?: ?string, ownId?: ?string, listening?: bool,
+     *     qr?: array{status: ?string, image: ?string, scannedBy: ?string}}
+     */
+    public function status(): array
+    {
+        try {
+            $health = $this->health();
+            $qr = (array) $this->request(5)->get('/qr')->throw()->json();
+        } catch (Throwable $e) {
+            return ['reachable' => false, 'error' => $e->getMessage()];
+        }
+
+        // generating | waiting_scan | scanned | expired | declined | logged_in | none
+        // (zaloClient.js::login). Ảnh chỉ còn giá trị lúc đang chờ quét.
+        $qrStatus = $qr['status'] ?? null;
+
+        return [
+            'reachable' => true,
+            'loggedIn' => ! empty($health['loggedIn']) && empty($health['sessionDead']),
+            'sessionDead' => ! empty($health['sessionDead']),
+            'sessionDeadReason' => $health['sessionDeadReason'] ?? null,
+            'ownId' => $health['ownId'] ?? null,
+            // Mỗi `zalo:group-listen` đang chạy là một kết nối SSE tới cầu nối.
+            'listening' => ($health['sseClients'] ?? 0) > 0,
+            'qr' => [
+                'status' => $qrStatus,
+                'image' => $qrStatus === 'waiting_scan' && ! empty($qr['image'])
+                    ? 'data:image/png;base64,'.$qr['image']
+                    : null,
+                'scannedBy' => $qr['displayName'] ?? null,
+            ],
+        ];
+    }
+
+    /**
+     * Bỏ phiên hiện tại (nếu có) và bắt đầu đăng nhập bằng mã QR mới. Cầu nối trả lời ngay,
+     * mã QR xuất hiện ở status() sau một hai giây và tự đổi mã mới khi mã cũ hết hạn.
+     */
+    public function relogin(): void
+    {
+        $this->request(10)->post('/relogin', ['forceQR' => true])->throw();
+    }
+
+    /**
      * Mở luồng SSE. Không giới hạn tổng thời gian: cầu nối gửi "ping" mỗi 15 giây, nên
      * 60 giây không có byte nào là kết nối đã chết — read_timeout cắt để vòng ngoài nối lại.
      */

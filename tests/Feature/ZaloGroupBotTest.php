@@ -188,13 +188,20 @@ class ZaloGroupBotTest extends TestCase
         Queue::assertPushed(ReplyZaloGroupLink::class, 2);
     }
 
-    public function test_refuses_to_start_when_the_bridge_is_not_logged_in(): void
+    /**
+     * Nick chưa đăng nhập (đang chờ admin quét QR) thì vẫn phải nghe tiếp, không thoát: thoát
+     * thì supervisor bỏ cuộc sau vài lần, và quét QR xong cũng không còn ai nhận tin.
+     */
+    public function test_keeps_listening_while_the_nick_waits_for_a_qr_scan(): void
     {
-        $this->fakeBridge([], loggedIn: false);
+        Queue::fake();
+        $this->fakeBridge([$this->message('m1', self::SHOPEE_URL)], loggedIn: false);
 
         $this->artisan('zalo:group-listen', ['--once' => true])
             ->expectsOutputToContain('chưa đăng nhập Zalo')
-            ->assertFailed();
+            ->assertSuccessful();
+
+        Queue::assertPushed(ReplyZaloGroupLink::class, 1);
     }
 
     // ── Trả lời ──────────────────────────────────────────────────────────────
