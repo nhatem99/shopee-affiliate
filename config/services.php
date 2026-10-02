@@ -206,6 +206,29 @@ return [
         'api_base' => env('ZALO_BOT_API_BASE', 'https://bot-api.zaloplatforms.com'),
     ],
 
+    // Nick Zalo CÁ NHÂN (nick phụ) chạy qua cầu nối hermes-zalo-plugin (zca-js, KHÔNG chính
+    // thức — Zalo có thể khoá nick). Khác Zalo Bot ở trên: nick cá nhân ai cũng kéo vào nhóm
+    // được, nên đây là đường để tự trả link affiliate khi khách dán link Shopee trong nhóm.
+    // Cầu nối chạy riêng (Node) trên cùng máy; Laravel đọc tin qua `php artisan zalo:group-listen`.
+    'zalo_personal' => [
+        // Cầu nối chỉ nghe 127.0.0.1 — đừng mở ra ngoài khi chưa đặt token.
+        'bridge_url' => env('ZALO_PERSONAL_BRIDGE_URL', 'http://127.0.0.1:8787'),
+
+        // Trùng với ZALO_PLUGIN_TOKEN của cầu nối. Để trống khi cầu nối không đặt token.
+        'token' => env('ZALO_PERSONAL_BRIDGE_TOKEN'),
+
+        // id các nhóm được phép trả lời, ngăn bằng dấu phẩy. Để trống = mọi nhóm nick đang ở.
+        // `zalo:group-listen` in id nhóm của mỗi tin nhận được để lấy cho nhanh.
+        'group_ids' => array_values(array_filter(array_map(
+            'trim',
+            explode(',', (string) env('ZALO_PERSONAL_GROUP_IDS', '')),
+        ))),
+
+        // Tối đa bấy nhiêu lần trả lời mỗi nhóm trong 10 phút. Nhóm đông mà nick trả lời dồn
+        // dập là dấu hiệu spam rõ nhất với Zalo — vượt ngưỡng thì im lặng, không xếp hàng.
+        'replies_per_10_minutes' => (int) env('ZALO_PERSONAL_REPLIES_PER_10_MIN', 20),
+    ],
+
     // Nguồn dự phòng khi kieushopee lỗi — cùng nền tảng afp.ad nên cùng bộ tham số, ý nghĩa
     // từng khoá y hệt khối trên (xem LaymaVoucherService). Giá trị đọc từ request thật trên
     // trình duyệt ngày 29-09-2026; next_action đổi mỗi lần họ deploy, sửa ở /admin/api-config.
