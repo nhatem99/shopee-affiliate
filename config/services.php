@@ -217,11 +217,12 @@ return [
         // Trùng với ZALO_PLUGIN_TOKEN của cầu nối. Để trống khi cầu nối không đặt token.
         'token' => env('ZALO_PERSONAL_BRIDGE_TOKEN'),
 
-        // id các nhóm được phép trả lời, ngăn bằng dấu phẩy. Để trống = mọi nhóm nick đang ở.
-        // `zalo:group-listen` in id nhóm của mỗi tin nhận được để lấy cho nhanh.
+        // id các nhóm được phép trả lời, ngăn bằng dấu phẩy. Chuỗi rỗng = MỌI nhóm nick đang ở
+        // (link thật!). `zalo:group-listen` in id các nhóm bị bỏ qua để lấy cho nhanh.
+        // Mặc định: nhóm test (nick chính + nick phụ) — thêm nhóm thật vào đây khi đã chạy ổn.
         'group_ids' => array_values(array_filter(array_map(
             'trim',
-            explode(',', (string) env('ZALO_PERSONAL_GROUP_IDS', '')),
+            explode(',', (string) env('ZALO_PERSONAL_GROUP_IDS', '3807556588641646868')),
         ))),
 
         // Tối đa bấy nhiêu lần trả lời mỗi nhóm trong 10 phút. Nhóm đông mà nick trả lời dồn

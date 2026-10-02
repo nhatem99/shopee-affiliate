@@ -32,11 +32,22 @@ class ZaloGroupListen extends Command
     // lại tối đa 200 tin bị lỡ; tin đã xử lý bị chặn ở bước chống trùng theo messageId.
     private const LAST_EVENT_KEY = 'zalo_personal:last_event_id';
 
+    // Mỗi lần deploy chạy `queue:restart`, lệnh đó ghi mốc thời gian vào khoá này (cùng cache
+    // mặc định). Lệnh này chạy mãi nên giữ code cũ — thấy mốc đổi thì thoát, supervisor
+    // (autorestart) chạy lại bằng code mới. Khỏi phải sửa deploy.yml.
+    private const RESTART_KEY = 'illuminate:queue:restart';
+
     /** @var array<string, true> nhóm đã báo "chưa trong danh sách" — mỗi nhóm báo một lần */
     private array $reportedGroups = [];
 
     /** consume() đã mở được luồng SSE trong lượt nối này chưa */
     private bool $connected = false;
+
+    private mixed $restartSignalAtStart = null;
+
+    private int $lastRestartCheck = 0;
+
+    private bool $exitForDeploy = false;
 
     public function handle(ZaloPersonalBridge $bridge, ZaloGroupLinkReplyService $replies): int
     {
@@ -57,6 +68,8 @@ class ZaloGroupListen extends Command
         $groups = config('services.zalo_personal.group_ids');
         $this->info('Nhóm được trả lời: '.($groups ? implode(', ', $groups) : 'mọi nhóm').'.');
 
+        $this->restartSignalAtStart = Cache::get(self::RESTART_KEY);
+
         // Số lần liền nhau KHÔNG nối được. Chờ giãn dần 6, 12, 24, 48 rồi 60 giây: cầu nối tắt
         // cả buổi thì log của supervisor không bị ngập mỗi 3 giây một dòng.
         $failures = 0;
@@ -68,7 +81,7 @@ class ZaloGroupListen extends Command
                 $this->warn('Mất kết nối cầu nối: '.$e->getMessage());
             }
 
-            if ($this->option('once')) {
+            if ($this->option('once') || $this->deployed()) {
                 return self::SUCCESS;
             }
 
@@ -100,7 +113,31 @@ class ZaloGroupListen extends Command
                 $this->handleFrame($frame, $replies);
                 $frame = [];
             }
+
+            // Ping 15 giây/lần nên chỗ này chạy đều kể cả lúc nhóm im lặng.
+            if ($this->deployed()) {
+                return;
+            }
         }
+    }
+
+    /**
+     * Đã có `queue:restart` (tức vừa deploy) kể từ lúc lệnh khởi động chưa. Đọc cache tối đa
+     * 10 giây/lần — mỗi dòng SSE đều gọi tới đây.
+     */
+    private function deployed(): bool
+    {
+        if ($this->exitForDeploy || time() - $this->lastRestartCheck < 10) {
+            return $this->exitForDeploy;
+        }
+        $this->lastRestartCheck = time();
+
+        if (Cache::get(self::RESTART_KEY) !== $this->restartSignalAtStart) {
+            $this->info('Có bản deploy mới (queue:restart) — thoát để supervisor chạy lại bằng code mới.');
+            $this->exitForDeploy = true;
+        }
+
+        return $this->exitForDeploy;
     }
 
     /**

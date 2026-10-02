@@ -204,6 +204,31 @@ class ZaloGroupBotTest extends TestCase
         Queue::assertPushed(ReplyZaloGroupLink::class, 1);
     }
 
+    /**
+     * Deploy chạy `queue:restart` — lệnh nghe phải tự thoát để supervisor chạy lại bằng code
+     * mới, không được giữ code cũ chạy mãi.
+     */
+    public function test_exits_after_a_deploy_signals_queue_restart(): void
+    {
+        Queue::fake();
+        Cache::forever('illuminate:queue:restart', 1000);
+        Http::fake([
+            self::BRIDGE.'/health' => Http::response(['ok' => true, 'loggedIn' => true, 'sessionDead' => false]),
+            self::BRIDGE.'/events' => function () {
+                // Deploy xong đúng lúc lệnh đang nghe.
+                Cache::forever('illuminate:queue:restart', 2000);
+
+                return Http::response($this->sse([$this->message('m1', self::SHOPEE_URL)]));
+            },
+        ]);
+
+        $this->artisan('zalo:group-listen', ['--once' => true])
+            ->expectsOutputToContain('Có bản deploy mới')
+            ->assertSuccessful();
+
+        Queue::assertNothingPushed();
+    }
+
     // ── Trả lời ──────────────────────────────────────────────────────────────
 
     public function test_reply_is_a_go_link_to_our_own_affiliate_link(): void
