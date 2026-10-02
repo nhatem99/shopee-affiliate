@@ -11,6 +11,7 @@ use App\Services\UrlValidationService;
 use App\Services\VoucherFetchResult;
 use App\Services\VoucherFetchService;
 use App\Services\VoucherRefService;
+use App\Services\YtbVoucherStatusService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
@@ -24,6 +25,7 @@ class ShopeeVoucherController extends Controller
         private VoucherFetchService $fetcher,
         private VoucherRefService $refs,
         private TrackingService $tracking,
+        private YtbVoucherStatusService $ytbVouchers,
     ) {}
 
     public function resolve(Request $request): Response|RedirectResponse
@@ -91,6 +93,8 @@ class ShopeeVoucherController extends Controller
                 // (bước 2) — xem ShortLinkController::activateYoutube. null = không có bước 1.
                 'ytb_activate_url' => $ref && $result->ytbUrl ? route('voucher.ytb', $ref) : null,
             ],
+            // Giữ khối "Ưu đãi đang có" sau khi quét — trang này thay hẳn props của trang chủ.
+            'ytbVouchers' => fn () => $this->ytbVouchers->forDisplay(),
             ...$this->facebookRedirectFlags(),
         ]);
     }

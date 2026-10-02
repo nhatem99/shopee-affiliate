@@ -41,6 +41,12 @@ class GanmaService
     // mà đổi UA thì không ảnh hưởng gì tới cách họ xử lý job.
     private const MOBILE_USER_AGENT = 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_5 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.5 Mobile/15E148 Safari/604.1';
 
+    /**
+     * Đọc danh sách mã YTB (fetchVoucherStatus) phải nhanh: lượt đọc đầu tiên khi cache còn trống
+     * chạy ngay trong request trang chủ, khách đứng chờ đúng bằng chừng này.
+     */
+    private const VOUCHER_STATUS_TIMEOUT = 4;
+
     /** Ghi nhớ trong một request — xem endpoint(). */
     private ?string $endpoint = null;
 
@@ -121,6 +127,68 @@ class GanmaService
         $name = $result['product']['product_name'] ?? 'không đọc được tên sản phẩm';
 
         return ['ok' => true, 'message' => "Lấy mã thành công — {$name}"];
+    }
+
+    /**
+     * Danh sách mã YTB đang có và còn bao nhiêu lượt — chính khối "Ưu đãi đang có" trên trang
+     * ganma.vn/yt, họ nạp bằng GET /yt/vouchers. Đo thật 02-10-2026: endpoint công khai, mỗi mã
+     * kèm `percent_left` (còn bao nhiêu % lượt), `sold_out`, `removed`; `updated_at` của họ nhích
+     * mỗi vài giây nên số liệu là thật chứ không viết cứng.
+     *
+     * Hỏng (mạng, đổi shape, `disabled`) đều trả null/rỗng chứ không ném lỗi: đây chỉ là thông tin
+     * hiển thị thêm, không được làm hỏng trang chủ — xem YtbVoucherStatusService. null = không
+     * đọc được, [] = đọc được nhưng không có mã nào.
+     *
+     * @return list<array{title: string, subtitle: string, percent_left: ?int, sold_out: bool}>|null
+     */
+    public function fetchVoucherStatus(): ?array
+    {
+        try {
+            $response = Http::withHeaders($this->headers())
+                ->timeout(self::VOUCHER_STATUS_TIMEOUT)
+                ->get($this->endpoint().'/yt/vouchers');
+        } catch (\Exception $e) {
+            Log::warning('GanmaService: lỗi kết nối khi đọc danh sách mã YTB: '.$e->getMessage());
+
+            return null;
+        }
+
+        $data = $response->successful() ? $response->json() : null;
+
+        if (! is_array($data) || ! is_array($data['vouchers'] ?? null)) {
+            Log::warning('GanmaService: danh sách mã YTB không đọc được', [
+                'status' => $response->status(),
+                'body' => Str::limit($response->body(), 300),
+            ]);
+
+            return null;
+        }
+
+        // Kênh bị họ tắt (thấy thật ở /fb/vouchers: {"vouchers":[],"disabled":true}).
+        if (! empty($data['disabled'])) {
+            return [];
+        }
+
+        $vouchers = [];
+
+        foreach ($data['vouchers'] as $voucher) {
+            $title = is_array($voucher) ? trim((string) ($voucher['title'] ?? '')) : '';
+
+            if ($title === '' || ! empty($voucher['removed'])) {
+                continue;
+            }
+
+            $vouchers[] = [
+                'title' => $title,
+                'subtitle' => trim((string) ($voucher['subtitle'] ?? '')),
+                'percent_left' => is_numeric($voucher['percent_left'] ?? null)
+                    ? max(0, min(100, (int) $voucher['percent_left']))
+                    : null,
+                'sold_out' => (bool) ($voucher['sold_out'] ?? false),
+            ];
+        }
+
+        return $vouchers;
     }
 
     /**

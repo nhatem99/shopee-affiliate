@@ -7,6 +7,7 @@ import { useLocalStorage } from '@vueuse/core'
 import AppLayout from '@/Layouts/AppLayout.vue'
 import CouponTicket from '@/Components/CouponTicket.vue'
 import RestockSchedule from '@/Components/RestockSchedule.vue'
+import YtbVoucherStatus from '@/Components/YtbVoucherStatus.vue'
 import CashbackExplainer from '@/Components/CashbackExplainer.vue'
 import CashbackLeaderboard from '@/Components/CashbackLeaderboard.vue'
 import HowItWorksSteps from '@/Components/HowItWorksSteps.vue'
@@ -19,6 +20,8 @@ import { useAuthStore } from '@/Stores/useAuthStore'
 
 const props = defineProps({
     vouchers: { type: Array, default: () => [] },
+    // Mã YTB đang có + % đã dùng — null khi nguồn không phải ganma (xem YtbVoucherStatusService).
+    ytbVouchers: { type: Array, default: null },
     voucherResult: { type: Object, default: null },
     canUseVoucherTool: { type: Boolean, default: true },
     // Khi admin đã bật chuyển hướng qua comment Facebook kèm chế độ tự chuyển hướng: ẩn luôn
@@ -1020,6 +1023,10 @@ onUnmounted(() => {
                         <p v-else class="text-xs text-[var(--color-accent-deep)] leading-relaxed">Mã đã gắn sẵn trong link — bấm "Mua ngay" rồi đặt hàng như bình thường, không cần nhập mã. Nếu Shopee báo mã hết lượt, thử lại sau ít phút nhé.</p>
                     </div>
                 </div>
+
+                <!-- Ưu đãi đang có (mã YTB còn bao nhiêu %): trả lời "giờ dán link có còn mã không"
+                     ngay dưới ô nhập. Server chỉ gửi khi nguồn đang là ganma — xem YtbVoucherStatusService. -->
+                <YtbVoucherStatus v-if="canUseVoucherTool && ytbVouchers?.length" :vouchers="ytbVouchers" class="mt-4" />
 
                 <!-- Hướng dẫn 4 bước, đặt NGAY SAU ô dán link (và sau khối kết quả nếu đang có).
                      Đứng sau kết quả chứ không chen vào giữa: lúc vừa quét xong, thứ khách cần

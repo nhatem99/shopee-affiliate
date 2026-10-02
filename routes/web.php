@@ -42,12 +42,13 @@ use App\Services\CashbackService;
 use App\Services\DailyCheckInService;
 use App\Services\MembershipTierService;
 use App\Services\TrackingService;
+use App\Services\YtbVoucherStatusService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 use Inertia\Inertia;
 
 // Home
-Route::get('/', function (Request $request, TrackingService $tracking, CashbackService $cashback, CashbackLeaderboardService $leaderboard, MembershipTierService $tiers, DailyCheckInService $checkIn) {
+Route::get('/', function (Request $request, TrackingService $tracking, CashbackService $cashback, CashbackLeaderboardService $leaderboard, MembershipTierService $tiers, DailyCheckInService $checkIn, YtbVoucherStatusService $ytbVouchers) {
     $tracking->log('page_view', $request, ['url' => $request->fullUrl()]);
 
     return Inertia::render('Home', [
@@ -65,6 +66,9 @@ Route::get('/', function (Request $request, TrackingService $tracking, CashbackS
         // những lượt partial reload không xin tới nó (ví dụ reload riêng voucherResult sau mỗi lần
         // dán link) không phải chạy lại mấy truy vấn đếm kho quà.
         'dailyCheckIn' => fn () => $checkIn->enabled() ? $checkIn->state($request->user()) : null,
+        // Khối "Ưu đãi đang có" (mã YTB còn bao nhiêu %) — null khi nguồn không phải ganma hoặc
+        // chưa có số liệu, xem YtbVoucherStatusService.
+        'ytbVouchers' => fn () => $ytbVouchers->forDisplay(),
     ]);
 })->name('home');
 
