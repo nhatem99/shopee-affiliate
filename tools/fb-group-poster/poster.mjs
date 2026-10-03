@@ -39,6 +39,26 @@ function log(message) {
 
 const accountLabel = (uid) => (uid ? `uid ${uid}` : null);
 
+// Một lượt (hỏi việc + đăng + báo kết quả) bình thường dưới 5 phút; lấy nhóm nhiều thì lâu hơn.
+const TICK_LIMIT_MS = (Number(process.env.FB_TICK_LIMIT_SECONDS) || 15 * 60) * 1000;
+const LAUNCH_LIMIT_MS = 2 * 60 * 1000;
+
+// Bot chạy nền không ai trông: kẹt ở đâu đó (Chromium treo, kết nối điều khiển bị một bot cũ
+// đóng băng giữ lại...) thì thoát để fb-poster.sh chạy lại từ đầu, còn hơn đứng im cả ngày.
+// Thoát thẳng, không đóng trình duyệt — chính việc đóng cũng có thể treo. Bài đang dở được
+// state.json báo đúng ở lần chạy sau ("không rõ" nếu đã bấm Đăng).
+function withDeadline(promise, ms, what) {
+  let timer;
+  const deadline = new Promise(() => {
+    timer = setTimeout(() => {
+      const limit = ms >= 60_000 ? `${Math.round(ms / 60_000)} phút` : `${Math.round(ms / 1000)} giây`;
+      log(`${what} kẹt quá ${limit} — thoát để chạy lại từ đầu.`);
+      process.exit(3);
+    }, ms);
+  });
+  return Promise.race([promise, deadline]).finally(() => clearTimeout(timer));
+}
+
 async function ask(prompt) {
   const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
   await rl.question(prompt);
@@ -259,13 +279,14 @@ async function cmdRun(cfg) {
   process.on('SIGINT', requestStop);
 
   log(`Bot đăng nhóm Facebook ${configModule.VERSION} — server ${cfg.baseUrl}`);
-  const browser = await launch(cfg);
+  const browser = await withDeadline(launch(cfg), LAUNCH_LIMIT_MS, 'Nối vào Chromium');
+  log('Đã nối vào Chromium, bắt đầu hỏi việc.');
   let exitCode = 0;
   try {
     while (!stopping) {
       let wait;
       try {
-        wait = await tick(api, state, cfg, browser);
+        wait = await withDeadline(tick(api, state, cfg, browser), TICK_LIMIT_MS, 'Một lượt làm việc');
       } catch (error) {
         if (error instanceof AuthError) {
           log(error.message);
