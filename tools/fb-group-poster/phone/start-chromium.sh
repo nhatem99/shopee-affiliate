@@ -25,13 +25,14 @@ fi
 
 mkdir -p "$PROFILE"
 # --no-sandbox: Android không cho Chromium trong Termux dựng sandbox.
-# --remote-debugging-port chỉ nghe 127.0.0.1 (mặc định của Chromium).
+# --remote-debugging-port chỉ nghe 127.0.0.1 (mặc định của Chromium), và không bật
+# navigator.webdriver (chỉ --enable-automation/--headless/--remote-debugging-pipe bật) — nên
+# KHÔNG thêm --disable-blink-features=AutomationControlled: thừa, lại hiện thanh cảnh báo vàng.
 "$BIN" \
   --no-sandbox \
   --no-first-run \
   --no-default-browser-check \
   --lang=vi-VN \
-  --disable-blink-features=AutomationControlled \
   --user-data-dir="$PROFILE" \
   --remote-debugging-port="$PORT" \
   --window-size=1280,900 \
