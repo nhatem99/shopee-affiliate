@@ -202,6 +202,25 @@ async function doPost(api, state, cfg, browser, job) {
   state.newClaimKey();
 }
 
+// Vì sao server chưa giao bài (reason trong FacebookGroupPostScheduler::poll/blockingReason).
+const IDLE_REASONS = {
+  empty: 'Chưa có bài nào trong hàng đợi — soạn bài ở /admin/fb-posts.',
+  outside_window: 'Ngoài khung giờ đăng (giờ Việt Nam, chỉnh ở /admin/fb-groups) — đợi tới giờ.',
+  daily_cap: 'Đã đăng đủ số bài hôm nay — mai đăng tiếp.',
+  gap: 'Đang nghỉ giữa hai bài theo cài đặt.',
+  paused: 'Server đang TẠM DỪNG bot — xem lý do và bấm "Chạy tiếp" ở /admin/fb-groups.',
+  busy: 'Server còn chờ kết quả một bài khác.',
+  preparing: 'Server đang chuẩn bị bài (tạo link mua)...',
+};
+let lastIdle = null;
+
+// Chỉ in khi lý do đổi — không thì cứ 1–2 phút một dòng giống hệt nhau.
+function logIdle(reason) {
+  if (reason === lastIdle) return;
+  lastIdle = reason;
+  log(`Chưa có việc: ${IDLE_REASONS[reason] || reason || 'không rõ lý do'}`);
+}
+
 // Một lượt hỏi việc. Trả số giây nên ngủ trước lượt sau.
 async function tick(api, state, cfg, browser) {
   await flushUnreported(api, state);
@@ -210,10 +229,12 @@ async function tick(api, state, cfg, browser) {
   const job = await api.poll(state.claimKey, uid ? 'ok' : 'logged_out', accountLabel(uid));
 
   if (job.type === 'post') {
+    lastIdle = null;
     await doPost(api, state, cfg, browser, job);
     return rand(20, 40);
   }
   if (job.type === 'sync_groups') {
+    lastIdle = null;
     log('Server yêu cầu lấy danh sách nhóm.');
     await syncGroups(api, browser);
     return 20;
@@ -222,6 +243,7 @@ async function tick(api, state, cfg, browser) {
   if (job.reason === 'paused' && !uid) {
     log('Nick Facebook đang bị đăng xuất — đăng nhập lại rồi bấm "Chạy tiếp" trên trang admin.');
   }
+  logIdle(job.reason);
   return Number(job.retry_after) || 60;
 }
 
