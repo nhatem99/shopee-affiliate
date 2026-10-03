@@ -1,5 +1,7 @@
 # Relay gọi hộ salesoc.vn
 
+> Thư mục `zalo-bridge/` không phải relay: đó là bản vá cho cầu nối Zalo nick cá nhân để gửi ảnh bằng URL, xem `zalo-bridge/README.md`.
+
 ## Vì sao cần
 
 `SalesOcService` lấy mã giảm giá thật từ API của salesoc.vn. Salesoc chặn theo **nguồn gọi** ở tầng

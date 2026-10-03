@@ -2,8 +2,11 @@
 
 namespace App\Console\Commands;
 
+use App\Jobs\AssembleZaloMirrorPost;
 use App\Jobs\ReplyZaloGroupLink;
 use App\Services\ZaloGroupLinkReplyService;
+use App\Services\ZaloMirrorService;
+use App\Services\ZaloMirrorSettings;
 use App\Services\ZaloPersonalBridge;
 use GuzzleHttp\Psr7\Utils;
 use Illuminate\Console\Command;
@@ -49,7 +52,7 @@ class ZaloGroupListen extends Command
 
     private bool $exitForDeploy = false;
 
-    public function handle(ZaloPersonalBridge $bridge, ZaloGroupLinkReplyService $replies): int
+    public function handle(ZaloPersonalBridge $bridge, ZaloGroupLinkReplyService $replies, ZaloMirrorSettings $mirrorSettings, ZaloMirrorService $mirrorService): int
     {
         // Chỉ báo, KHÔNG thoát: cầu nối lên chậm sau khi reboot hay nick đang chờ admin quét QR ở
         // /admin/zalo-nick đều là chuyện bình thường — vòng dưới tự nối lại, đăng nhập xong là
@@ -76,7 +79,7 @@ class ZaloGroupListen extends Command
         while (true) {
             $this->connected = false;
             try {
-                $this->consume($bridge, $replies, $failures);
+                $this->consume($bridge, $replies, $mirrorSettings, $mirrorService, $failures);
             } catch (Throwable $e) {
                 $this->warn('Mất kết nối cầu nối: '.$e->getMessage());
             }
@@ -90,7 +93,7 @@ class ZaloGroupListen extends Command
         }
     }
 
-    private function consume(ZaloPersonalBridge $bridge, ZaloGroupLinkReplyService $replies, int $failures): void
+    private function consume(ZaloPersonalBridge $bridge, ZaloGroupLinkReplyService $replies, ZaloMirrorSettings $mirrorSettings, ZaloMirrorService $mirrorService, int $failures): void
     {
         $body = $bridge->openEvents((int) Cache::get(self::LAST_EVENT_KEY, 0))->toPsrResponse()->getBody();
         $this->connected = true;
@@ -110,7 +113,7 @@ class ZaloGroupListen extends Command
             if ($line !== '') {
                 $frame[] = $line;
             } elseif ($frame) {
-                $this->handleFrame($frame, $replies);
+                $this->handleFrame($frame, $replies, $mirrorSettings, $mirrorService);
                 $frame = [];
             }
 
@@ -143,7 +146,7 @@ class ZaloGroupListen extends Command
     /**
      * @param  list<string>  $lines  các dòng của một sự kiện SSE (đã bỏ dòng trống phân cách)
      */
-    private function handleFrame(array $lines, ZaloGroupLinkReplyService $replies): void
+    private function handleFrame(array $lines, ZaloGroupLinkReplyService $replies, ZaloMirrorSettings $mirrorSettings, ZaloMirrorService $mirrorService): void
     {
         $id = null;
         $event = 'message';
@@ -175,7 +178,7 @@ class ZaloGroupListen extends Command
         }
 
         if ($event === 'message') {
-            $this->onMessage($payload, $replies);
+            $this->onMessage($payload, $replies, $mirrorSettings, $mirrorService);
         } elseif ($event === 'session_dead') {
             // Zalo đá phiên (đăng nhập nơi khác, đổi mật khẩu...) — phải quét QR lại.
             $this->error('Phiên Zalo đã chết, cần quét QR lại: '.json_encode($payload, JSON_UNESCAPED_UNICODE));
@@ -186,13 +189,20 @@ class ZaloGroupListen extends Command
     /**
      * @param  array<string, mixed>  $message  một tin đã chuẩn hoá của cầu nối (zaloClient.js::_normaliseMessage)
      */
-    private function onMessage(array $message, ZaloGroupLinkReplyService $replies): void
+    private function onMessage(array $message, ZaloGroupLinkReplyService $replies, ZaloMirrorSettings $mirrorSettings, ZaloMirrorService $mirrorService): void
     {
         $threadId = (string) ($message['threadId'] ?? '');
         $threadType = ($message['threadType'] ?? '') === 'group' ? 'group' : 'user';
         $messageId = (string) ($message['messageId'] ?? '');
 
         if (! empty($message['isSelf']) || $threadId === '' || $messageId === '') {
+            return;
+        }
+
+        // Tin từ nhóm nguồn mirror: thu thập và KHÔNG chạy bot trả lời trong nhóm của đối thủ.
+        if ($threadType === 'group' && $mirrorSettings->isActive() && $mirrorSettings->isSourceGroup($threadId)) {
+            $this->collectForMirror($message, $mirrorSettings, $mirrorService);
+
             return;
         }
 
@@ -231,5 +241,54 @@ class ZaloGroupListen extends Command
         } else {
             $this->warn("• [{$threadType} {$threadId}] {$sender}: bỏ qua, nhóm đã đủ lượt trả lời trong 10 phút");
         }
+    }
+
+    /**
+     * Thu thập mảnh tin nhắn từ nhóm nguồn mirror. Không gọi HTTP ở đây — listener phải nhanh.
+     * Dedupe theo messageId rồi gom vào cache buffer; sau buffer_seconds job Assemble sẽ xử lý.
+     */
+    private function collectForMirror(array $message, ZaloMirrorSettings $mirrorSettings, ZaloMirrorService $mirrorService): void
+    {
+        $messageId = (string) ($message['messageId'] ?? '');
+        $threadId = (string) ($message['threadId'] ?? '');
+        $senderId = (string) ($message['senderId'] ?? '');
+        $senderName = (string) ($message['senderName'] ?? $senderId);
+
+        // Tin cầu nối phát lại khi reconnect — bỏ qua nếu đã xử lý.
+        if (! Cache::add("zalo_mirror:msg:{$messageId}", true, now()->addHours(48))) {
+            return;
+        }
+
+        $piece = $mirrorService->extractPiece($message);
+        if ($piece === null) {
+            return; // sticker, voice, file... — không đáng đăng lại
+        }
+
+        $bufferKey = "zalo_mirror:buf:{$threadId}:{$senderId}";
+        $seqKey = "zalo_mirror:seq:{$threadId}:{$senderId}";
+
+        // Nối mảnh vào buffer hiện có (TTL 10 phút — vừa đủ cho album 10 ảnh gửi chậm).
+        $existing = json_decode((string) Cache::get($bufferKey, '[]'), true);
+        if (! is_array($existing)) {
+            $existing = [];
+        }
+        $existing[] = $piece;
+        Cache::put($bufferKey, json_encode($existing), now()->addMinutes(10));
+
+        // Tăng seq để job cũ hơn (seq nhỏ hơn) tự loại.
+        $seq = (int) Cache::get($seqKey, 0) + 1;
+        Cache::put($seqKey, $seq, now()->addMinutes(15));
+
+        $bufferSeconds = (int) config('services.zalo_personal.mirror.buffer_seconds', 20);
+        AssembleZaloMirrorPost::dispatch(
+            $threadId,
+            $senderId,
+            $seq,
+            (string) $mirrorSettings->targetGroupId(),
+            $threadId, // sourceGroupId
+            $senderName,
+        )->delay(now()->addSeconds($bufferSeconds));
+
+        $this->line("• [mirror {$threadId}] {$senderName}: mảnh ".($piece['type'])." thu thập (seq={$seq})");
     }
 }

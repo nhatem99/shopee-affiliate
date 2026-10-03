@@ -134,9 +134,11 @@ class ZaloGroupLinkReplyService
      * In đậm dòng đầu. Vị trí tính theo đơn vị UTF-16 vì Zalo đếm như chuỗi JavaScript —
      * emoji chiếm 2 đơn vị, đếm bằng mb_strlen là lệch.
      *
+     * Public static để ZaloMirrorService dùng lại — không copy-paste logic UTF-16 vào nhiều chỗ.
+     *
      * @return array{text: string, styles: list<array{start: int, len: int, st: string}>}
      */
-    private function message(string $text): array
+    public static function boldFirstLine(string $text): array
     {
         $firstLine = strtok($text, "\n");
 
@@ -148,5 +150,13 @@ class ZaloGroupLinkReplyService
                 'st' => 'b',
             ]],
         ];
+    }
+
+    /**
+     * @return array{text: string, styles: list<array{start: int, len: int, st: string}>}
+     */
+    private function message(string $text): array
+    {
+        return self::boldFirstLine($text);
     }
 }

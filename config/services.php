@@ -211,6 +211,23 @@ return [
     // được, nên đây là đường để tự trả link affiliate khi khách dán link Shopee trong nhóm.
     // Cầu nối chạy riêng (Node) trên cùng máy; Laravel đọc tin qua `php artisan zalo:group-listen`.
     'zalo_personal' => [
+        // Cấu hình tính năng đăng lại bài (mirror) từ nhóm nguồn sang nhóm đích. Giá trị ở đây
+        // chỉ là mặc định kỹ thuật — các tuỳ chỉnh thật do admin nhập ở /admin/zalo-nick và lưu
+        // vào bảng settings (ZaloMirrorSettings), không sửa ở đây được khi production.
+        'mirror' => [
+            // Giây chờ sau khi nhận mảnh đầu tiên, để gom cả ảnh lẫn caption về cùng một bài
+            // (zca-js gửi ảnh và text riêng biệt, cách nhau vài trăm ms).
+            'buffer_seconds' => (int) env('ZALO_MIRROR_BUFFER_SECONDS', 20),
+
+            // Số ảnh tối đa mỗi bài đăng lại. Zalo thường giới hạn album ~9 ảnh; để 10 như một
+            // biên an toàn — nếu nguồn đăng nhiều hơn thì log ảnh bị bỏ qua.
+            'max_images' => (int) env('ZALO_MIRROR_MAX_IMAGES', 10),
+
+            // Bài cùng nội dung trong bao nhiêu giờ thì coi là trùng — nhóm chị em cross-post
+            // cùng một deal dồn dập trong giờ đầu, để 24h là đủ chặn tất cả.
+            'dedupe_hours' => (int) env('ZALO_MIRROR_DEDUPE_HOURS', 24),
+        ],
+
         // Cầu nối chỉ nghe 127.0.0.1 — đừng mở ra ngoài khi chưa đặt token.
         'bridge_url' => env('ZALO_PERSONAL_BRIDGE_URL', 'http://127.0.0.1:8787'),
 

@@ -260,6 +260,9 @@ Route::middleware(['auth', 'auth.admin'])->prefix('admin')->name('admin.')->grou
     Route::get('/zalo-nick', [ZaloNickController::class, 'index'])->name('zalo-nick');
     Route::get('/zalo-nick/status', [ZaloNickController::class, 'status'])->name('zalo-nick.status');
     Route::post('/zalo-nick/relogin', [ZaloNickController::class, 'relogin'])->name('zalo-nick.relogin');
+    // Mirror (đăng lại bài từ nhóm nguồn sang nhóm đích): lưu cài đặt và lấy danh sách nhóm.
+    Route::post('/zalo-nick/mirror', [ZaloNickController::class, 'saveMirror'])->name('zalo-nick.mirror');
+    Route::get('/zalo-nick/groups', [ZaloNickController::class, 'groups'])->name('zalo-nick.groups');
     // Xem log lỗi production ngay trên web thay vì phải SSH lên server đọc storage/logs.
     Route::get('/logs', [LogController::class, 'index'])->name('logs');
     // Scheduler: cron có chạy không, job nào chạy lúc nào, bấm chạy ngay — cũng để khỏi SSH.

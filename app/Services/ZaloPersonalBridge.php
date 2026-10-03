@@ -2,6 +2,8 @@
 
 namespace App\Services;
 
+use App\Exceptions\BridgeDownloadFailedException;
+use App\Exceptions\BridgeUrlsNotSupportedException;
 use Illuminate\Http\Client\PendingRequest;
 use Illuminate\Http\Client\Response;
 use Illuminate\Support\Facades\Http;
@@ -109,6 +111,107 @@ class ZaloPersonalBridge
 
         if (! $response->successful()) {
             throw new RuntimeException("Cầu nối Zalo /send lỗi [{$response->status()}]: ".($response->json('error') ?? $response->body()));
+        }
+    }
+
+    /**
+     * Danh sách nhóm mà nick đang tham gia. Dùng để admin chọn nhóm nguồn / nhóm đích cho
+     * tính năng mirror mà không cần nhớ id nhóm.
+     *
+     * @return list<array{id: string, name: string}>
+     */
+    public function groups(): array
+    {
+        try {
+            $response = $this->request(30)->get('/contacts')->throw();
+        } catch (Throwable $e) {
+            throw new RuntimeException('Cầu nối Zalo /contacts: '.$e->getMessage(), 0, $e);
+        }
+
+        $groups = $response->json('groups');
+
+        return is_array($groups) ? $groups : [];
+    }
+
+    /**
+     * Danh sách id admin của một nhóm (chủ nhóm + admin được chỉ định). Dùng cho adminsOnly
+     * của tính năng mirror: chỉ đăng lại bài của admin nhóm nguồn, bỏ qua thành viên thường.
+     *
+     * @return list<string>
+     */
+    public function groupAdmins(string $groupId): array
+    {
+        try {
+            $response = $this->request(10)
+                ->get('/chat-info', ['threadId' => $groupId, 'threadType' => 'group'])
+                ->throw();
+        } catch (Throwable $e) {
+            throw new RuntimeException("Cầu nối Zalo /chat-info [{$groupId}]: ".$e->getMessage(), 0, $e);
+        }
+
+        $info = data_get($response->json(), "info.gridInfoMap.{$groupId}");
+
+        // Cầu nối swallow mọi lỗi Zalo (rate-limit backoff, getGroupInfo null) và trả HTTP 200
+        // với info: null. Ném lỗi thay vì trả [] — caller phải phân biệt "không có admin"
+        // (nhóm thực sự trống, không thể xảy ra) với "chưa lấy được" (lỗi tạm thời).
+        if (! is_array($info)) {
+            throw new RuntimeException("Cầu nối Zalo /chat-info [{$groupId}]: info.gridInfoMap[{$groupId}] null — cầu nối đang rate-limit hoặc lỗi nội bộ");
+        }
+
+        $creatorId = data_get($info, 'creatorId');
+        $adminIds = (array) data_get($info, 'adminIds', []);
+
+        $all = array_filter(
+            array_unique(array_merge($creatorId ? [(string) $creatorId] : [], array_map('strval', $adminIds))),
+            fn (string $id) => $id !== '',
+        );
+
+        // Mọi nhóm đều có chủ nhóm — danh sách rỗng nghĩa là bridge trả dữ liệu không đủ.
+        if (empty($all)) {
+            throw new RuntimeException("Cầu nối Zalo /chat-info [{$groupId}]: gridInfoMap[{$groupId}] không có creatorId — cầu nối trả dữ liệu thiếu");
+        }
+
+        return array_values($all);
+    }
+
+    /**
+     * Gửi một hoặc nhiều ảnh qua URL. Cầu nối mới hỗ trợ trường `urls` (tự tải về file tạm) —
+     * cầu nối cũ trả 400 "threadId and paths required" vì chỉ biết nhận đường dẫn file cục bộ.
+     *
+     * Ném BridgeUrlsNotSupportedException khi cầu nối cũ chưa nâng cấp — caller tự xử lý fallback.
+     *
+     * @param  list<string>  $urls
+     */
+    public function sendImages(string $threadId, string $threadType, array $urls, ?string $caption = null): void
+    {
+        try {
+            $response = $this->request(120)->post('/send-attachment', array_filter([
+                'threadId' => $threadId,
+                'threadType' => $threadType,
+                'urls' => $urls,
+                'caption' => $caption,
+            ], fn ($v) => $v !== null));
+        } catch (Throwable $e) {
+            throw new RuntimeException('Cầu nối Zalo /send-attachment: '.$e->getMessage(), 0, $e);
+        }
+
+        // Cầu nối cũ không có trường 'urls' — lỗi 400 với nội dung nhắc tới 'paths'.
+        if ($response->status() === 400 && str_contains((string) $response->body(), 'paths')) {
+            throw new BridgeUrlsNotSupportedException(
+                'bridge chưa hỗ trợ gửi ảnh qua URL — cần nâng cấp cầu nối lên phiên bản mới nhất'
+            );
+        }
+
+        // 422 = cầu nối mới nhưng ít nhất một URL ảnh không tải được (404, quá lớn, timeout...).
+        // Lỗi này xác định — retry cùng URL sẽ cho cùng kết quả — fallback về text-only.
+        if ($response->status() === 422) {
+            throw new BridgeDownloadFailedException(
+                'cầu nối không tải được ảnh — '.($response->json('error') ?? $response->body())
+            );
+        }
+
+        if (! $response->successful()) {
+            throw new RuntimeException("Cầu nối Zalo /send-attachment lỗi [{$response->status()}]: ".($response->json('error') ?? $response->body()));
         }
     }
 
