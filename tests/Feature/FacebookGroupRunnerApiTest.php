@@ -124,6 +124,16 @@ class FacebookGroupRunnerApiTest extends TestCase
         $this->postJson('/runner/fb/groups', ['groups' => []], ['X-Runner-Token' => 'wrong'])->assertForbidden();
     }
 
+    public function test_poll_without_claim_key_checks_token_without_claiming(): void
+    {
+        // Bot điện thoại (tools/fb-group-poster, lệnh check) dựa vào 422 này để thử token.
+        $post = $this->queue();
+
+        $this->postJson('/runner/fb/poll', [], ['X-Runner-Token' => $this->token])->assertUnprocessable();
+
+        $this->assertSame(FacebookGroupPost::PENDING, $post->fresh()->status);
+    }
+
     public function test_rejects_everything_when_no_token_created(): void
     {
         Setting::where('key', 'fb_runner_token')->delete();
