@@ -17,6 +17,13 @@ return new class extends Migration
      */
     public function up(): void
     {
+        // Lần deploy đầu (03/10/2026) chết giữa chừng trên MySQL vì tên index unique quá 64 ký
+        // tự; MySQL không rollback CREATE TABLE nên còn bảng dở mà migration chưa được ghi nhận.
+        // Các bảng này chỉ migration này tạo và chưa từng có dữ liệu — xoá đi tạo lại cho sạch.
+        Schema::dropIfExists('facebook_group_posts');
+        Schema::dropIfExists('facebook_group_deals');
+        Schema::dropIfExists('facebook_groups');
+
         Schema::create('facebook_groups', function (Blueprint $table) {
             $table->id();
             // Phần sau /groups/ trong link: id số hoặc tên rút gọn, viết thường.
@@ -69,7 +76,8 @@ return new class extends Migration
             $table->string('error', 1000)->nullable();
             $table->timestamps();
 
-            $table->unique(['facebook_group_deal_id', 'facebook_group_id']);
+            // Đặt tên tay: tên tự sinh dài 68 ký tự, MySQL chỉ cho 64.
+            $table->unique(['facebook_group_deal_id', 'facebook_group_id'], 'fb_group_posts_deal_group_unique');
             $table->index(['facebook_group_id', 'status']);
         });
     }
