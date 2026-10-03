@@ -11,7 +11,7 @@ import path from 'node:path';
 import readline from 'node:readline/promises';
 import { parseArgs } from 'node:util';
 
-import { Api, ApiError, AuthError } from './lib/api.mjs';
+import { Api, ApiError, AuthError, errorText } from './lib/api.mjs';
 import { accountId, launch } from './lib/browser.mjs';
 import * as configModule from './lib/config.mjs';
 import { ScrapeError, scrapeJoinedGroups } from './lib/groups.mjs';
@@ -190,7 +190,7 @@ async function doPost(api, state, cfg, browser, job) {
     try {
       imagePath = await downloadAsJpeg(job.image_url, tmpDir, browser.context);
     } catch (error) {
-      log(`Không tải được ảnh sản phẩm (${error.message}) — đăng không kèm ảnh.`);
+      log(`Không tải được ảnh sản phẩm (${errorText(error)}) — đăng không kèm ảnh.`);
     }
   }
 

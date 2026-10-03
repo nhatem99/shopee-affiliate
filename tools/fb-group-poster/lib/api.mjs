@@ -6,6 +6,13 @@ export class ApiError extends Error {}
 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
+// fetch() của Node chỉ báo "fetch failed" — lý do thật (ENOTFOUND, ECONNRESET, hết giờ...) nằm
+// trong error.cause. Thiếu nó thì không phân biệt được lỗi mạng điện thoại với lỗi server.
+export function errorText(error) {
+  const cause = error?.cause?.code || error?.cause?.message;
+  return cause ? `${error.message} (${cause})` : String(error?.message ?? error);
+}
+
 export class Api {
   // Lượt nhận bài ở chế độ mã YTB mất tới ~45 giây phía server.
   constructor(baseUrl, token, timeoutMs = 90_000) {
@@ -29,7 +36,7 @@ export class Api {
         signal: AbortSignal.timeout(this.timeoutMs),
       });
     } catch (error) {
-      throw new ApiError(`Không gọi được server: ${error.message}`);
+      throw new ApiError(`Không gọi được server: ${errorText(error)}`);
     }
     if (response.status === 403) {
       throw new AuthError('Server từ chối token (403) — kiểm tra token trong config.json hoặc tạo token mới.');
