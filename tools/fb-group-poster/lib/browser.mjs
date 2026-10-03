@@ -1,8 +1,18 @@
 // Kết nối trình duyệt: nối vào Chromium đã mở sẵn (cdp, dùng trên điện thoại) hoặc tự mở một
 // Chromium có hồ sơ riêng (máy nhà) — đăng nhập một lần, lần sau tự vào lại.
-import { chromium } from 'playwright-core';
 import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
 import * as ui from './ui.mjs';
+
+// Termux báo process.platform = 'android'; playwright-core không biết nền tảng này và ném lỗi
+// "Unsupported platform" khi tính thư mục chứa trình duyệt — trừ khi PLAYWRIGHT_BROWSERS_PATH
+// đặt sẵn. Bot chỉ nối vào Chromium có sẵn, không tải trình duyệt nào, nên đường dẫn chỉ cần
+// hợp lệ. Phải đặt TRƯỚC khi nạp playwright-core, nên nạp bằng import() động.
+if (process.platform === 'android') {
+  process.env.PLAYWRIGHT_BROWSERS_PATH ||= path.join(os.homedir(), '.cache', 'ms-playwright');
+}
+const { chromium } = await import('playwright-core');
 
 // Chromium trên điện thoại không bị tắt giữa các lần chạy: khung soạn bài còn dở (dry-run, lỗi
 // giữa chừng) có thể bật hộp "Rời trang?" — Playwright mặc định bấm "Ở lại" làm goto kẹt.
