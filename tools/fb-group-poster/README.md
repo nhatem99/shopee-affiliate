@@ -37,10 +37,10 @@ cd shopee-affiliate
 git sparse-checkout set tools/fb-group-poster
 cd tools/fb-group-poster
 npm install
-chmod +x phone/*.sh
 ```
 
-Cập nhật code về sau: `cd ~/shopee-affiliate && git pull`.
+Cập nhật code về sau: `cd ~/shopee-affiliate && git pull`. Nếu git báo "Your local changes … would be
+overwritten" (thường do lỡ `chmod` file): `git checkout -- tools/fb-group-poster && git pull`.
 
 ## 1. Mở Chromium và đăng nhập Facebook
 

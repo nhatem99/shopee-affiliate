@@ -13,7 +13,8 @@ termux-wake-lock
 sleep 20  # đợi wifi lên sau khi khởi động máy
 
 while true; do
-  if ! "$APP_DIR/phone/start-chromium.sh" >>"$LOG_DIR/boot.log" 2>&1; then
+  # Gọi qua bash: không phụ thuộc quyền thực thi của file (git checkout có thể làm mất).
+  if ! bash "$APP_DIR/phone/start-chromium.sh" >>"$LOG_DIR/boot.log" 2>&1; then
     sleep 60
     continue
   fi
