@@ -267,7 +267,39 @@ async function tick(api, state, cfg, browser) {
   return Number(job.retry_after) || 60;
 }
 
+// Hai bot cùng lúc thì cùng điều khiển một Chromium. Chuyện này dễ xảy ra trên điện thoại:
+// vòng lặp fb-poster.sh tự bật lại bot vừa bị tắt, rồi người dùng lại chạy thêm một vòng nữa.
+function otherRunner(pidFile) {
+  let pid;
+  try {
+    pid = Number(fs.readFileSync(pidFile, 'utf8'));
+  } catch {
+    return null;
+  }
+  if (!pid || pid === process.pid) return null;
+  try {
+    process.kill(pid, 0);
+  } catch {
+    return null; // tiến trình đã chết, file còn sót lại
+  }
+  // PID có thể đã bị tiến trình khác dùng lại — chỉ tính khi đúng là bot.
+  try {
+    if (!fs.readFileSync(`/proc/${pid}/cmdline`, 'utf8').includes('poster.mjs')) return null;
+  } catch {
+    /* không có /proc (Windows, macOS): tin vào kill(0) */
+  }
+  return pid;
+}
+
 async function cmdRun(cfg) {
+  const pidFile = path.join(cfg.dataDir, 'run.pid');
+  const other = otherRunner(pidFile);
+  if (other) {
+    log(`Đã có bot khác đang chạy (PID ${other}) — không chạy thêm con thứ hai.`);
+    return 4;
+  }
+  fs.writeFileSync(pidFile, String(process.pid));
+
   const api = new Api(cfg.baseUrl, cfg.token);
   const state = new State(path.join(cfg.dataDir, 'state.json'));
   let stopping = false;
@@ -304,6 +336,7 @@ async function cmdRun(cfg) {
     }
   } finally {
     await browser.close().catch(() => {});
+    if (otherRunner(pidFile) === null) fs.rmSync(pidFile, { force: true });
   }
   return exitCode;
 }

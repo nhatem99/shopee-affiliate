@@ -22,7 +22,11 @@ while true; do
   (cd "$APP_DIR" && node poster.mjs run) >>"$LOG_DIR/boot.log" 2>&1
   code=$?
 
-  if [ "$code" -eq 2 ]; then
+  if [ "$code" -eq 4 ]; then
+    # Đã có bot khác chạy (vòng lặp khác bật nó) — vòng lặp này thừa, thôi luôn.
+    echo "[$(date '+%F %T')] Đã có bot khác chạy — vòng lặp này dừng." >>"$LOG_DIR/boot.log"
+    exit 0
+  elif [ "$code" -eq 2 ]; then
     # Server từ chối token: chạy lại liên tục cũng vô ích — đợi 1 giờ cho bạn kịp dán token mới.
     echo "[$(date '+%F %T')] Token bị từ chối — đợi 1 giờ." >>"$LOG_DIR/boot.log"
     sleep 3600
