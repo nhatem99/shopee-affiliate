@@ -29,6 +29,9 @@ return Application::configure(basePath: dirname(__DIR__))
             Route::post('/webhooks/zalo', ZaloWebhookController::class)
                 ->middleware('throttle:120,1')
                 ->name('zalo.webhook');
+
+            // Bot đăng nhóm Facebook (đường bot gọi nằm ngoài nhóm web) + trang admin của nó.
+            require base_path('routes/facebook-groups.php');
         },
     )
     ->withMiddleware(function (Middleware $middleware): void {

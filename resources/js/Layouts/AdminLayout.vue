@@ -126,6 +126,8 @@ const navGroups = [
             { href: '/admin/vouchers', icon: '🎫', label: 'Voucher FB/YT' },
             { href: '/admin/voucher-buttons', icon: '🔘', label: 'Nút Voucher' },
             { href: '/admin/promo', icon: '📣', label: 'Bài giới thiệu' },
+            { href: '/admin/fb-posts', icon: '📢', label: 'Đăng nhóm FB' },
+            { href: '/admin/fb-groups', icon: '🧑‍🤝‍🧑', label: 'Nhóm FB & bot' },
         ],
     },
     {

@@ -1,0 +1,40 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+  Chạy bot đăng nhóm Facebook nền trên Mac, tự bật lại khi bot thoát hoặc máy khởi động lại.
+  Sửa BAN_DUONG_DAN thành đường dẫn thật tới thư mục deploy/fb-group-runner, rồi:
+    cp com.tietkiemvi.fb-runner.plist.example ~/Library/LaunchAgents/com.tietkiemvi.fb-runner.plist
+    launchctl load ~/Library/LaunchAgents/com.tietkiemvi.fb-runner.plist
+-->
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>com.tietkiemvi.fb-runner</string>
+
+    <key>ProgramArguments</key>
+    <array>
+        <!-- caffeinate -i: không cho máy ngủ khi đang chạy (gập nắp MacBook thì vẫn ngủ). -->
+        <string>/usr/bin/caffeinate</string>
+        <string>-i</string>
+        <string>BAN_DUONG_DAN/deploy/fb-group-runner/.venv/bin/python</string>
+        <string>BAN_DUONG_DAN/deploy/fb-group-runner/runner.py</string>
+        <string>run</string>
+    </array>
+
+    <key>WorkingDirectory</key>
+    <string>BAN_DUONG_DAN/deploy/fb-group-runner</string>
+
+    <key>RunAtLoad</key>
+    <true/>
+    <key>KeepAlive</key>
+    <true/>
+    <!-- Bot thoát vì lỗi thì đợi 60 giây mới bật lại, tránh vòng lặp dồn dập. -->
+    <key>ThrottleInterval</key>
+    <integer>60</integer>
+
+    <key>StandardOutPath</key>
+    <string>/tmp/tietkiemvi-fb-runner.out.log</string>
+    <key>StandardErrorPath</key>
+    <string>/tmp/tietkiemvi-fb-runner.err.log</string>
+</dict>
+</plist>
