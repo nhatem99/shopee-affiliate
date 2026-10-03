@@ -18,7 +18,11 @@ class FacebookDealCaption
     /** Ngoặc nhọn có dấu | bên trong và không chứa ngoặc khác — tức lựa chọn trong cùng. */
     private const SPIN_PATTERN = '/\{([^{}]*\|[^{}]*)\}/u';
 
-    public function defaultTemplate(?array $product): string
+    /**
+     * @param  bool  $withVoucher  false khi bài chỉ có link affiliate không mã (công tắc ở
+     *                             DirectAffiliateLinkService) — khỏi hứa "mã có hạn" khi chẳng có mã.
+     */
+    public function defaultTemplate(?array $product, bool $withVoucher = true): string
     {
         $name = $this->plain($product['product_name'] ?? '') ?: 'Sản phẩm Shopee đang giảm giá';
 
@@ -41,7 +45,9 @@ class FacebookDealCaption
         $lines[] = '';
         $lines[] = '{link}';
         $lines[] = '';
-        $lines[] = '{Mã có giới hạn lượt|Số lượng mã có hạn}, {nhanh tay kẻo hết|tranh thủ nhé} {👇|🛒|⏰}';
+        $lines[] = $withVoucher
+            ? '{Mã có giới hạn lượt|Số lượng mã có hạn}, {nhanh tay kẻo hết|tranh thủ nhé} {👇|🛒|⏰}'
+            : '{Giá có thể đổi bất cứ lúc nào|Giá tốt không chờ ai}, {nhanh tay kẻo lỡ|tranh thủ nhé} {👇|🛒|⏰}';
 
         return implode("\n", $lines);
     }

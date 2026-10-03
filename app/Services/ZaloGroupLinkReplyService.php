@@ -27,6 +27,7 @@ class ZaloGroupLinkReplyService
         private AffiliateLinkRewriterService $rewriter,
         private ShortLinkService $shortLinks,
         private VoucherRefService $refs,
+        private DirectAffiliateLinkService $direct,
     ) {}
 
     /**
@@ -72,6 +73,12 @@ class ZaloGroupLinkReplyService
      */
     public function replyFor(string $url): array
     {
+        // Công tắc "chỉ đổi sang link affiliate" ở Admin > Cài đặt: không lấy mã, trả thẳng link
+        // affiliate của Shopee — không bọc /go/ của site.
+        if (DirectAffiliateLinkService::enabled()) {
+            return $this->directReplyFor($url);
+        }
+
         try {
             $result = $this->fetcher->fetch($url);
             $voucherLink = $result->data['voucher_link'] ?? null;
@@ -114,6 +121,26 @@ class ZaloGroupLinkReplyService
             $title,
             '👉 Bấm link này để mua có mã giảm giá:',
             $buyUrl,
+        ]));
+    }
+
+    /**
+     * @return array{text: string, styles: list<array{start: int, len: int, st: string}>}
+     */
+    private function directReplyFor(string $url): array
+    {
+        try {
+            $direct = $this->direct->build($url, (string) config('services.shopee_affiliate.utm_content_zalo'));
+        } catch (AffiliateScanException $e) {
+            return $this->message('😥 '.$e->getMessage());
+        }
+
+        $name = $direct['product']['product_name'] ?? null;
+
+        return $this->message(implode("\n", [
+            '🛍️ '.($name ? Str::limit($name, 120) : 'Link mua sản phẩm'),
+            '👉 Link mua:',
+            $direct['url'],
         ]));
     }
 

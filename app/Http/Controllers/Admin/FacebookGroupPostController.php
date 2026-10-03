@@ -8,6 +8,7 @@ use App\Models\FacebookGroup;
 use App\Models\FacebookGroupDeal;
 use App\Models\FacebookGroupPost;
 use App\Models\ShortLink;
+use App\Services\DirectAffiliateLinkService;
 use App\Services\FacebookDealCaption;
 use App\Services\FacebookDealLinkBuilder;
 use App\Services\FacebookGroupPostScheduler;
@@ -93,7 +94,7 @@ class FacebookGroupPostController extends Controller
             'canonical_url' => $link->canonicalUrl,
             'source' => $link->source,
             'product' => $product,
-            'caption' => $captions->defaultTemplate($product),
+            'caption' => $captions->defaultTemplate($product, $link->source !== DirectAffiliateLinkService::SOURCE),
             'link_block' => $link->captionBlock(),
             'fallback_buy_url' => $link->buyUrl,
             'fallback_ytb_url' => $link->ytbActivateUrl,
@@ -117,9 +118,14 @@ class FacebookGroupPostController extends Controller
             'product.original_price' => ['nullable', 'numeric'],
             'product.discounted_price' => ['nullable', 'numeric'],
             'product.discount_percent' => ['nullable', 'numeric'],
-            // Link dự phòng phải là link của chính site — không cho trang admin chèn link lạ
+            // Link dự phòng phải là link của chính site, hoặc link affiliate Shopee mang ID của
+            // mình (công tắc "chỉ đổi sang link affiliate") — không cho trang admin chèn link lạ
             // vào bài mà nick cá nhân sẽ đăng.
-            'fallback_buy_url' => ['nullable', 'string', 'max:500', 'starts_with:'.url('/go/')],
+            'fallback_buy_url' => ['nullable', 'string', 'max:500', function (string $attribute, mixed $value, \Closure $fail) {
+                if (! str_starts_with((string) $value, url('/go/')) && ! DirectAffiliateLinkService::isOwn((string) $value)) {
+                    $fail('Link dự phòng không phải link của mình.');
+                }
+            }],
             'fallback_ytb_url' => ['nullable', 'string', 'max:500', 'starts_with:'.url('/ytb/')],
             'group_ids' => ['required', 'array', 'min:1', 'max:500'],
             'group_ids.*' => ['integer', Rule::exists('facebook_groups', 'id')->where('enabled', true)],

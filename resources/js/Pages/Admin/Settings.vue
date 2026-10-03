@@ -15,6 +15,7 @@ const props = defineProps({
     historyRebuyEnabled: { type: Boolean, default: false },
     fbigWindowAutoSwitch: { type: Boolean, default: false },
     ytbWithKieuShopee: { type: Boolean, default: true },
+    groupLinksDirectAffiliate: { type: Boolean, default: false },
     leaderboardDemo: { type: Boolean, default: true },
     // { url, fileName, video, maxUploadMb } — xem GuideVideoService::adminState().
     guideVideo: { type: Object, default: () => ({ url: '', fileName: null, video: null, maxUploadMb: 0 }) },
@@ -47,6 +48,8 @@ const fbigWindowAutoSwitch = ref(props.fbigWindowAutoSwitch)
 const savingFbigAutoSwitch = ref(false)
 const ytbWithKieuShopee = ref(props.ytbWithKieuShopee)
 const savingYtbWithKieuShopee = ref(false)
+const groupLinksDirectAffiliate = ref(props.groupLinksDirectAffiliate)
+const savingGroupLinksDirect = ref(false)
 const leaderboardDemo = ref(props.leaderboardDemo)
 const savingLeaderboardDemo = ref(false)
 const guideVideoUrl = ref(props.guideVideo?.url ?? '')
@@ -78,6 +81,7 @@ watch(() => props.festiveDecor, (v) => { festiveDecor.value = v })
 watch(() => props.historyRebuyEnabled, (v) => { historyRebuyEnabled.value = v })
 watch(() => props.fbigWindowAutoSwitch, (v) => { fbigWindowAutoSwitch.value = v })
 watch(() => props.ytbWithKieuShopee, (v) => { ytbWithKieuShopee.value = v })
+watch(() => props.groupLinksDirectAffiliate, (v) => { groupLinksDirectAffiliate.value = v })
 watch(() => props.leaderboardDemo, (v) => { leaderboardDemo.value = v })
 watch(() => props.guideVideo, (v) => { guideVideoUrl.value = v?.url ?? '' })
 watch(() => props.communityUrl, (v) => { communityUrl.value = v })
@@ -234,6 +238,24 @@ function toggleYtbWithKieuShopee() {
             toast.error('Không lưu được cài đặt, vui lòng thử lại.')
         },
         onFinish: () => { savingYtbWithKieuShopee.value = false },
+    })
+}
+
+function toggleGroupLinksDirect() {
+    const next = !groupLinksDirectAffiliate.value
+    groupLinksDirectAffiliate.value = next
+    savingGroupLinksDirect.value = true
+
+    router.post('/admin/settings', { group_links_direct_affiliate: next }, {
+        preserveScroll: true,
+        onSuccess: () => toast.success(next
+            ? 'Đã bật — bài nhóm FB và bot Zalo gửi thẳng link affiliate Shopee, không mã.'
+            : 'Đã tắt — bài nhóm FB và bot Zalo lại gửi link có mã như cũ.'),
+        onError: () => {
+            groupLinksDirectAffiliate.value = !next // rollback nếu lưu lỗi
+            toast.error('Không lưu được cài đặt, vui lòng thử lại.')
+        },
+        onFinish: () => { savingGroupLinksDirect.value = false },
     })
 }
 
@@ -694,6 +716,46 @@ function saveCashbackDisplayRate() {
                         {{ ytbWithKieuShopee
                             ? 'Đang bật — chế độ mã YTB gọi cả ganma lẫn kieushopee.'
                             : 'Đang tắt — chế độ mã YTB chỉ gọi ganma, không đụng tới kieushopee.' }}
+                    </span>
+                </div>
+            </div>
+
+            <div class="bg-[var(--color-surface)] rounded-2xl border border-[var(--color-line)] p-6">
+                <div class="flex items-start justify-between gap-6">
+                    <div class="min-w-0">
+                        <h2 class="font-bold text-[var(--color-ink)] mb-1">🔗 Nhóm FB &amp; Zalo: chỉ đổi sang link affiliate</h2>
+                        <p class="text-sm text-[var(--color-muted)] leading-relaxed">
+                            Áp cho <b>bài đăng nhóm Facebook</b> và <b>bot Zalo nhóm</b>.
+                            <b>Bật</b>: không lấy mã nữa — link Shopee được đổi thẳng thành link affiliate chính thức của Shopee
+                            (<span class="font-mono text-xs">s.shopee.vn/an_redir…</span>) mang ID của bạn, gửi nguyên link đó, không qua tietkiemvi.com.
+                            Nhanh, không phụ thuộc nguồn mã, nhưng <b>khách không có mã giảm giá</b> và không đếm được lượt bấm ở trang admin.
+                            <b>Tắt</b>: link có mã qua tietkiemvi.com như hiện nay.
+                            Cả hai cách đều chưa hoàn tiền được cho khách trong nhóm — không biết ai là người mua.
+                        </p>
+                    </div>
+
+                    <button
+                        type="button"
+                        role="switch"
+                        :aria-checked="groupLinksDirectAffiliate"
+                        @click="toggleGroupLinksDirect"
+                        :disabled="savingGroupLinksDirect"
+                        class="relative flex-none w-14 h-8 rounded-full transition-colors duration-200 disabled:opacity-60"
+                        :class="groupLinksDirectAffiliate ? 'bg-[var(--color-accent)]' : 'bg-[var(--color-line)]'"
+                    >
+                        <span
+                            class="absolute top-1 left-1 w-6 h-6 rounded-full bg-white shadow-md transition-transform duration-200"
+                            :class="groupLinksDirectAffiliate ? 'translate-x-6' : 'translate-x-0'"
+                        ></span>
+                    </button>
+                </div>
+
+                <div class="mt-4 pt-4 border-t border-[var(--color-line)] flex items-center gap-2 text-sm">
+                    <span class="w-2 h-2 rounded-full flex-none" :class="groupLinksDirectAffiliate ? 'bg-[var(--color-accent)]' : 'bg-[var(--color-muted)]'"></span>
+                    <span class="text-[var(--color-ink)] font-medium">
+                        {{ groupLinksDirectAffiliate
+                            ? 'Đang bật — nhóm FB và Zalo nhận link affiliate Shopee, không mã.'
+                            : 'Đang tắt — nhóm FB và Zalo nhận link có mã qua tietkiemvi.com.' }}
                     </span>
                 </div>
             </div>

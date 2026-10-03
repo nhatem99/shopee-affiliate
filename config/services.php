@@ -70,6 +70,12 @@ return [
         // Nhãn cho mã lấy từ nguồn YouTube (ganma.vn).
         'utm_content_yt' => env('SHOPEE_UTM_CONTENT_YT', 'YT'),
 
+        // Nhãn cho link affiliate KHÔNG mã của bài nhóm Facebook / bot Zalo nhóm, khi bật công
+        // tắc "chỉ đổi sang link affiliate" — xem DirectAffiliateLinkService. Tách riêng để báo
+        // cáo Shopee thấy được đơn đến từ nhóm. Cùng quy tắc: không đặt tên miền vào đây.
+        'utm_content_fb_group' => env('SHOPEE_UTM_CONTENT_FB_GROUP', 'FBG'),
+        'utm_content_zalo' => env('SHOPEE_UTM_CONTENT_ZALO', 'ZL'),
+
         // Marker nhận ra "mã YouTube". Link an_redir của ganma mang sub_id dạng "YT3-<token>";
         // đi theo redirect thì Shopee đổ nguyên văn giá trị đó sang utm_content, nên khe đầu
         // ('yt3') là chỗ nhận ra kênh. Thêm giá trị vào đây nếu họ đổi cách đặt tên nhóm —

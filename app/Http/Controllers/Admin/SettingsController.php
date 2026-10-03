@@ -8,6 +8,7 @@ use App\Services\CashbackLeaderboardService;
 use App\Services\CashbackService;
 use App\Services\ChatService;
 use App\Services\DailyCheckInService;
+use App\Services\DirectAffiliateLinkService;
 use App\Services\GuideVideoService;
 use App\Services\MembershipTierService;
 use App\Services\SourceHealthService;
@@ -36,6 +37,7 @@ class SettingsController extends Controller
             'historyRebuyEnabled' => Setting::getBool('history_rebuy_enabled', false),
             'fbigWindowAutoSwitch' => VoucherSourceResolver::autoSwitchEnabled(),
             'ytbWithKieuShopee' => VoucherSourceResolver::ytbWithKieuShopee(),
+            'groupLinksDirectAffiliate' => DirectAffiliateLinkService::enabled(),
             'leaderboardDemo' => Setting::getBool(CashbackLeaderboardService::DEMO_KEY, CashbackLeaderboardService::DEMO_DEFAULT),
             'communityUrl' => Setting::get('community_url') ?: '',
             'messengerUrl' => Setting::get('messenger_url') ?: '',
@@ -68,6 +70,7 @@ class SettingsController extends Controller
             'history_rebuy_enabled' => ['sometimes', 'boolean'],
             'fbig_window_auto_switch' => ['sometimes', 'boolean'],
             'ytb_with_kieushopee' => ['sometimes', 'boolean'],
+            'group_links_direct_affiliate' => ['sometimes', 'boolean'],
             'leaderboard_demo' => ['sometimes', 'boolean'],
             'community_url' => ['sometimes', 'nullable', 'url', 'max:255'],
             'messenger_url' => ['sometimes', 'nullable', 'url', 'max:255'],
@@ -137,6 +140,10 @@ class SettingsController extends Controller
 
         if (array_key_exists('ytb_with_kieushopee', $validated)) {
             Setting::set(VoucherSourceResolver::YTB_WITH_KIEUSHOPEE_KEY, $validated['ytb_with_kieushopee'] ? '1' : '0');
+        }
+
+        if (array_key_exists('group_links_direct_affiliate', $validated)) {
+            Setting::set(DirectAffiliateLinkService::ENABLED_KEY, $validated['group_links_direct_affiliate'] ? '1' : '0');
         }
 
         if (array_key_exists('leaderboard_demo', $validated)) {

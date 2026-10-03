@@ -24,6 +24,13 @@ final readonly class FacebookDealLink
      */
     public function captionBlock(): string
     {
+        if ($this->source === DirectAffiliateLinkService::SOURCE) {
+            return implode("\n", [
+                '👉 Link mua:',
+                $this->buyUrl,
+            ]);
+        }
+
         if ($this->ytbActivateUrl) {
             return implode("\n", [
                 '1️⃣ Mở link này trước để kích hoạt mã:',
