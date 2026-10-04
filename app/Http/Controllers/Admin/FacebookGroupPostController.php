@@ -13,18 +13,22 @@ use App\Services\FacebookDealCaption;
 use App\Services\FacebookDealLinkBuilder;
 use App\Services\FacebookGroupPostScheduler;
 use App\Services\FacebookGroupRunnerSettings;
+use App\Services\FacebookPostImages;
 use App\Services\UrlValidationService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
 use Inertia\Inertia;
 use Inertia\Response;
+use Symfony\Component\HttpFoundation\BinaryFileResponse;
 
 /**
- * /admin/fb-posts — dán link Shopee, hệ thống soạn sẵn bài, admin sửa rồi chọn nhóm; bot trên
- * máy nhà đăng dần theo nhịp ở /admin/fb-groups.
+ * /admin/fb-posts — dán link Shopee, hệ thống soạn sẵn bài, admin sửa rồi chọn nhóm; hoặc tự
+ * soạn bài không link. Ảnh tự tải lên được cho cả hai kiểu. Bot trên máy nhà đăng dần theo nhịp
+ * ở /admin/fb-groups.
  */
 class FacebookGroupPostController extends Controller
 {
@@ -33,6 +37,7 @@ class FacebookGroupPostController extends Controller
     public function __construct(
         private FacebookGroupPostScheduler $scheduler,
         private FacebookGroupRunnerSettings $settings,
+        private FacebookPostImages $images,
     ) {}
 
     public function index(): Response
@@ -44,12 +49,18 @@ class FacebookGroupPostController extends Controller
         $clicks = ShortLink::whereIn('id', $deals->flatMap->posts->pluck('short_link_id')->filter()->unique())
             ->pluck('clicks', 'id');
 
+        $runnerVersion = $this->settings->runnerStatus()['version'];
+        $runnerSupportsUploads = FacebookGroupPostScheduler::runnerSupportsUploads($runnerVersion);
+
         return Inertia::render('Admin/FacebookGroupPosts', [
             'groups' => FacebookGroup::enabled()->orderBy('name')->get(['id', 'name', 'url', 'last_posted_at']),
             'deals' => $deals->map(fn (FacebookGroupDeal $deal) => [
                 'id' => $deal->id,
                 'created_at' => $deal->created_at,
                 'shopee_url' => $deal->shopee_url,
+                'custom' => $deal->isCustom(),
+                'excerpt' => $deal->isCustom() ? Str::limit(trim(strtok($deal->caption, "\n")), 120) : null,
+                'images' => $this->images->adminUrlsFor($deal),
                 'product' => $deal->product,
                 'clicks' => $deal->posts->pluck('short_link_id')->filter()->unique()->sum(fn ($id) => $clicks[$id] ?? 0),
                 'posts' => $deal->posts->sortBy('id')->values()->map(fn (FacebookGroupPost $post) => [
@@ -70,7 +81,44 @@ class FacebookGroupPostController extends Controller
             ],
             // Công tắc dùng chung với trang Zalo nick nhóm — xem GroupLinksDirectToggle.vue.
             'groupLinksDirectAffiliate' => DirectAffiliateLinkService::enabled(),
+            'maxImages' => FacebookPostImages::MAX_PER_POST,
+            'runner' => [
+                'version' => $runnerVersion,
+                'supports_uploads' => $runnerSupportsUploads,
+                // Bot cũ không nhận bài có ảnh tự tải — có bài như vậy đang chờ thì phải báo.
+                'uploads_waiting' => ! $runnerSupportsUploads && FacebookGroupPost::where('status', FacebookGroupPost::PENDING)
+                    ->whereHas('deal', fn ($query) => $query->whereNotNull('images'))
+                    ->exists(),
+            ],
         ]);
+    }
+
+    /**
+     * Tải một ảnh lên ngay lúc admin chọn — trình duyệt đã nén sẵn (FacebookGroupPosts.vue), mỗi
+     * request một ảnh cho nhẹ. Trả tên file để form gửi kèm khi xếp bài.
+     */
+    public function uploadImage(Request $request): JsonResponse
+    {
+        $request->validate([
+            'image' => ['required', 'image', 'mimes:jpg,jpeg,png,webp', 'max:'.FacebookPostImages::MAX_KB],
+        ], [
+            'image.image' => 'File này không phải ảnh.',
+            'image.mimes' => 'Chỉ nhận ảnh JPG, PNG hoặc WebP.',
+            'image.max' => 'Ảnh quá lớn.',
+        ]);
+
+        $this->images->prune();
+        $name = $this->images->store($request->file('image'));
+
+        return response()->json(['name' => $name, 'url' => route('admin.fb-posts.image', $name)]);
+    }
+
+    public function image(string $name): BinaryFileResponse
+    {
+        $path = $this->images->path($name);
+        abort_if($path === null, 404);
+
+        return response()->file($path, ['Cache-Control' => 'private, max-age=604800']);
     }
 
     /**
@@ -105,11 +153,17 @@ class FacebookGroupPostController extends Controller
 
     public function store(Request $request, UrlValidationService $urls): RedirectResponse
     {
+        // Không có link Shopee = bài tự soạn: không link mua, nên cũng không được có {link}.
+        $custom = ! $request->filled('shopee_url');
+
         $data = $request->validate([
-            'shopee_url' => ['required', 'string', 'max:2000'],
-            'caption' => ['required', 'string', 'max:5000', function (string $attribute, mixed $value, \Closure $fail) {
-                if (! str_contains((string) $value, '{link}')) {
+            'shopee_url' => ['nullable', 'string', 'max:2000'],
+            'caption' => ['required', 'string', 'max:5000', function (string $attribute, mixed $value, \Closure $fail) use ($custom) {
+                $hasLink = str_contains((string) $value, '{link}');
+                if (! $custom && ! $hasLink) {
                     $fail('Nội dung phải có {link} — chỗ đặt link mua.');
+                } elseif ($custom && $hasLink) {
+                    $fail('Bài tự soạn không có link mua — bỏ {link} ra khỏi nội dung.');
                 }
             }],
             'canonical_url' => ['nullable', 'string', 'max:2000'],
@@ -129,6 +183,13 @@ class FacebookGroupPostController extends Controller
                 }
             }],
             'fallback_ytb_url' => ['nullable', 'string', 'max:500', 'starts_with:'.url('/ytb/')],
+            'with_product_image' => ['boolean'],
+            'images' => ['nullable', 'array', 'max:'.FacebookPostImages::MAX_PER_POST],
+            'images.*' => ['string', 'distinct', function (string $attribute, mixed $value, \Closure $fail) {
+                if (! $this->images->exists((string) $value)) {
+                    $fail('Có ảnh đã tải lên không còn trên server — xoá ảnh đó rồi tải lại.');
+                }
+            }],
             'group_ids' => ['required', 'array', 'min:1', 'max:500'],
             'group_ids.*' => ['integer', Rule::exists('facebook_groups', 'id')->where('enabled', true)],
         ], [
@@ -136,23 +197,37 @@ class FacebookGroupPostController extends Controller
             'group_ids.*.exists' => 'Có nhóm đã bị tắt hoặc không còn — tải lại trang rồi chọn lại.',
         ]);
 
-        try {
-            $urls->validateShopeeOnly($data['shopee_url']);
-        } catch (AffiliateScanException $e) {
-            return back()->withErrors(['shopee_url' => $e->getMessage()]);
+        if (! $custom) {
+            try {
+                $urls->validateShopeeOnly($data['shopee_url']);
+            } catch (AffiliateScanException $e) {
+                return back()->withErrors(['shopee_url' => $e->getMessage()]);
+            }
+        }
+
+        $product = ! $custom && isset($data['product']) ? array_intersect_key($data['product'], array_flip(self::PRODUCT_KEYS)) : null;
+        $withProductImage = (bool) ($data['with_product_image'] ?? true);
+        $uploads = array_values($data['images'] ?? []);
+
+        $total = count($uploads) + ($withProductImage && ! empty($product['product_image']) ? 1 : 0);
+        if ($total > FacebookPostImages::MAX_PER_POST) {
+            return back()->withErrors(['images' => 'Mỗi bài tối đa '.FacebookPostImages::MAX_PER_POST.' ảnh, kể cả ảnh sản phẩm.']);
         }
 
         $groupIds = array_values(array_unique(array_map('intval', $data['group_ids'])));
 
-        DB::transaction(function () use ($data, $groupIds, $request) {
+        DB::transaction(function () use ($data, $custom, $product, $withProductImage, $uploads, $groupIds, $request) {
             $deal = FacebookGroupDeal::create([
-                'shopee_url' => trim($data['shopee_url']),
-                'canonical_url' => $data['canonical_url'] ?? null,
-                'source' => $data['source'] ?? null,
-                'product' => isset($data['product']) ? array_intersect_key($data['product'], array_flip(self::PRODUCT_KEYS)) : null,
+                'shopee_url' => $custom ? null : trim($data['shopee_url']),
+                'canonical_url' => $custom ? null : ($data['canonical_url'] ?? null),
+                'source' => $custom ? null : ($data['source'] ?? null),
+                'product' => $product,
+                // null chứ không [] — bot cũ được nhận bài nhờ whereNull('images').
+                'images' => $uploads ?: null,
+                'with_product_image' => $withProductImage,
                 'caption' => $data['caption'],
-                'fallback_buy_url' => $data['fallback_buy_url'] ?? null,
-                'fallback_ytb_url' => $data['fallback_ytb_url'] ?? null,
+                'fallback_buy_url' => $custom ? null : ($data['fallback_buy_url'] ?? null),
+                'fallback_ytb_url' => $custom ? null : ($data['fallback_ytb_url'] ?? null),
                 'created_by' => $request->user()->id,
             ]);
 

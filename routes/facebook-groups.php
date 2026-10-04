@@ -4,6 +4,7 @@ use App\Http\Controllers\Admin\FacebookGroupController;
 use App\Http\Controllers\Admin\FacebookGroupPostController;
 use App\Http\Controllers\FacebookRunnerController;
 use App\Http\Middleware\VerifyFacebookRunnerToken;
+use App\Services\FacebookPostImages;
 use Illuminate\Support\Facades\Route;
 
 /*
@@ -12,7 +13,7 @@ use Illuminate\Support\Facades\Route;
 */
 
 // Bot hỏi việc / báo kết quả: ngoài nhóm web (không CSRF, session, GeoBlock), xác thực bằng
-// token. Bot hỏi tối đa vài lần mỗi phút — 60/phút là dư.
+// token. Bot hỏi tối đa vài lần mỗi phút, mỗi bài tải thêm tối đa 5 ảnh — 60/phút là dư.
 Route::prefix('runner/fb')
     ->name('runner.fb.')
     ->middleware(['throttle:60,1', VerifyFacebookRunnerToken::class])
@@ -20,6 +21,7 @@ Route::prefix('runner/fb')
         Route::post('/poll', [FacebookRunnerController::class, 'poll'])->name('poll');
         Route::post('/posts/{id}/result', [FacebookRunnerController::class, 'result'])->whereNumber('id')->name('result');
         Route::post('/groups', [FacebookRunnerController::class, 'groups'])->name('groups');
+        Route::get('/images/{name}', [FacebookRunnerController::class, 'image'])->where('name', FacebookPostImages::NAME_PATTERN)->name('image');
     });
 
 Route::middleware(['web', 'auth', 'auth.admin'])->prefix('admin')->name('admin.')->group(function () {
@@ -35,6 +37,8 @@ Route::middleware(['web', 'auth', 'auth.admin'])->prefix('admin')->name('admin.'
 
     Route::get('/fb-posts', [FacebookGroupPostController::class, 'index'])->name('fb-posts');
     Route::post('/fb-posts/compose', [FacebookGroupPostController::class, 'compose'])->name('fb-posts.compose');
+    Route::post('/fb-posts/images', [FacebookGroupPostController::class, 'uploadImage'])->name('fb-posts.images');
+    Route::get('/fb-posts/images/{name}', [FacebookGroupPostController::class, 'image'])->where('name', FacebookPostImages::NAME_PATTERN)->name('fb-posts.image');
     Route::post('/fb-posts', [FacebookGroupPostController::class, 'store'])->name('fb-posts.store');
     Route::post('/fb-posts/{facebookGroupPost}/cancel', [FacebookGroupPostController::class, 'cancel'])->name('fb-posts.cancel');
     Route::post('/fb-posts/{facebookGroupPost}/retry', [FacebookGroupPostController::class, 'retry'])->name('fb-posts.retry');

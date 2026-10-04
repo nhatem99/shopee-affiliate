@@ -81,7 +81,12 @@ node poster.mjs dry-run --group https://www.facebook.com/groups/<id-nhom-test>
 ```
 
 Bot mở nhóm, điền nội dung rồi **dừng trước nút Đăng**. Xem trên Termux:X11, xong bấm Enter. Thử kèm
-ảnh: thêm `--image <đường dẫn ảnh>`.
+ảnh: thêm `--image <đường dẫn ảnh>`, lặp lại tối đa 5 lần để thử bài nhiều ảnh
+(`--image a.jpg --image b.jpg`).
+
+Bài soạn ở /admin/fb-posts có thể kèm tới 5 ảnh (ảnh sản phẩm Shopee + ảnh tự tải lên) hoặc là
+"bài tự soạn" không link. Ảnh tự tải lên chỉ bot từ bản 1.1.0 đăng được — bot cũ hơn được server
+cho qua những bài đó (trang admin báo "đang chờ"), nên nhớ `git pull` rồi chạy lại bot.
 
 ## 4. Chạy
 

@@ -3,7 +3,8 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 
-export const VERSION = '1.0.0-node';
+// Server chỉ giao bài có ảnh tự tải lên cho bot từ 1.1.0 (FacebookGroupPostScheduler::UPLOADS_MIN_VERSION).
+export const VERSION = '1.1.0-node';
 
 const home = (p) => (p.startsWith('~') ? path.join(os.homedir(), p.slice(1)) : p);
 

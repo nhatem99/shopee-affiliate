@@ -1,4 +1,4 @@
-"""Đăng một bài (ảnh + chữ) vào một nhóm qua giao diện web Facebook.
+"""Đăng một bài (chữ + tối đa vài ảnh) vào một nhóm qua giao diện web Facebook.
 
 Kết quả chia theo việc ĐÃ BẤM ĐĂNG HAY CHƯA:
   • chưa bấm mà hỏng → "failed" (chưa có gì lên nhóm, server cho đăng lại);
@@ -37,7 +37,7 @@ def post_to_group(
     page: Page,
     group_url: str,
     caption: str,
-    image_path: Path | None = None,
+    image_paths: list[Path] | None = None,
     dry_run: bool = False,
     on_submitting: Callable[[], None] | None = None,
 ) -> Result:
@@ -68,8 +68,9 @@ def post_to_group(
     except PlaywrightTimeout:
         return Result("failed", 'Bấm vào ô soạn bài nhưng khung "Tạo bài viết" không mở')
 
-    if image_path:
-        error = _attach_image(page, image_path)
+    images = [path for path in (image_paths or []) if path]
+    if images:
+        error = _attach_images(page, images)
         if error:
             return Result("failed", error)
 
@@ -83,9 +84,11 @@ def post_to_group(
         return Result("dry_run")
 
     _click_next_if_any(page)
-    button = _wait_post_button(page)
+    # Mỗi ảnh thêm chút thời gian: mạng chậm tải 5 ảnh lên Facebook có khi quá một phút.
+    wait_seconds = 60 + 15 * len(images)
+    button = _wait_post_button(page, wait_seconds)
     if button is None:
-        return Result("failed", "Nút Đăng không bấm được sau 60 giây (ảnh chưa tải xong?)")
+        return Result("failed", f"Nút Đăng không bấm được sau {wait_seconds} giây (ảnh chưa tải xong?)")
 
     # ── Từ đây trở đi bài có thể đã lên nhóm ──
     if on_submitting:
@@ -125,7 +128,7 @@ def _why_no_composer(page: Page) -> Result:
     return Result("failed", 'Không thấy ô "Bạn viết gì đi" trên trang nhóm')
 
 
-def _attach_image(page: Page, image_path: Path) -> str | None:
+def _attach_images(page: Page, image_paths: list[Path]) -> str | None:
     file_input = page.locator('div[role="dialog"] input[type="file"]')
     if file_input.count() == 0:
         photo = page.locator('div[role="dialog"]').get_by_role("button", name=ui.PHOTO_BUTTON)
@@ -135,8 +138,18 @@ def _attach_image(page: Page, image_path: Path) -> str | None:
     if file_input.count() == 0:
         return "Không thấy chỗ tải ảnh trong khung soạn bài"
 
-    file_input.first.set_input_files(str(image_path))
-    pause(3.0, 5.0)
+    # Ô chọn ảnh của Facebook thường nhận nhiều file một lần. Ô nào không có "multiple" thì thêm
+    # từng tấm — sau mỗi tấm Facebook có thể dựng lại ô, nên tìm lại ô mỗi lượt.
+    files = [str(path) for path in image_paths]
+    first = file_input.first
+    if len(files) == 1 or first.get_attribute("multiple") is not None:
+        first.set_input_files(files)
+    else:
+        for file in files:
+            page.locator('div[role="dialog"] input[type="file"]').first.set_input_files(file)
+            pause(2.0, 3.5)
+    # Nút Đăng còn mờ tới khi ảnh tải xong (_wait_post_button đợi tiếp) — ở đây chỉ nghỉ cho giống người.
+    pause(2.0 + len(files), 4.0 + len(files))
     return None
 
 

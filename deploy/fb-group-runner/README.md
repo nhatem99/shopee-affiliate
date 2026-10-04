@@ -36,7 +36,8 @@ Phiên đăng nhập được lưu ở `~/.local/share/tietkiemvi-fb-runner/prof
 
 Bot sẽ mở nhóm, bấm vào ô "Bạn viết gì đi", điền thử nội dung rồi **dừng trước nút Đăng**. Bạn xem trên cửa sổ Chromium, xong bấm Enter để đóng. Bài nháp sẽ bị bỏ.
 
-Muốn thử kèm ảnh thì thêm `--image <đường dẫn ảnh trên máy>`.
+Muốn thử kèm ảnh thì thêm `--image <đường dẫn ảnh trên máy>`, lặp lại tối đa 5 lần để thử bài nhiều ảnh.
+Ảnh admin tự tải lên ở /admin/fb-posts chỉ bot từ bản 1.1.0 đăng được.
 
 ## 3. Nối bot với server
 

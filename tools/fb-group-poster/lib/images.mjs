@@ -1,5 +1,8 @@
-// Tải ảnh sản phẩm về file JPEG tạm để đính kèm bài. Chỉ tải từ CDN ảnh của Shopee — server có
-// bị chiếm quyền cũng không bắt được nick đăng ảnh tuỳ ý.
+// Tải ảnh của bài về file JPEG tạm để đính kèm. Chỉ hai nguồn:
+//   • ảnh sản phẩm trên CDN ảnh của Shopee (link https đầy đủ);
+//   • ảnh admin tự tải lên ở /admin/fb-posts — server gửi đường dẫn /runner/fb/images/<tên>, bot
+//     tải từ chính server đã cấu hình, kèm token.
+// Không tải link lạ nào khác — server có bị chiếm quyền cũng không biến bot thành máy đi tải bậy.
 //
 // Shopee hay trả .webp, Facebook nên nhận JPEG. Không dùng thư viện ảnh native (khó cài trên
 // Termux): nhờ chính Chromium đổi định dạng bằng canvas.
@@ -11,6 +14,18 @@ import { VERSION } from './config.mjs';
 const ALLOWED_HOSTS = ['cf.shopee.vn'];
 const ALLOWED_SUFFIXES = ['.susercontent.com'];
 const MAX_BYTES = 10 * 1024 * 1024;
+
+// Trùng FacebookPostImages::MAX_PER_POST và NAME_PATTERN phía server.
+export const MAX_IMAGES = 5;
+export const UPLOAD_PATH = /^\/runner\/fb\/images\/[a-f0-9]{32}\.(?:jpg|png|webp)$/;
+
+export const isUpload = (ref) => UPLOAD_PATH.test(String(ref));
+
+// Một ảnh trong danh sách "images" của lượt nhận bài → file JPEG tạm.
+export async function fetchAsJpeg(ref, api, directory, context) {
+  if (isUpload(ref)) return toJpeg(context, await api.download(ref, MAX_BYTES), directory);
+  return downloadAsJpeg(ref, directory, context);
+}
 
 export function allowed(url) {
   let parsed;

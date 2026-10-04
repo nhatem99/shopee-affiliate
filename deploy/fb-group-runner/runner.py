@@ -5,6 +5,7 @@
   python runner.py run                   chạy thật: hỏi server có bài thì đăng
   python runner.py sync                  lấy danh sách nhóm đã tham gia gửi lên server
   python runner.py dry-run --group URL   thử trên một nhóm: điền hết nhưng KHÔNG bấm Đăng
+                                         (thêm --image <ảnh> tối đa 5 lần để thử kèm ảnh)
 """
 
 import argparse
@@ -23,7 +24,7 @@ from fbrunner import config as config_module
 from fbrunner.api import Api, ApiError, AuthError
 from fbrunner.browser import account_id, launch
 from fbrunner.groups import ScrapeError, scrape_joined_groups
-from fbrunner.images import download_as_jpeg
+from fbrunner.images import MAX_IMAGES, download_as_jpeg, fetch_as_jpeg, is_upload
 from fbrunner.poster import Result, post_to_group
 from fbrunner.state import State
 
@@ -61,13 +62,14 @@ def cmd_login(cfg: config_module.Config) -> int:
 
 # ── dry-run ──────────────────────────────────────────────────────────────────
 
-def cmd_dry_run(cfg: config_module.Config, group: str, caption: str, image: str | None) -> int:
+def cmd_dry_run(cfg: config_module.Config, group: str, caption: str, images: list[str]) -> int:
     with sync_playwright() as pw:
         context, page = launch(pw, cfg)
-        image_path = None
-        if image:
-            image_path = download_as_jpeg(image, cfg.data_dir / "tmp") if image.startswith("https://") else Path(image)
-        result = post_to_group(page, group, caption, image_path, dry_run=True)
+        image_paths = [
+            download_as_jpeg(image, cfg.data_dir / "tmp") if image.startswith("https://") else Path(image)
+            for image in images[:MAX_IMAGES]
+        ]
+        result = post_to_group(page, group, caption, image_paths, dry_run=True)
         log(f"Kết quả: {result.status} {result.error or ''}")
         if result.status == "dry_run":
             input("Đã điền xong, KHÔNG bấm Đăng. Xem cửa sổ Chromium rồi bấm Enter để đóng (bài nháp bị bỏ)... ")
@@ -130,20 +132,31 @@ def do_post(api: Api, state: State, cfg: config_module.Config, page, job: dict) 
     state.start(post_id, claim_key)
     log(f"Đăng bài #{post_id} vào nhóm {job.get('group_name') or job['group_url']}")
 
-    image_path = None
-    if job.get("image_url"):
+    # Server cũ chỉ gửi image_url; server mới gửi "images" (ảnh sản phẩm + ảnh admin tự tải lên).
+    refs = job["images"] if isinstance(job.get("images"), list) else ([job["image_url"]] if job.get("image_url") else [])
+    image_paths: list[Path] = []
+    image_error = None
+    for ref in refs[:MAX_IMAGES]:
         try:
-            image_path = download_as_jpeg(job["image_url"], cfg.data_dir / "tmp")
+            image_paths.append(fetch_as_jpeg(ref, api, cfg.data_dir / "tmp"))
         except Exception as error:  # noqa: BLE001
-            log(f"Không tải được ảnh sản phẩm ({error}) — đăng không kèm ảnh.")
+            # Ảnh admin tự chọn mà thiếu thì đừng đăng — bài sẽ khác ý admin. Chưa bấm Đăng nên báo
+            # "failed", admin bấm đăng lại được. Ảnh sản phẩm Shopee thì bỏ qua như trước.
+            if is_upload(ref):
+                image_error = f"Không tải được ảnh đã tải lên ({error}) — chưa đăng."
+                break
+            log(f"Không tải được ảnh sản phẩm ({error}) — đăng không kèm ảnh này.")
 
     try:
-        result = post_to_group(page, job["group_url"], job["caption"], image_path, on_submitting=state.submitting)
+        if image_error:
+            result = Result("failed", image_error)
+        else:
+            result = post_to_group(page, job["group_url"], job["caption"], image_paths, on_submitting=state.submitting)
     except PlaywrightError as error:
         submitted = (state.inflight or {}).get("phase") == "submitting"
         result = Result("ambiguous" if submitted else "failed", f"Lỗi trình duyệt: {error}")
     finally:
-        if image_path and image_path.parent == cfg.data_dir / "tmp":
+        for image_path in image_paths:
             image_path.unlink(missing_ok=True)
 
     if result.status != "posted":
@@ -233,7 +246,7 @@ def main() -> int:
     dry = sub.add_parser("dry-run", help="Thử trên một nhóm, KHÔNG bấm Đăng")
     dry.add_argument("--group", required=True, help="Link nhóm: https://www.facebook.com/groups/...")
     dry.add_argument("--caption", default="Bài thử (không đăng)\nDòng 2\nhttps://shopee.vn")
-    dry.add_argument("--image", help="Đường dẫn ảnh trên máy hoặc link ảnh Shopee")
+    dry.add_argument("--image", action="append", default=[], help="Đường dẫn ảnh trên máy hoặc link ảnh Shopee (lặp lại để thêm ảnh)")
     args = parser.parse_args()
 
     needs_server = args.command in ("run", "sync")

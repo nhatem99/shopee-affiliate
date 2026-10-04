@@ -8,11 +8,14 @@ use App\Models\FacebookGroupDeal;
 use App\Models\FacebookGroupPost;
 use App\Models\Setting;
 use App\Services\FacebookGroupRunnerSettings;
+use App\Services\FacebookPostImages;
 use App\Services\VoucherFetchResult;
 use App\Services\VoucherFetchService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Crypt;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Storage;
 use Inertia\Testing\AssertableInertia as Assert;
 use Mockery;
 use Tests\TestCase;
@@ -48,6 +51,15 @@ class AdminFacebookGroupsTest extends TestCase
         ], $attributes));
     }
 
+    /** Ảnh "đã tải lên" nằm sẵn trên disk — tên đúng dạng server sinh. */
+    private function uploadedImage(): string
+    {
+        $name = bin2hex(random_bytes(16)).'.jpg';
+        Storage::disk('local')->put(FacebookPostImages::DIR.'/'.$name, 'jpeg-bytes');
+
+        return $name;
+    }
+
     private function storePayload(array $overrides = []): array
     {
         return array_merge([
@@ -68,6 +80,8 @@ class AdminFacebookGroupsTest extends TestCase
         $this->postJson('/admin/fb-groups/token')->assertForbidden();
         $this->postJson('/admin/fb-posts/compose', ['url' => 'https://shopee.vn/x-i.1.2'])->assertForbidden();
         $this->post('/admin/fb-posts', $this->storePayload())->assertForbidden();
+        $this->post('/admin/fb-posts/images', ['image' => UploadedFile::fake()->image('a.jpg')])->assertForbidden();
+        $this->get('/admin/fb-posts/images/'.str_repeat('a', 32).'.jpg')->assertForbidden();
     }
 
     public function test_pages_render_for_admin(): void
@@ -84,7 +98,113 @@ class AdminFacebookGroupsTest extends TestCase
         $this->admin()->get('/admin/fb-posts')->assertOk()->assertInertia(fn (Assert $page) => $page
             ->component('Admin/FacebookGroupPosts')
             ->has('groups', 1)
-            ->where('today.max', 10));
+            ->where('today.max', 10)
+            ->where('maxImages', 5)
+            ->where('runner.supports_uploads', false)
+            ->where('runner.uploads_waiting', false));
+    }
+
+    public function test_post_list_shows_custom_posts_and_warns_when_bot_is_too_old(): void
+    {
+        Storage::fake('local');
+        $name = $this->uploadedImage();
+        $deal = FacebookGroupDeal::create(['shopee_url' => null, 'caption' => "{Chào|Hello} cả nhà\nDòng 2", 'images' => [$name]]);
+        $deal->posts()->create(['facebook_group_id' => $this->group()->id, 'status' => 'pending', 'queued_at' => now()]);
+        app(FacebookGroupRunnerSettings::class)->recordRunner(['state' => 'ok', 'version' => '1.0.0-node']);
+
+        $this->admin()->get('/admin/fb-posts')->assertOk()->assertInertia(fn (Assert $page) => $page
+            ->where('deals.0.custom', true)
+            ->where('deals.0.excerpt', '{Chào|Hello} cả nhà')
+            ->where('deals.0.images', [route('admin.fb-posts.image', $name)])
+            ->where('runner.version', '1.0.0-node')
+            ->where('runner.uploads_waiting', true));
+
+        app(FacebookGroupRunnerSettings::class)->recordRunner(['state' => 'ok', 'version' => '1.1.0-node']);
+        $this->admin()->get('/admin/fb-posts')->assertInertia(fn (Assert $page) => $page
+            ->where('runner.supports_uploads', true)
+            ->where('runner.uploads_waiting', false));
+    }
+
+    public function test_admin_uploads_image_and_views_it(): void
+    {
+        Storage::fake('local');
+
+        $name = $this->admin()->post('/admin/fb-posts/images', ['image' => UploadedFile::fake()->image('anh.jpg', 50, 50)])
+            ->assertOk()->json('name');
+
+        $this->assertTrue(FacebookPostImages::validName($name));
+        Storage::disk('local')->assertExists(FacebookPostImages::DIR.'/'.$name);
+        $this->admin()->get('/admin/fb-posts/images/'.$name)->assertOk();
+        $this->admin()->get('/admin/fb-posts/images/'.str_repeat('a', 32).'.jpg')->assertNotFound();
+
+        $this->admin()->postJson('/admin/fb-posts/images', ['image' => UploadedFile::fake()->create('x.pdf', 10, 'application/pdf')])
+            ->assertStatus(422)->assertJsonValidationErrors('image');
+    }
+
+    public function test_upload_prunes_old_unused_images_only(): void
+    {
+        Storage::fake('local');
+        $disk = Storage::disk('local');
+        $unused = $this->uploadedImage();
+        $used = $this->uploadedImage();
+        $recent = $this->uploadedImage();
+        FacebookGroupDeal::create(['shopee_url' => null, 'caption' => 'x', 'images' => [$used]]);
+        touch($disk->path(FacebookPostImages::DIR.'/'.$unused), now()->subDays(2)->getTimestamp());
+        touch($disk->path(FacebookPostImages::DIR.'/'.$used), now()->subDays(2)->getTimestamp());
+
+        $this->admin()->post('/admin/fb-posts/images', ['image' => UploadedFile::fake()->image('a.jpg')])->assertOk();
+
+        $disk->assertMissing(FacebookPostImages::DIR.'/'.$unused);
+        $disk->assertExists(FacebookPostImages::DIR.'/'.$used);
+        $disk->assertExists(FacebookPostImages::DIR.'/'.$recent);
+    }
+
+    public function test_store_custom_post_without_shopee_link(): void
+    {
+        Storage::fake('local');
+        $group = $this->group();
+        $names = [$this->uploadedImage(), $this->uploadedImage()];
+        $payload = ['shopee_url' => '', 'caption' => 'Mẹo săn sale hôm nay', 'images' => $names, 'group_ids' => [$group->id]];
+
+        $this->admin()->post('/admin/fb-posts', array_merge($payload, ['caption' => "Mẹo\n{link}"]))
+            ->assertSessionHasErrors('caption');
+        $this->admin()->post('/admin/fb-posts', array_merge($payload, ['images' => [str_repeat('a', 32).'.jpg']]))
+            ->assertSessionHasErrors('images.0');
+        $this->admin()->post('/admin/fb-posts', array_merge($payload, ['images' => ['../../.env']]))
+            ->assertSessionHasErrors('images.0');
+        $this->assertSame(0, FacebookGroupDeal::count());
+
+        // Rác của kiểu bài có link (link dự phòng, sản phẩm) bị bỏ, không lưu vào bài tự soạn.
+        $this->admin()->post('/admin/fb-posts', array_merge($payload, ['fallback_buy_url' => url('/go/abc123'), 'product' => ['product_name' => 'X']]))
+            ->assertSessionHasNoErrors();
+
+        $deal = FacebookGroupDeal::firstOrFail();
+        $this->assertTrue($deal->isCustom());
+        $this->assertSame($names, $deal->images);
+        $this->assertNull($deal->product);
+        $this->assertNull($deal->fallback_buy_url);
+        $this->assertSame(1, $deal->posts()->count());
+    }
+
+    public function test_store_caps_images_including_the_product_image(): void
+    {
+        Storage::fake('local');
+        $group = $this->group();
+        $names = array_map(fn () => $this->uploadedImage(), range(1, 5));
+        $product = ['product_name' => 'Áo thun', 'product_image' => 'https://down-vn.img.susercontent.com/file/abc.webp'];
+        $payload = $this->storePayload(['group_ids' => [$group->id], 'product' => $product, 'images' => $names]);
+
+        $this->admin()->post('/admin/fb-posts', $payload)->assertSessionHasErrors('images');
+        $this->admin()->post('/admin/fb-posts', array_merge($payload, ['images' => [...$names, $this->uploadedImage()], 'with_product_image' => false]))
+            ->assertSessionHasErrors('images');
+        $this->assertSame(0, FacebookGroupDeal::count());
+
+        $this->admin()->post('/admin/fb-posts', array_merge($payload, ['with_product_image' => false]))->assertSessionHasNoErrors();
+
+        $deal = FacebookGroupDeal::firstOrFail();
+        $this->assertFalse($deal->with_product_image);
+        $this->assertSame($names, $deal->images);
+        $this->assertFalse($deal->isCustom());
     }
 
     public function test_token_is_shown_once_and_stored_encrypted(): void
@@ -209,6 +329,8 @@ class AdminFacebookGroupsTest extends TestCase
             ->assertSessionHasNoErrors();
 
         $deal = FacebookGroupDeal::firstOrFail();
+        $this->assertNull($deal->images);
+        $this->assertTrue($deal->with_product_image);
         $this->assertSame(2, $deal->posts()->count());
         $this->assertSame(['pending'], $deal->posts()->pluck('status')->unique()->values()->all());
         $this->assertNotNull($deal->posts()->first()->queued_at);

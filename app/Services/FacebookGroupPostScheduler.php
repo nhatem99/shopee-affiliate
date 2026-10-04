@@ -33,6 +33,13 @@ class FacebookGroupPostScheduler
 
     private const LOCK_KEY = 'fb-runner:claim';
 
+    /**
+     * Bot từ bản này mới đính kèm được ảnh admin tự tải lên (trường "images" của lượt nhận bài).
+     * Bot cũ chỉ biết "image_url" — giao bài có ảnh tự tải cho nó là bài lên nhóm thiếu ảnh, nên
+     * những bài đó nằm chờ tới khi bot được cập nhật.
+     */
+    public const UPLOADS_MIN_VERSION = '1.1.0';
+
     private const PAUSE_REASONS = [
         'checkpoint' => 'Facebook bắt xác minh tài khoản hoặc nick đã bị đăng xuất',
         'logged_out' => 'Nick Facebook trên máy chạy bot đã bị đăng xuất',
@@ -44,6 +51,7 @@ class FacebookGroupPostScheduler
         private FacebookDealLinkBuilder $links,
         private FacebookDealCaption $captions,
         private ZaloAdminNotifier $notifier,
+        private FacebookPostImages $images,
     ) {}
 
     /**
@@ -87,7 +95,7 @@ class FacebookGroupPostScheduler
             return $this->idle($blocking['reason'], $blocking['retry_after']);
         }
 
-        $post = $this->claimNext($claimKey);
+        $post = $this->claimNext($claimKey, self::runnerSupportsUploads($runner['version'] ?? null));
         if (! $post) {
             return $this->idle('empty', 120);
         }
@@ -127,6 +135,14 @@ class FacebookGroupPostScheduler
         }
 
         return null;
+    }
+
+    /** "1.1.0-node", "1.1.0" → được; "1.0.0-node", không gửi phiên bản → chưa. */
+    public static function runnerSupportsUploads(?string $version): bool
+    {
+        return $version !== null
+            && preg_match('/^\d+(?:\.\d+)*/', $version, $match) === 1
+            && version_compare($match[0], self::UPLOADS_MIN_VERSION, '>=');
     }
 
     /** Số lượt đã (có thể) đưa bài lên Facebook từ 0h hôm nay, giờ VN. */
@@ -247,7 +263,7 @@ class FacebookGroupPostScheduler
         return ['created' => $created, 'updated' => $updated];
     }
 
-    private function claimNext(string $claimKey): ?FacebookGroupPost
+    private function claimNext(string $claimKey, bool $withUploads): ?FacebookGroupPost
     {
         $lock = Cache::lock(self::LOCK_KEY, 30);
         if (! $lock->get()) {
@@ -261,6 +277,7 @@ class FacebookGroupPostScheduler
                 ->whereHas('group', fn ($query) => $query->where('enabled', true)->where(
                     fn ($q) => $q->whereNull('last_attempt_at')->orWhere('last_attempt_at', '<=', $cooldownStart)
                 ))
+                ->when(! $withUploads, fn ($query) => $query->whereHas('deal', fn ($q) => $q->whereNull('images')))
                 ->orderBy('id')
                 ->first();
             if (! $post) {
@@ -295,6 +312,13 @@ class FacebookGroupPostScheduler
     private function prepare(FacebookGroupPost $post): array
     {
         $deal = $post->deal;
+
+        // Bài tự soạn: không link mua, chỉ còn bốc câu chữ {a|b} riêng cho nhóm này.
+        if ($deal->isCustom()) {
+            $post->forceFill(['caption' => $this->captions->render($deal->caption, '')])->save();
+
+            return $this->payload($post);
+        }
 
         try {
             $link = $this->links->build($deal->shopee_url);
@@ -359,7 +383,10 @@ class FacebookGroupPostScheduler
             'group_url' => $post->group->url,
             'group_name' => $post->group->name,
             'caption' => $post->caption,
-            'image_url' => $post->deal->product['product_image'] ?? null,
+            // Bot từ UPLOADS_MIN_VERSION dùng "images"; "image_url" giữ cho bot cũ — chúng chỉ
+            // nhận bài không có ảnh tự tải (claimNext), nên ảnh sản phẩm là đủ.
+            'image_url' => $this->images->productImage($post->deal),
+            'images' => $this->images->refsFor($post->deal),
         ];
     }
 

@@ -11,7 +11,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from fbrunner import ui  # noqa: E402
 from fbrunner.groups import group_key  # noqa: E402
-from fbrunner.images import allowed  # noqa: E402
+from fbrunner.images import allowed, is_upload  # noqa: E402
 from fbrunner.poster import GROUP_URL  # noqa: E402
 from fbrunner.state import State  # noqa: E402
 
@@ -41,6 +41,16 @@ class SafetyTest(unittest.TestCase):
         self.assertFalse(allowed("http://cf.shopee.vn/file/abc"))
         self.assertFalse(allowed("https://evil.test/susercontent.com.jpg"))
         self.assertFalse(allowed("https://susercontent.com.evil.test/a.jpg"))
+
+    def test_uploads_only_from_own_server_path(self):
+        name = "0123456789abcdef0123456789abcdef"
+        self.assertTrue(is_upload(f"/runner/fb/images/{name}.jpg"))
+        self.assertTrue(is_upload(f"/runner/fb/images/{name}.webp"))
+        self.assertFalse(is_upload(f"https://evil.test/runner/fb/images/{name}.jpg"))
+        self.assertFalse(is_upload(f"//evil.test/runner/fb/images/{name}.jpg"))
+        self.assertFalse(is_upload("/runner/fb/poll"))
+        self.assertFalse(is_upload("/runner/fb/images/../poll"))
+        self.assertFalse(is_upload(f"/runner/fb/images/{name}.jpg\n"))
 
 
 class UiTextTest(unittest.TestCase):

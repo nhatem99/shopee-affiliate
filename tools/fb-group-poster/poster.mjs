@@ -6,6 +6,7 @@
 //   node poster.mjs sync                  lấy danh sách nhóm đã tham gia gửi lên server
 //   node poster.mjs check                 kiểm tra kết nối server + trình duyệt + đã đăng nhập chưa
 //   node poster.mjs dry-run --group URL   thử trên một nhóm: điền hết nhưng KHÔNG bấm Đăng
+//                                         (thêm --image <ảnh> tối đa 5 lần để thử kèm ảnh)
 import fs from 'node:fs';
 import path from 'node:path';
 import readline from 'node:readline/promises';
@@ -15,7 +16,7 @@ import { Api, ApiError, AuthError, errorText } from './lib/api.mjs';
 import { accountId, launch } from './lib/browser.mjs';
 import * as configModule from './lib/config.mjs';
 import { ScrapeError, scrapeJoinedGroups } from './lib/groups.mjs';
-import { downloadAsJpeg } from './lib/images.mjs';
+import { MAX_IMAGES, downloadAsJpeg, fetchAsJpeg, isUpload } from './lib/images.mjs';
 import { postToGroup } from './lib/post.mjs';
 import { State } from './lib/state.mjs';
 
@@ -108,13 +109,15 @@ async function cmdCheck(cfg) {
 
 // ── dry-run ──────────────────────────────────────────────────────────────────
 
-async function cmdDryRun(cfg, group, caption, image) {
+async function cmdDryRun(cfg, group, caption, images) {
   const browser = await launch(cfg);
   let result;
   try {
-    let imagePath = null;
-    if (image) imagePath = image.startsWith('https://') ? await downloadAsJpeg(image, path.join(cfg.dataDir, 'tmp'), browser.context) : image;
-    result = await postToGroup(browser.page, group, caption, imagePath, { dryRun: true });
+    const imagePaths = [];
+    for (const image of images.slice(0, MAX_IMAGES)) {
+      imagePaths.push(image.startsWith('https://') ? await downloadAsJpeg(image, path.join(cfg.dataDir, 'tmp'), browser.context) : image);
+    }
+    result = await postToGroup(browser.page, group, caption, imagePaths, { dryRun: true });
     log(`Kết quả: ${result.status} ${result.error || ''}`);
     if (result.status === 'dry_run') {
       await ask('Đã điền xong, KHÔNG bấm Đăng. Xem màn hình rồi bấm Enter để đóng (bài nháp bị bỏ)... ');
@@ -184,24 +187,35 @@ async function doPost(api, state, cfg, browser, job) {
   state.start(postId, claimKey);
   log(`Đăng bài #${postId} vào nhóm ${job.group_name || job.group_url}`);
 
-  let imagePath = null;
+  // Server cũ chỉ gửi image_url; server mới gửi "images" (ảnh sản phẩm + ảnh admin tự tải lên).
+  const refs = Array.isArray(job.images) ? job.images : job.image_url ? [job.image_url] : [];
+  const imagePaths = [];
   const tmpDir = path.join(cfg.dataDir, 'tmp');
-  if (job.image_url) {
+  let imageError = null;
+  for (const ref of refs.slice(0, MAX_IMAGES)) {
     try {
-      imagePath = await downloadAsJpeg(job.image_url, tmpDir, browser.context);
+      imagePaths.push(await fetchAsJpeg(ref, api, tmpDir, browser.context));
     } catch (error) {
-      log(`Không tải được ảnh sản phẩm (${errorText(error)}) — đăng không kèm ảnh.`);
+      // Ảnh admin tự chọn mà thiếu thì đừng đăng — bài sẽ khác ý admin. Chưa bấm Đăng nên báo
+      // "failed", admin bấm đăng lại được. Ảnh sản phẩm Shopee thì bỏ qua như trước.
+      if (isUpload(ref)) {
+        imageError = `Không tải được ảnh đã tải lên (${errorText(error)}) — chưa đăng.`;
+        break;
+      }
+      log(`Không tải được ảnh sản phẩm (${errorText(error)}) — đăng không kèm ảnh này.`);
     }
   }
 
   let result;
   try {
-    result = await postToGroup(browser.page, job.group_url, job.caption, imagePath, { onSubmitting: () => state.submitting() });
+    result = imageError
+      ? { status: 'failed', error: imageError }
+      : await postToGroup(browser.page, job.group_url, job.caption, imagePaths, { onSubmitting: () => state.submitting() });
   } catch (error) {
     const submitted = state.inflight?.phase === 'submitting';
     result = { status: submitted ? 'ambiguous' : 'failed', error: `Lỗi trình duyệt: ${error.message}` };
   } finally {
-    if (imagePath) fs.rmSync(imagePath, { force: true });
+    for (const file of imagePaths) fs.rmSync(file, { force: true });
   }
 
   if (result.status !== 'posted') {
@@ -348,7 +362,7 @@ async function main() {
     options: {
       group: { type: 'string' },
       caption: { type: 'string', default: 'Bài thử (không đăng)\nDòng 2\nhttps://shopee.vn' },
-      image: { type: 'string' },
+      image: { type: 'string', multiple: true, default: [] },
     },
   });
 

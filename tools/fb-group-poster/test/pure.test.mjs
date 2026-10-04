@@ -5,7 +5,7 @@ import path from 'node:path';
 import test from 'node:test';
 
 import { groupKey } from '../lib/groups.mjs';
-import { allowed } from '../lib/images.mjs';
+import { allowed, isUpload } from '../lib/images.mjs';
 import { GROUP_URL } from '../lib/post.mjs';
 import { State } from '../lib/state.mjs';
 import * as ui from '../lib/ui.mjs';
@@ -33,6 +33,16 @@ test('allowed chỉ nhận ảnh từ CDN Shopee', () => {
   assert.ok(!allowed('http://cf.shopee.vn/file/abc'));
   assert.ok(!allowed('https://evil.com/susercontent.com'));
   assert.ok(!allowed('https://susercontent.com.evil.com/x'));
+});
+
+test('isUpload chỉ nhận đường dẫn ảnh tự tải trên chính server', () => {
+  assert.ok(isUpload('/runner/fb/images/0123456789abcdef0123456789abcdef.jpg'));
+  assert.ok(isUpload('/runner/fb/images/0123456789abcdef0123456789abcdef.webp'));
+  assert.ok(!isUpload('https://evil.com/runner/fb/images/0123456789abcdef0123456789abcdef.jpg'));
+  assert.ok(!isUpload('//evil.com/runner/fb/images/0123456789abcdef0123456789abcdef.jpg'));
+  assert.ok(!isUpload('/runner/fb/poll'));
+  assert.ok(!isUpload('/runner/fb/images/../poll'));
+  assert.ok(!isUpload('/runner/fb/images/0123456789abcdef0123456789abcdef.jpg?x=1'));
 });
 
 test('State giữ claim_key và trạng thái bài đang dở qua lần khởi động lại', () => {

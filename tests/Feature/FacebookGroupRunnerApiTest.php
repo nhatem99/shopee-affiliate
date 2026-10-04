@@ -8,13 +8,16 @@ use App\Models\FacebookGroupDeal;
 use App\Models\FacebookGroupPost;
 use App\Models\Setting;
 use App\Models\ShortLink;
+use App\Services\FacebookGroupPostScheduler;
 use App\Services\FacebookGroupRunnerSettings;
+use App\Services\FacebookPostImages;
 use App\Services\VoucherFetchResult;
 use App\Services\VoucherFetchService;
 use App\Services\ZaloAdminNotifier;
 use Carbon\Carbon;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Storage;
 use Mockery;
 use Tests\TestCase;
 
@@ -36,12 +39,12 @@ class FacebookGroupRunnerApiTest extends TestCase
         $this->token = app(FacebookGroupRunnerSettings::class)->regenerateToken();
     }
 
-    private function poll(string $key = self::KEY, string $state = 'ok')
+    private function poll(string $key = self::KEY, string $state = 'ok', string $version = '1.0')
     {
         return $this->postJson('/runner/fb/poll', [
             'claim_key' => $key,
             'state' => $state,
-            'version' => '1.0',
+            'version' => $version,
             'account' => 'Nick test',
         ], ['X-Runner-Token' => $this->token]);
     }
@@ -225,6 +228,103 @@ class FacebookGroupRunnerApiTest extends TestCase
         $this->assertSame(FacebookGroupPost::FAILED, $post->status);
         $this->assertStringContainsString('Nguồn mã đang lỗi', $post->error);
         $this->assertNull($post->group->last_attempt_at);
+    }
+
+    // ── Bài tự soạn, ảnh tự tải lên ──────────────────────────────────────────
+
+    private function uploadedImage(): string
+    {
+        $name = bin2hex(random_bytes(16)).'.jpg';
+        Storage::disk('local')->put(FacebookPostImages::DIR.'/'.$name, 'jpeg-bytes');
+
+        return $name;
+    }
+
+    public function test_custom_post_has_no_link_and_carries_uploaded_images_in_order(): void
+    {
+        Storage::fake('local');
+        $fetcher = Mockery::mock(VoucherFetchService::class);
+        $fetcher->shouldNotReceive('fetch');
+        $this->app->instance(VoucherFetchService::class, $fetcher);
+        [$a, $b] = [$this->uploadedImage(), $this->uploadedImage()];
+        $post = $this->queue($this->deal([
+            'shopee_url' => null,
+            'source' => null,
+            'product' => null,
+            'caption' => "{Chào|Hello} cả nhà\nMẹo săn sale hôm nay",
+            'images' => [$a, $b],
+        ]));
+
+        $response = $this->poll(version: '1.1.0-node')->assertOk()->assertJson(['type' => 'post', 'post_id' => $post->id, 'image_url' => null]);
+
+        $this->assertSame(["/runner/fb/images/{$a}", "/runner/fb/images/{$b}"], $response->json('images'));
+        $this->assertStringEndsWith("cả nhà\nMẹo săn sale hôm nay", $response->json('caption'));
+        $this->assertStringNotContainsString('{', $response->json('caption'));
+        $post->refresh();
+        $this->assertSame(FacebookGroupPost::CLAIMED, $post->status);
+        $this->assertNull($post->buy_url);
+        $this->assertSame(0, ShortLink::count());
+    }
+
+    public function test_product_image_goes_first_and_admin_can_drop_it(): void
+    {
+        Storage::fake('local');
+        $this->fetchReturns();
+        $name = $this->uploadedImage();
+        $this->queue($this->deal(['images' => [$name]]));
+
+        $this->assertSame(
+            ['https://down-vn.img.susercontent.com/file/abc.webp', "/runner/fb/images/{$name}"],
+            $this->poll(version: '1.1.0')->assertOk()->json('images'),
+        );
+
+        $this->travel(20)->minutes(); // bài trước thành "không rõ", hết khoá "bot đang bận"
+        $this->queue($this->deal(['with_product_image' => false]));
+        $response = $this->poll('claim-key-000000000002', version: '1.1.0')->assertOk()->assertJson(['type' => 'post', 'image_url' => null]);
+        $this->assertSame([], $response->json('images'));
+    }
+
+    public function test_old_runner_leaves_posts_with_uploaded_images_waiting(): void
+    {
+        Storage::fake('local');
+        $this->fetchReturns();
+        $withUpload = $this->queue($this->deal(['images' => [$this->uploadedImage()]]));
+        $plain = $this->queue();
+
+        $this->poll(version: '1.0.0-node')->assertOk()->assertJson(['type' => 'post', 'post_id' => $plain->id]);
+        $this->report($plain, 'posted')->assertOk();
+        app(FacebookGroupRunnerSettings::class)->setNextAllowedAt(null);
+
+        $this->poll('claim-key-000000000002', version: '1.0.0-node')->assertOk()->assertJson(['type' => 'idle', 'reason' => 'empty']);
+        $this->assertSame(FacebookGroupPost::PENDING, $withUpload->fresh()->status);
+
+        $this->poll('claim-key-000000000002', version: '1.1.0-node')->assertOk()->assertJson(['type' => 'post', 'post_id' => $withUpload->id]);
+    }
+
+    public function test_runner_version_check(): void
+    {
+        $this->assertTrue(FacebookGroupPostScheduler::runnerSupportsUploads('1.1.0-node'));
+        $this->assertTrue(FacebookGroupPostScheduler::runnerSupportsUploads('1.1.0'));
+        $this->assertTrue(FacebookGroupPostScheduler::runnerSupportsUploads('1.10'));
+        $this->assertTrue(FacebookGroupPostScheduler::runnerSupportsUploads('2.0.0'));
+        $this->assertFalse(FacebookGroupPostScheduler::runnerSupportsUploads('1.0.0-node'));
+        $this->assertFalse(FacebookGroupPostScheduler::runnerSupportsUploads('1.0'));
+        $this->assertFalse(FacebookGroupPostScheduler::runnerSupportsUploads('node'));
+        $this->assertFalse(FacebookGroupPostScheduler::runnerSupportsUploads(null));
+    }
+
+    public function test_runner_downloads_uploaded_images_with_token_only(): void
+    {
+        Storage::fake('local');
+        $name = $this->uploadedImage();
+
+        $this->get("/runner/fb/images/{$name}")->assertForbidden();
+        $this->get("/runner/fb/images/{$name}", ['X-Runner-Token' => 'sai'])->assertForbidden();
+        $response = $this->get("/runner/fb/images/{$name}", ['X-Runner-Token' => $this->token])->assertOk();
+        $this->assertSame('jpeg-bytes', $response->baseResponse->getFile()->getContent());
+
+        $this->get('/runner/fb/images/'.str_repeat('0', 32).'.jpg', ['X-Runner-Token' => $this->token])->assertNotFound();
+        $this->get('/runner/fb/images/..%2F..%2F.env', ['X-Runner-Token' => $this->token])->assertNotFound();
     }
 
     // ── Luật nhịp đăng ───────────────────────────────────────────────────────

@@ -1,5 +1,5 @@
 <script setup>
-import { ref, computed, onMounted, onBeforeUnmount } from 'vue'
+import { ref, reactive, computed, onMounted, onBeforeUnmount } from 'vue'
 import { router, useForm, usePage, Head, Link } from '@inertiajs/vue3'
 import axios from 'axios'
 import AdminLayout from '@/Layouts/AdminLayout.vue'
@@ -15,6 +15,9 @@ const props = defineProps({
     blocking: Object,
     today: Object,
     groupLinksDirectAffiliate: Boolean,
+    maxImages: Number,
+    // { version, supports_uploads, uploads_waiting } — bot cũ không đăng được ảnh tự tải lên.
+    runner: Object,
 })
 
 const errors = computed(() => page.props.errors || {})
@@ -34,9 +37,12 @@ function vnd(n) {
 
 let timer = null
 onMounted(() => {
-    timer = setInterval(() => router.reload({ only: ['deals', 'blocking', 'today'] }), 30000)
+    timer = setInterval(() => router.reload({ only: ['deals', 'blocking', 'today', 'runner'] }), 30000)
 })
-onBeforeUnmount(() => clearInterval(timer))
+onBeforeUnmount(() => {
+    clearInterval(timer)
+    clearPhotos()
+})
 
 const blockingText = computed(() => {
     const b = props.blocking
@@ -50,11 +56,24 @@ const blockingText = computed(() => {
     }
 })
 
+// ── Kiểu bài ────────────────────────────────────────────────────────────────
+// 'link': dán link Shopee, hệ thống lấy mã và soạn sẵn; 'custom': tự viết, không có link mua.
+const mode = ref('link')
+const isCustom = computed(() => mode.value === 'custom')
+
+function setMode(next) {
+    if (mode.value === next) return
+    if ((form.caption.trim() || photos.value.length) && !confirm('Bỏ bài đang soạn dở?')) return
+    mode.value = next
+    resetDraft()
+}
+
 // ── Soạn bài ────────────────────────────────────────────────────────────────
 const url = ref('')
 const composing = ref(false)
 const composeError = ref('')
 const draft = ref(null)
+const editing = computed(() => isCustom.value || draft.value !== null)
 
 const form = useForm({
     shopee_url: '',
@@ -82,12 +101,24 @@ async function compose() {
             fallback_buy_url: data.fallback_buy_url,
             fallback_ytb_url: data.fallback_ytb_url,
         })
+        clearPhotos()
+        if (data.product?.product_image) addProductPhoto()
         rollPreview()
     } catch (e) {
         composeError.value = e.response?.data?.message || 'Không soạn được bài, thử lại.'
     } finally {
         composing.value = false
     }
+}
+
+function resetDraft() {
+    draft.value = null
+    url.value = ''
+    composeError.value = ''
+    form.reset()
+    form.clearErrors()
+    clearPhotos()
+    preview.value = ''
 }
 
 // Giống FacebookDealCaption::render() phía server: thay {a|b} từ trong ra ngoài, rồi {link}.
@@ -107,23 +138,140 @@ function renderCaption(template, linkBlock) {
 
 const preview = ref('')
 function rollPreview() {
-    preview.value = draft.value ? renderCaption(form.caption, draft.value.link_block) : ''
+    preview.value = editing.value ? renderCaption(form.caption, isCustom.value ? '' : draft.value.link_block) : ''
 }
 
 const hasLinkToken = computed(() => form.caption.includes('{link}'))
+const linkTokenError = computed(() => {
+    if (isCustom.value) return hasLinkToken.value ? 'Bài tự soạn không có link mua — bỏ {link} ra khỏi nội dung.' : ''
+    return hasLinkToken.value ? '' : 'Thiếu {link} — bài sẽ không có link mua.'
+})
 
+// ── Ảnh ─────────────────────────────────────────────────────────────────────
+// Mỗi ảnh: { key, kind: 'product' | 'upload', src, name, uploading }. Ảnh sản phẩm Shopee (nếu
+// giữ) luôn đứng đầu — server cũng xếp như vậy (FacebookPostImages::refsFor).
+const MAX_SIDE = 2048
+const photos = ref([])
+const photoError = ref('')
+const photoInput = ref(null)
+let nextKey = 1
+
+const roomLeft = computed(() => props.maxImages - photos.value.length)
+const uploading = computed(() => photos.value.some(p => p.uploading))
+const hasUploads = computed(() => photos.value.some(p => p.kind === 'upload'))
+const productPhotoRemoved = computed(() =>
+    !isCustom.value && !!draft.value?.product?.product_image && !photos.value.some(p => p.kind === 'product'))
+
+function addProductPhoto() {
+    photos.value.unshift({ key: nextKey++, kind: 'product', src: draft.value.product.product_image, name: null, uploading: false })
+}
+
+function pickPhotos() {
+    photoInput.value?.click()
+}
+
+function onPhotosPicked(event) {
+    const files = Array.from(event.target.files || []).filter(f => f.type.startsWith('image/'))
+    event.target.value = '' // chọn lại đúng ảnh vừa bỏ vẫn phải kích hoạt change
+    photoError.value = ''
+
+    const room = Math.max(0, roomLeft.value)
+    if (files.length > room) photoError.value = `Mỗi bài tối đa ${props.maxImages} ảnh — chỉ lấy ${room} ảnh đầu.`
+
+    for (const file of files.slice(0, room)) {
+        const photo = reactive({ key: nextKey++, kind: 'upload', src: URL.createObjectURL(file), name: null, uploading: true })
+        photos.value.push(photo)
+        uploadPhoto(photo, file)
+    }
+}
+
+async function uploadPhoto(photo, file) {
+    try {
+        const body = new FormData()
+        body.append('image', await shrink(file), 'anh.jpg')
+        const { data } = await axios.post('/admin/fb-posts/images', body)
+        photo.name = data.name
+    } catch (e) {
+        removePhoto(photo)
+        photoError.value = e.response?.status === 413
+            ? 'Ảnh quá lớn so với giới hạn của server.'
+            : e.response?.data?.errors?.image?.[0] || e.response?.data?.message || e.message || 'Tải ảnh lên lỗi, thử lại.'
+    } finally {
+        photo.uploading = false
+    }
+}
+
+// Nén ở trình duyệt trước khi tải lên: ảnh điện thoại 5–12 MB còn vài trăm KB (Facebook cũng chỉ
+// giữ cạnh dài 2048px), và vẽ lại qua canvas làm rụng EXIF — kể cả toạ độ GPS nơi chụp.
+// Giữ dưới ~1 MB: PHP mặc định chỉ nhận file 2 MB, nginx mặc định chỉ nhận request 1 MB.
+const MAX_UPLOAD_BYTES = 950 * 1024
+const SHRINK_STEPS = [[MAX_SIDE, 0.85], [MAX_SIDE, 0.75], [1600, 0.75], [1280, 0.7]]
+
+async function shrink(file) {
+    let bitmap
+    try {
+        bitmap = await createImageBitmap(file)
+    } catch {
+        throw new Error(`Không đọc được ảnh "${file.name}" (ảnh HEIC của iPhone?) — đổi sang JPG/PNG rồi thử lại.`)
+    }
+    try {
+        let blob = null
+        for (const [side, quality] of SHRINK_STEPS) {
+            blob = await toJpeg(bitmap, side, quality)
+            if (blob.size <= MAX_UPLOAD_BYTES) break
+        }
+        return blob
+    } finally {
+        bitmap.close()
+    }
+}
+
+async function toJpeg(bitmap, maxSide, quality) {
+    const scale = Math.min(1, maxSide / Math.max(bitmap.width, bitmap.height))
+    const canvas = document.createElement('canvas')
+    canvas.width = Math.round(bitmap.width * scale)
+    canvas.height = Math.round(bitmap.height * scale)
+    const ctx = canvas.getContext('2d')
+    // JPEG không có nền trong suốt — lấp trắng trước, không thì vùng trong suốt của PNG ra màu đen.
+    ctx.fillStyle = '#fff'
+    ctx.fillRect(0, 0, canvas.width, canvas.height)
+    ctx.drawImage(bitmap, 0, 0, canvas.width, canvas.height)
+    const blob = await new Promise(resolve => canvas.toBlob(resolve, 'image/jpeg', quality))
+    if (!blob) throw new Error('Không nén được ảnh, thử ảnh khác.')
+    return blob
+}
+
+function removePhoto(photo) {
+    photos.value = photos.value.filter(p => p.key !== photo.key)
+    if (photo.kind === 'upload') URL.revokeObjectURL(photo.src)
+}
+
+function clearPhotos() {
+    photos.value.forEach(p => p.kind === 'upload' && URL.revokeObjectURL(p.src))
+    photos.value = []
+    photoError.value = ''
+}
+
+const imageErrors = computed(() => Object.entries(form.errors).filter(([key]) => key === 'images' || key.startsWith('images.')).map(([, msg]) => msg))
+
+// ── Chọn nhóm + xếp hàng ────────────────────────────────────────────────────
 function toggleAll() {
     form.group_ids = form.group_ids.length === props.groups.length ? [] : props.groups.map(g => g.id)
 }
 
+const canQueue = computed(() => !form.processing && !uploading.value && form.group_ids.length > 0
+    && form.caption.trim() !== '' && !linkTokenError.value)
+
 function queue() {
-    form.post('/admin/fb-posts', {
+    form.transform(data => ({
+        ...data,
+        with_product_image: photos.value.some(p => p.kind === 'product'),
+        images: photos.value.filter(p => p.kind === 'upload').map(p => p.name),
+    })).post('/admin/fb-posts', {
         preserveScroll: true,
         onSuccess: () => {
             flashToast()
-            draft.value = null
-            url.value = ''
-            form.reset()
+            resetDraft()
         },
     })
 }
@@ -166,62 +314,88 @@ function retry(post) {
 <template>
     <Head title="Admin — Đăng nhóm FB" />
     <AdminLayout>
-        <template #title>Đăng deal vào nhóm Facebook</template>
+        <template #title>Đăng bài vào nhóm Facebook</template>
 
         <p class="text-sm text-[var(--color-muted)] mb-5">
             Hôm nay <span class="font-semibold text-[var(--color-ink)]">{{ today.used }}/{{ today.max }}</span> bài · lúc này {{ blockingText }} ·
             <Link href="/admin/fb-groups" class="font-semibold text-[var(--color-accent)] hover:underline">Nhóm & bot</Link>
         </p>
 
-        <GroupLinksDirectToggle :enabled="groupLinksDirectAffiliate" class="mb-5" />
+        <div v-if="runner.uploads_waiting" class="mb-5 rounded-2xl border border-amber-300 bg-[var(--color-peach-soft)] text-sm text-amber-700 p-4">
+            <span class="font-semibold">Có bài kèm ảnh tự tải lên đang chờ:</span>
+            bot trên điện thoại đang chạy bản {{ runner.version || 'cũ' }}, chưa đăng được ảnh tự tải nên tạm bỏ qua những bài đó.
+            Cập nhật bot (<span class="font-mono">git pull</span> trong thư mục repo trên điện thoại rồi chạy lại bot) là bài được đăng tiếp.
+        </div>
 
-        <!-- 1. Soạn bài -->
+        <GroupLinksDirectToggle v-if="!isCustom" :enabled="groupLinksDirectAffiliate" class="mb-5" />
+
+        <!-- 1. Kiểu bài -->
         <section class="bg-[var(--color-surface)] rounded-2xl border border-[var(--color-line)] p-5 mb-5">
-            <h2 class="font-extrabold text-[var(--color-ink)] mb-1">1. Dán link sản phẩm Shopee</h2>
-            <p class="text-sm text-[var(--color-muted)] mb-3">
-                {{ groupLinksDirectAffiliate
-                    ? 'Hệ thống đổi sang link affiliate Shopee (không mã) và soạn sẵn bài — bạn sửa lại rồi chọn nhóm.'
-                    : 'Hệ thống lấy mã, tạo link có mã của mình và soạn sẵn bài — bạn sửa lại rồi chọn nhóm.' }}
-            </p>
-
-            <form @submit.prevent="compose" class="flex flex-col md:flex-row gap-2">
-                <input v-model="url" type="text" required placeholder="https://s.shopee.vn/... hoặc https://shopee.vn/..."
-                    class="flex-1 border border-[var(--color-line)] rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:border-[var(--color-accent)]" />
-                <button type="submit" :disabled="composing"
-                    class="bg-[var(--color-accent)] hover:bg-[var(--color-accent-deep)] text-white font-semibold px-6 py-2.5 rounded-xl text-sm transition disabled:opacity-60 whitespace-nowrap">
-                    {{ composing ? 'Đang lấy mã…' : 'Soạn bài' }}
+            <div class="inline-flex rounded-xl border border-[var(--color-line)] p-1 mb-4 text-sm font-semibold">
+                <button type="button" @click="setMode('link')" class="px-4 py-1.5 rounded-lg transition"
+                    :class="!isCustom ? 'bg-[var(--color-accent)] text-white' : 'text-[var(--color-muted)] hover:text-[var(--color-ink)]'">
+                    Có link Shopee
                 </button>
-            </form>
-            <p v-if="composing" class="text-xs text-[var(--color-muted)] mt-2">Có thể mất tới 45 giây khi đang bật chế độ mã YTB.</p>
-            <p v-if="composeError" class="text-red-500 text-sm mt-2">{{ composeError }}</p>
+                <button type="button" @click="setMode('custom')" class="px-4 py-1.5 rounded-lg transition"
+                    :class="isCustom ? 'bg-[var(--color-accent)] text-white' : 'text-[var(--color-muted)] hover:text-[var(--color-ink)]'">
+                    Bài tự soạn
+                </button>
+            </div>
+
+            <template v-if="!isCustom">
+                <h2 class="font-extrabold text-[var(--color-ink)] mb-1">1. Dán link sản phẩm Shopee</h2>
+                <p class="text-sm text-[var(--color-muted)] mb-3">
+                    {{ groupLinksDirectAffiliate
+                        ? 'Hệ thống đổi sang link affiliate Shopee (không mã) và soạn sẵn bài — bạn sửa chữ, đổi ảnh rồi chọn nhóm.'
+                        : 'Hệ thống lấy mã, tạo link có mã của mình và soạn sẵn bài — bạn sửa chữ, đổi ảnh rồi chọn nhóm.' }}
+                </p>
+
+                <form @submit.prevent="compose" class="flex flex-col md:flex-row gap-2">
+                    <input v-model="url" type="text" required placeholder="https://s.shopee.vn/... hoặc https://shopee.vn/..."
+                        class="flex-1 border border-[var(--color-line)] rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:border-[var(--color-accent)]" />
+                    <button type="submit" :disabled="composing"
+                        class="bg-[var(--color-accent)] hover:bg-[var(--color-accent-deep)] text-white font-semibold px-6 py-2.5 rounded-xl text-sm transition disabled:opacity-60 whitespace-nowrap">
+                        {{ composing ? 'Đang lấy mã…' : 'Soạn bài' }}
+                    </button>
+                </form>
+                <p v-if="composing" class="text-xs text-[var(--color-muted)] mt-2">Có thể mất tới 45 giây khi đang bật chế độ mã YTB.</p>
+                <p v-if="composeError" class="text-red-500 text-sm mt-2">{{ composeError }}</p>
+            </template>
+
+            <template v-else>
+                <h2 class="font-extrabold text-[var(--color-ink)] mb-1">1. Bài tự soạn</h2>
+                <p class="text-sm text-[var(--color-muted)]">
+                    Không cần link Shopee: tự viết nội dung, tự chọn tối đa {{ maxImages }} ảnh — hợp cho bài chia sẻ mẹo, gom mã, giới thiệu nhóm…
+                </p>
+                <p class="text-xs text-amber-600 mt-1">
+                    Link Shopee dán thẳng vào bài tự soạn KHÔNG được đổi sang link của mình (không có hoa hồng). Đăng deal thì dùng "Có link Shopee".
+                </p>
+            </template>
         </section>
 
-        <!-- 2. Sửa bài + chọn nhóm -->
-        <section v-if="draft" class="bg-[var(--color-surface)] rounded-2xl border border-[var(--color-line)] p-5 mb-5">
-            <h2 class="font-extrabold text-[var(--color-ink)] mb-3">2. Sửa bài và chọn nhóm</h2>
+        <!-- 2. Sửa bài, ảnh + chọn nhóm -->
+        <section v-if="editing" class="bg-[var(--color-surface)] rounded-2xl border border-[var(--color-line)] p-5 mb-5">
+            <h2 class="font-extrabold text-[var(--color-ink)] mb-3">2. Viết bài, chọn ảnh và nhóm</h2>
 
-            <div class="flex gap-3 items-start mb-4">
-                <img v-if="draft.product?.product_image" :src="draft.product.product_image" alt="" class="w-20 h-20 rounded-xl object-cover border border-[var(--color-line)]" />
-                <div class="text-sm">
-                    <p class="font-semibold text-[var(--color-ink)]">{{ draft.product?.product_name || 'Không có tên sản phẩm' }}</p>
-                    <p class="text-[var(--color-muted)]">
-                        {{ vnd(draft.product?.discounted_price) }}
-                        <span v-if="draft.product?.discount_percent"> · giảm {{ Math.round(draft.product.discount_percent) }}%</span>
-                    </p>
-                    <p v-if="!draft.product?.product_image" class="text-xs text-amber-600">Không có ảnh — bài sẽ đăng chữ, Facebook tự hiện khung xem trước của link.</p>
-                </div>
+            <div v-if="!isCustom" class="text-sm mb-4">
+                <p class="font-semibold text-[var(--color-ink)]">{{ draft.product?.product_name || 'Không có tên sản phẩm' }}</p>
+                <p class="text-[var(--color-muted)]">
+                    {{ vnd(draft.product?.discounted_price) }}
+                    <span v-if="draft.product?.discount_percent"> · giảm {{ Math.round(draft.product.discount_percent) }}%</span>
+                </p>
             </div>
 
             <div class="grid md:grid-cols-2 gap-4 mb-4">
                 <div>
-                    <label class="block text-xs font-semibold text-[var(--color-ink)] mb-1">Mẫu bài</label>
+                    <label class="block text-xs font-semibold text-[var(--color-ink)] mb-1">{{ isCustom ? 'Nội dung bài' : 'Mẫu bài' }}</label>
                     <textarea v-model="form.caption" @input="rollPreview" rows="10"
+                        :placeholder="isCustom ? '{Chào cả nhà|Hello mọi người} 👋\nHôm nay mình chia sẻ…' : ''"
                         class="w-full border border-[var(--color-line)] rounded-xl px-3 py-2 text-sm font-mono focus:outline-none focus:border-[var(--color-accent)]"></textarea>
                     <p class="text-xs text-[var(--color-muted)] mt-1">
-                        <span class="font-mono">{link}</span> là chỗ đặt link mua — để riêng một dòng.
+                        <template v-if="!isCustom"><span class="font-mono">{link}</span> là chỗ đặt link mua — để riêng một dòng. </template>
                         <span class="font-mono">{a|b|c}</span>: mỗi nhóm nhận ngẫu nhiên một lựa chọn, để các nhóm không thấy cùng một câu y hệt.
                     </p>
-                    <p v-if="!hasLinkToken" class="text-red-500 text-xs mt-1">Thiếu {link} — bài sẽ không có link mua.</p>
+                    <p v-if="linkTokenError" class="text-red-500 text-xs mt-1">{{ linkTokenError }}</p>
                     <p v-if="form.errors.caption" class="text-red-500 text-xs mt-1">{{ form.errors.caption }}</p>
                 </div>
                 <div>
@@ -230,8 +404,42 @@ function retry(post) {
                         <button type="button" @click="rollPreview" class="text-xs font-semibold text-[var(--color-accent)] hover:underline">Xem câu khác</button>
                     </div>
                     <pre class="whitespace-pre-wrap text-sm bg-[var(--color-peach-soft)] rounded-xl p-3 min-h-[12rem]">{{ preview }}</pre>
-                    <p class="text-xs text-[var(--color-muted)] mt-1">Link thật được tạo lại lúc bot đăng, để mã còn lượt.</p>
+                    <p v-if="!isCustom" class="text-xs text-[var(--color-muted)] mt-1">Link thật được tạo lại lúc bot đăng, để mã còn lượt.</p>
                 </div>
+            </div>
+
+            <div class="mb-4">
+                <div class="flex items-center justify-between mb-2">
+                    <p class="text-xs font-semibold text-[var(--color-ink)]">Ảnh ({{ photos.length }}/{{ maxImages }})</p>
+                    <button v-if="productPhotoRemoved && roomLeft > 0" type="button" @click="addProductPhoto" class="text-xs font-semibold text-[var(--color-accent)] hover:underline">
+                        Thêm lại ảnh sản phẩm
+                    </button>
+                </div>
+                <div class="flex flex-wrap gap-2">
+                    <div v-for="(photo, index) in photos" :key="photo.key" class="relative w-24 h-24 rounded-xl overflow-hidden border border-[var(--color-line)]">
+                        <img :src="photo.src" alt="" class="w-full h-full object-cover" :class="{ 'opacity-40': photo.uploading }" />
+                        <span v-if="photo.uploading" class="absolute inset-0 flex items-center justify-center text-[11px] font-semibold text-[var(--color-ink)]">Đang tải…</span>
+                        <span v-if="photo.kind === 'product'" class="absolute bottom-1 left-1 text-[10px] font-semibold bg-black/60 text-white px-1.5 rounded">Shopee</span>
+                        <span v-else-if="index === 0" class="absolute bottom-1 left-1 text-[10px] font-semibold bg-black/60 text-white px-1.5 rounded">Ảnh đầu</span>
+                        <button type="button" @click="removePhoto(photo)" aria-label="Bỏ ảnh này"
+                            class="absolute top-1 right-1 w-6 h-6 rounded-full bg-black/60 hover:bg-black/80 text-white text-sm leading-none">×</button>
+                    </div>
+                    <button v-if="roomLeft > 0" type="button" @click="pickPhotos"
+                        class="w-24 h-24 rounded-xl border-2 border-dashed border-[var(--color-line)] hover:border-[var(--color-accent)] text-xs font-semibold text-[var(--color-muted)] hover:text-[var(--color-accent)] flex flex-col items-center justify-center transition">
+                        <span class="text-2xl leading-none">+</span>
+                        Thêm ảnh
+                    </button>
+                </div>
+                <input ref="photoInput" type="file" accept="image/*" multiple class="hidden" @change="onPhotosPicked" />
+                <p class="text-xs text-[var(--color-muted)] mt-1">
+                    Ảnh đầu tiên hiện to nhất trên Facebook.
+                    {{ isCustom ? 'Không chọn ảnh thì bài chỉ có chữ.' : 'Bỏ hết ảnh thì Facebook tự hiện khung xem trước của link.' }}
+                </p>
+                <p v-if="photoError" class="text-red-500 text-xs mt-1">{{ photoError }}</p>
+                <p v-for="msg in imageErrors" :key="msg" class="text-red-500 text-xs mt-1">{{ msg }}</p>
+                <p v-if="hasUploads && !runner.supports_uploads" class="text-amber-600 text-xs mt-1">
+                    Bot trên điện thoại đang chạy bản {{ runner.version || 'cũ' }} — chưa đăng được ảnh tự tải. Bài này sẽ chờ tới khi bạn cập nhật bot.
+                </p>
             </div>
 
             <div class="mb-4">
@@ -255,9 +463,9 @@ function retry(post) {
                 <p v-for="(msg, key) in form.errors" :key="key" v-show="key.startsWith('group_ids.') || key.startsWith('fallback') || key === 'shopee_url'" class="text-red-500 text-xs mt-1">{{ msg }}</p>
             </div>
 
-            <button @click="queue" :disabled="form.processing || !form.group_ids.length || !hasLinkToken"
+            <button @click="queue" :disabled="!canQueue"
                 class="bg-[var(--color-accent)] hover:bg-[var(--color-accent-deep)] text-white font-semibold px-6 py-2.5 rounded-xl text-sm transition disabled:opacity-50">
-                Xếp {{ form.group_ids.length }} bài vào hàng đợi
+                {{ uploading ? 'Đang tải ảnh lên…' : `Xếp ${form.group_ids.length} bài vào hàng đợi` }}
             </button>
         </section>
 
@@ -268,10 +476,18 @@ function retry(post) {
 
             <div v-for="deal in deals" :key="deal.id" class="border border-[var(--color-line)] rounded-xl p-4 mb-3">
                 <div class="flex gap-3 items-start mb-3">
-                    <img v-if="deal.product?.product_image" :src="deal.product.product_image" alt="" class="w-12 h-12 rounded-lg object-cover" />
+                    <div v-if="deal.images.length" class="relative shrink-0">
+                        <img :src="deal.images[0]" alt="" class="w-12 h-12 rounded-lg object-cover" />
+                        <span v-if="deal.images.length > 1" class="absolute -bottom-1 -right-1 text-[10px] font-semibold bg-black/70 text-white rounded-full px-1.5">+{{ deal.images.length - 1 }}</span>
+                    </div>
                     <div class="text-sm min-w-0">
-                        <p class="font-semibold text-[var(--color-ink)] truncate">{{ deal.product?.product_name || deal.shopee_url }}</p>
-                        <p class="text-xs text-[var(--color-muted)]">Xếp lúc {{ fmt(deal.created_at) }} · {{ deal.clicks }} lượt bấm link</p>
+                        <p class="font-semibold text-[var(--color-ink)] truncate">
+                            <span v-if="deal.custom" class="text-[10px] font-semibold px-1.5 py-0.5 rounded bg-[var(--color-peach-soft)] mr-1">Tự soạn</span>
+                            {{ deal.product?.product_name || deal.excerpt || deal.shopee_url }}
+                        </p>
+                        <p class="text-xs text-[var(--color-muted)]">
+                            Xếp lúc {{ fmt(deal.created_at) }}<template v-if="!deal.custom"> · {{ deal.clicks }} lượt bấm link</template>
+                        </p>
                     </div>
                 </div>
                 <ul class="space-y-1.5">

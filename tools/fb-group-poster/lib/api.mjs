@@ -83,6 +83,26 @@ export class Api {
     throw new ApiError(`Không báo được kết quả bài #${postId}: ${last?.message}`);
   }
 
+  // Ảnh admin tự tải lên cho bài — chỉ server của mình có, phải kèm token. `path` đã được
+  // images.mjs kiểm đúng dạng /runner/fb/images/<tên> nên không gọi được đường nào khác.
+  async download(path, maxBytes) {
+    let response;
+    try {
+      response = await fetch(this.baseUrl + path, {
+        headers: { 'User-Agent': `tietkiemvi-fb-runner/${VERSION}`, 'X-Runner-Token': this.token },
+        signal: AbortSignal.timeout(60_000),
+        redirect: 'error',
+      });
+    } catch (error) {
+      throw new ApiError(`Không tải được ảnh: ${errorText(error)}`);
+    }
+    if (response.status === 403) throw new AuthError('Server từ chối token (403) khi tải ảnh.');
+    if (!response.ok) throw new ApiError(`Tải ảnh lỗi HTTP ${response.status}`);
+    const body = Buffer.from(await response.arrayBuffer());
+    if (body.length > maxBytes) throw new ApiError('Ảnh quá lớn');
+    return body;
+  }
+
   async uploadGroups(groups, account) {
     const [status, data] = await this.post('/runner/fb/groups', { groups, account });
     if (status !== 200) throw new ApiError(`Gửi danh sách nhóm lỗi HTTP ${status}: ${JSON.stringify(data)}`);

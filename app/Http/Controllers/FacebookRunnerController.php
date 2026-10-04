@@ -4,10 +4,12 @@ namespace App\Http\Controllers;
 
 use App\Models\FacebookGroupPost;
 use App\Services\FacebookGroupPostScheduler;
+use App\Services\FacebookPostImages;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\URL;
 use Illuminate\Validation\Rule;
+use Symfony\Component\HttpFoundation\BinaryFileResponse;
 
 /**
  * Nơi bot đăng nhóm Facebook (deploy/fb-group-runner, chạy trên máy nhà) hỏi việc và báo kết
@@ -56,6 +58,15 @@ class FacebookRunnerController extends Controller
         }
 
         return response()->json(['ok' => true]);
+    }
+
+    /** Ảnh admin tự tải lên cho bài — bot tải về đính kèm (đường dẫn có trong lượt nhận bài). */
+    public function image(FacebookPostImages $images, string $name): BinaryFileResponse
+    {
+        $path = $images->path($name);
+        abort_if($path === null, 404);
+
+        return response()->file($path);
     }
 
     public function groups(Request $request): JsonResponse

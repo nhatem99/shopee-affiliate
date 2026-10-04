@@ -1,4 +1,4 @@
-// Đăng một bài (ảnh + chữ) vào một nhóm qua giao diện web Facebook.
+// Đăng một bài (chữ + tối đa vài ảnh) vào một nhóm qua giao diện web Facebook.
 //
 // Kết quả chia theo việc ĐÃ BẤM ĐĂNG HAY CHƯA:
 //   • chưa bấm mà hỏng → "failed" (chưa có gì lên nhóm, server cho đăng lại);
@@ -14,7 +14,9 @@ const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 const pause = (low = 0.6, high = 1.6) => sleep((low + Math.random() * (high - low)) * 1000);
 const result = (status, error = null) => ({ status, error });
 
-export async function postToGroup(page, groupUrl, caption, imagePath = null, { dryRun = false, onSubmitting = null } = {}) {
+// imagePaths: một đường dẫn, mảng đường dẫn, hoặc null — theo thứ tự hiện trên bài.
+export async function postToGroup(page, groupUrl, caption, imagePaths = null, { dryRun = false, onSubmitting = null } = {}) {
+  const images = [imagePaths].flat().filter(Boolean);
   if (!GROUP_URL.test(groupUrl)) {
     return result('failed', `Link nhóm không đúng dạng facebook.com/groups/... — bỏ qua cho an toàn: ${groupUrl.slice(0, 120)}`);
   }
@@ -43,8 +45,8 @@ export async function postToGroup(page, groupUrl, caption, imagePath = null, { d
     return result('failed', 'Bấm vào ô soạn bài nhưng khung "Tạo bài viết" không mở');
   }
 
-  if (imagePath) {
-    const error = await attachImage(page, imagePath);
+  if (images.length) {
+    const error = await attachImages(page, images);
     if (error) return result('failed', error);
   }
 
@@ -57,8 +59,10 @@ export async function postToGroup(page, groupUrl, caption, imagePath = null, { d
   if (dryRun) return result('dry_run');
 
   await clickNextIfAny(page);
-  const button = await waitPostButton(page);
-  if (!button) return result('failed', 'Nút Đăng không bấm được sau 60 giây (ảnh chưa tải xong?)');
+  // Mỗi ảnh thêm chút thời gian: mạng điện thoại tải 5 ảnh lên Facebook có khi quá một phút.
+  const waitSeconds = 60 + 15 * images.length;
+  const button = await waitPostButton(page, waitSeconds);
+  if (!button) return result('failed', `Nút Đăng không bấm được sau ${waitSeconds} giây (ảnh chưa tải xong?)`);
 
   // ── Từ đây trở đi bài có thể đã lên nhóm ──
   if (onSubmitting) onSubmitting();
@@ -101,7 +105,7 @@ async function whyNoComposer(page) {
   return result('failed', 'Không thấy ô "Bạn viết gì đi" trên trang nhóm');
 }
 
-async function attachImage(page, imagePath) {
+async function attachImages(page, imagePaths) {
   const fileInput = page.locator('div[role="dialog"] input[type="file"]');
   if ((await fileInput.count()) === 0) {
     const photo = page.locator('div[role="dialog"]').getByRole('button', { name: ui.PHOTO_BUTTON });
@@ -112,8 +116,19 @@ async function attachImage(page, imagePath) {
   }
   if ((await fileInput.count()) === 0) return 'Không thấy chỗ tải ảnh trong khung soạn bài';
 
-  await fileInput.first().setInputFiles(imagePath);
-  await pause(3.0, 5.0);
+  // Ô chọn ảnh của Facebook thường nhận nhiều file một lần. Ô nào không có "multiple" thì thêm
+  // từng tấm — sau mỗi tấm Facebook có thể dựng lại ô, nên tìm lại ô mỗi lượt.
+  const input = fileInput.first();
+  if (imagePaths.length === 1 || (await input.getAttribute('multiple')) !== null) {
+    await input.setInputFiles(imagePaths);
+  } else {
+    for (const file of imagePaths) {
+      await page.locator('div[role="dialog"] input[type="file"]').first().setInputFiles(file);
+      await pause(2.0, 3.5);
+    }
+  }
+  // Nút Đăng còn mờ tới khi ảnh tải xong (waitPostButton đợi tiếp) — ở đây chỉ nghỉ cho giống người.
+  await pause(2.0 + imagePaths.length, 4.0 + imagePaths.length);
   return null;
 }
 

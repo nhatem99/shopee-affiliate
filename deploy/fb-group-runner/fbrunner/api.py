@@ -16,6 +16,13 @@ class ApiError(Exception):
     pass
 
 
+class _NoRedirect(urllib.request.HTTPRedirectHandler):
+    """Tải ảnh không theo chuyển hướng — urllib chép cả header token sang chỗ mới."""
+
+    def redirect_request(self, *args, **kwargs):  # noqa: ANN002, ANN003
+        return None
+
+
 class Api:
     def __init__(self, base_url: str, token: str, timeout: int = 90):
         self.base_url = base_url.rstrip("/")
@@ -70,6 +77,26 @@ class Api:
                 last_error = error
             time.sleep(min(60, 5 * 2**attempt))
         raise ApiError(f"Không báo được kết quả bài #{post_id}: {last_error}")
+
+    def download(self, path: str, max_bytes: int) -> bytes:
+        """Ảnh admin tự tải lên cho bài — chỉ server của mình có, phải kèm token. `path` đã được
+        images.py kiểm đúng dạng /runner/fb/images/<tên> nên không gọi được đường nào khác."""
+        request = urllib.request.Request(
+            self.base_url + path,
+            headers={"User-Agent": f"tietkiemvi-fb-runner/{VERSION}", "X-Runner-Token": self._token},
+        )
+        try:
+            with urllib.request.build_opener(_NoRedirect).open(request, timeout=60) as response:
+                body = response.read(max_bytes + 1)
+        except urllib.error.HTTPError as error:
+            if error.code == 403:
+                raise AuthError("Server từ chối token (403) khi tải ảnh.") from None
+            raise ApiError(f"Tải ảnh lỗi HTTP {error.code}") from None
+        except (urllib.error.URLError, TimeoutError, ConnectionError, OSError) as error:
+            raise ApiError(f"Không tải được ảnh: {error}") from None
+        if len(body) > max_bytes:
+            raise ApiError("Ảnh quá lớn")
+        return body
 
     def upload_groups(self, groups: list[dict], account: str | None) -> dict:
         status, data = self._post("/runner/fb/groups", {"groups": groups, "account": account})
