@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Exceptions\AffiliateScanException;
 use App\Models\ApiConfig;
+use App\Models\Setting;
 use App\Services\AffiliateLinkRewriterService;
 use App\Services\FacebookPageService;
 use App\Services\FacebookPostTarget;
@@ -157,6 +158,14 @@ class ShortLinkController extends Controller
         // để bot không "thấy" được URL sạch của Shopee. Với người dùng thật: 302 như cũ.
         if (TrackingService::isBot($request->userAgent())) {
             return response()->view('short-link-preview', ['link' => $link]);
+        }
+
+        // Công tắc ở Admin > Cài đặt: link /go/ chỉ chuyển hướng cho điện thoại (mở được app
+        // Shopee). Máy tính nhận trang nói rõ lý do, không đếm click. Admin luôn qua để tự thử.
+        if (Setting::getBool('go_links_mobile_only', false)
+            && ! TrackingService::isMobile($request->userAgent())
+            && ! ($request->user()?->isAdmin() ?? false)) {
+            return response()->view('short-link-mobile-only', ['link' => $link]);
         }
 
         $this->shortLinks->trackClick($link);

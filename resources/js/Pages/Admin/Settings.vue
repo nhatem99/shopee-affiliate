@@ -25,6 +25,7 @@ const props = defineProps({
     historyRebuyEnabled: { type: Boolean, default: false },
     fbigWindowAutoSwitch: { type: Boolean, default: false },
     ytbWithKieuShopee: { type: Boolean, default: true },
+    goLinksMobileOnly: { type: Boolean, default: false },
     leaderboardDemo: { type: Boolean, default: true },
     // { url, fileName, video, maxUploadMb } — xem GuideVideoService::adminState().
     guideVideo: { type: Object, default: () => ({ url: '', fileName: null, video: null, maxUploadMb: 0 }) },
@@ -56,6 +57,8 @@ const savingHistoryRebuy = ref(false)
 const fbigWindowAutoSwitch = ref(props.fbigWindowAutoSwitch)
 const savingFbigAutoSwitch = ref(false)
 const ytbWithKieuShopee = ref(props.ytbWithKieuShopee)
+const goLinksMobileOnly = ref(props.goLinksMobileOnly)
+const savingGoLinksMobileOnly = ref(false)
 const savingYtbWithKieuShopee = ref(false)
 const leaderboardDemo = ref(props.leaderboardDemo)
 const savingLeaderboardDemo = ref(false)
@@ -88,6 +91,7 @@ watch(() => props.festiveDecor, (v) => { festiveDecor.value = v })
 watch(() => props.historyRebuyEnabled, (v) => { historyRebuyEnabled.value = v })
 watch(() => props.fbigWindowAutoSwitch, (v) => { fbigWindowAutoSwitch.value = v })
 watch(() => props.ytbWithKieuShopee, (v) => { ytbWithKieuShopee.value = v })
+watch(() => props.goLinksMobileOnly, (v) => { goLinksMobileOnly.value = v })
 watch(() => props.leaderboardDemo, (v) => { leaderboardDemo.value = v })
 watch(() => props.guideVideo, (v) => { guideVideoUrl.value = v?.url ?? '' })
 watch(() => props.communityUrl, (v) => { communityUrl.value = v })
@@ -244,6 +248,24 @@ function toggleYtbWithKieuShopee() {
             toast.error('Không lưu được cài đặt, vui lòng thử lại.')
         },
         onFinish: () => { savingYtbWithKieuShopee.value = false },
+    })
+}
+
+function toggleGoLinksMobileOnly() {
+    const next = !goLinksMobileOnly.value
+    goLinksMobileOnly.value = next
+    savingGoLinksMobileOnly.value = true
+
+    router.post('/admin/settings', { go_links_mobile_only: next }, {
+        preserveScroll: true,
+        onSuccess: () => toast.success(next
+            ? 'Đã bật — link /go/ chỉ chuyển hướng trên điện thoại.'
+            : 'Đã tắt — link /go/ mở được trên cả máy tính và điện thoại.'),
+        onError: () => {
+            goLinksMobileOnly.value = !next // rollback nếu lưu lỗi
+            toast.error('Không lưu được cài đặt, vui lòng thử lại.')
+        },
+        onFinish: () => { savingGoLinksMobileOnly.value = false },
     })
 }
 
@@ -699,6 +721,45 @@ function saveCashbackDisplayRate() {
                             {{ fbigWindowAutoSwitch
                                 ? 'Đang bật — xem nguồn nào thật sự đang phục vụ khách ở trang Cấu hình API.'
                                 : 'Đang tắt — nguồn lấy mã luôn đúng lựa chọn ở trang Cấu hình API.' }}
+                        </span>
+                    </div>
+                </div>
+
+                <div class="bg-[var(--color-surface)] rounded-2xl border border-[var(--color-line)] p-6">
+                    <div class="flex items-start justify-between gap-6">
+                        <div class="min-w-0">
+                            <h2 class="font-bold text-[var(--color-ink)] mb-1">📱 Link /go/ chỉ mở trên điện thoại</h2>
+                            <p class="text-sm text-[var(--color-muted)] leading-relaxed">
+                                <b>Bật</b>: khách bấm link <span class="font-mono text-xs">tietkiemvi.com/go/…</span> trên <b>máy tính</b>
+                                chỉ thấy trang báo "mở bằng điện thoại", không được chuyển tới Shopee và không đếm lượt bấm.
+                                Trên điện thoại vẫn chuyển hướng như thường. <b>Tài khoản admin luôn qua</b> để bạn tự thử.
+                                <b>Tắt</b>: mở được trên cả hai. Chỉ áp cho link có mã; link affiliate trực tiếp
+                                (<span class="font-mono text-xs">s.shopee.vn/an_redir…</span>) không đi qua trang này.
+                            </p>
+                        </div>
+
+                        <button
+                            type="button"
+                            role="switch"
+                            :aria-checked="goLinksMobileOnly"
+                            @click="toggleGoLinksMobileOnly"
+                            :disabled="savingGoLinksMobileOnly"
+                            class="relative flex-none w-14 h-8 rounded-full transition-colors duration-200 disabled:opacity-60"
+                            :class="goLinksMobileOnly ? 'bg-[var(--color-accent)]' : 'bg-[var(--color-line)]'"
+                        >
+                            <span
+                                class="absolute top-1 left-1 w-6 h-6 rounded-full bg-white shadow-md transition-transform duration-200"
+                                :class="goLinksMobileOnly ? 'translate-x-6' : 'translate-x-0'"
+                            ></span>
+                        </button>
+                    </div>
+
+                    <div class="mt-4 pt-4 border-t border-[var(--color-line)] flex items-center gap-2 text-sm">
+                        <span class="w-2 h-2 rounded-full flex-none" :class="goLinksMobileOnly ? 'bg-[var(--color-accent)]' : 'bg-[var(--color-muted)]'"></span>
+                        <span class="text-[var(--color-ink)] font-medium">
+                            {{ goLinksMobileOnly
+                                ? 'Đang bật — máy tính nhận trang báo mở bằng điện thoại.'
+                                : 'Đang tắt — link /go/ mở được trên cả máy tính và điện thoại.' }}
                         </span>
                     </div>
                 </div>

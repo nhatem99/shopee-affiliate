@@ -37,6 +37,7 @@ class SettingsController extends Controller
             'historyRebuyEnabled' => Setting::getBool('history_rebuy_enabled', false),
             'fbigWindowAutoSwitch' => VoucherSourceResolver::autoSwitchEnabled(),
             'ytbWithKieuShopee' => VoucherSourceResolver::ytbWithKieuShopee(),
+            'goLinksMobileOnly' => Setting::getBool('go_links_mobile_only', false),
             'leaderboardDemo' => Setting::getBool(CashbackLeaderboardService::DEMO_KEY, CashbackLeaderboardService::DEMO_DEFAULT),
             'communityUrl' => Setting::get('community_url') ?: '',
             'messengerUrl' => Setting::get('messenger_url') ?: '',
@@ -70,6 +71,7 @@ class SettingsController extends Controller
             'fbig_window_auto_switch' => ['sometimes', 'boolean'],
             'ytb_with_kieushopee' => ['sometimes', 'boolean'],
             'group_links_direct_affiliate' => ['sometimes', 'boolean'],
+            'go_links_mobile_only' => ['sometimes', 'boolean'],
             'leaderboard_demo' => ['sometimes', 'boolean'],
             'community_url' => ['sometimes', 'nullable', 'url', 'max:255'],
             'messenger_url' => ['sometimes', 'nullable', 'url', 'max:255'],
@@ -139,6 +141,10 @@ class SettingsController extends Controller
 
         if (array_key_exists('ytb_with_kieushopee', $validated)) {
             Setting::set(VoucherSourceResolver::YTB_WITH_KIEUSHOPEE_KEY, $validated['ytb_with_kieushopee'] ? '1' : '0');
+        }
+
+        if (array_key_exists('go_links_mobile_only', $validated)) {
+            Setting::set('go_links_mobile_only', $validated['go_links_mobile_only'] ? '1' : '0');
         }
 
         if (array_key_exists('group_links_direct_affiliate', $validated)) {
