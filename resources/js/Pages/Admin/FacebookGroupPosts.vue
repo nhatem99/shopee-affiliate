@@ -18,6 +18,8 @@ const props = defineProps({
     maxImages: Number,
     // { version, supports_uploads, uploads_waiting } — bot cũ không đăng được ảnh tự tải lên.
     runner: Object,
+    // Mẫu bài tự soạn: [{ id, name, caption, images: [{ name, url }] }], mới sửa lên đầu.
+    templates: Array,
 })
 
 const errors = computed(() => page.props.errors || {})
@@ -63,7 +65,7 @@ const isCustom = computed(() => mode.value === 'custom')
 
 function setMode(next) {
     if (mode.value === next) return
-    if ((form.caption.trim() || photos.value.length) && !confirm('Bỏ bài đang soạn dở?')) return
+    if (isDirty.value && !confirm('Bỏ bài đang soạn dở?')) return
     mode.value = next
     resetDraft()
 }
@@ -119,6 +121,7 @@ function resetDraft() {
     form.clearErrors()
     clearPhotos()
     preview.value = ''
+    activeTemplateId.value = null
 }
 
 // Giống FacebookDealCaption::render() phía server: thay {a|b} từ trong ra ngoài, rồi {link}.
@@ -142,6 +145,22 @@ function rollPreview() {
 }
 
 const hasLinkToken = computed(() => form.caption.includes('{link}'))
+const isDirty = computed(() => form.caption.trim() !== '' || photos.value.length > 0)
+
+// Facebook chỉ chắc chắn biến chữ thành link bấm được khi viết liền "https://tên-miền". Tên miền
+// trần ("dealngon.top") hay có dấu cách sau "https://" thì bài lên nhóm chỉ là chữ thường.
+const SPACE_AFTER_SCHEME = /https?:\/\/\s/i
+const BARE_DOMAIN = /(?<![\p{L}\p{N}./@:_-])((?:[a-z0-9-]+\.)+[a-z]{2,})(?![\p{L}\p{N}@_-])/giu
+// Chỉ xét bài tự soạn: bài có link thì link mua do hệ thống chèn, còn tên sản phẩm kiểu "Size.XL"
+// dễ bị nhận nhầm là tên miền.
+const linkWarning = computed(() => {
+    if (!isCustom.value) return ''
+    const text = form.caption
+    if (SPACE_AFTER_SCHEME.test(text)) return 'Có dấu cách ngay sau "https://" — Facebook sẽ không biến thành link. Viết liền, ví dụ: https://dealngon.top'
+    const withoutUrls = text.replace(/https?:\/\/\S+/gi, ' ')
+    const bare = [...new Set([...withoutUrls.matchAll(BARE_DOMAIN)].map(m => m[1]))]
+    return bare.length ? `Thêm https:// trước ${bare.join(', ')} — thiếu nó Facebook có thể không biến thành link bấm được.` : ''
+})
 const linkTokenError = computed(() => {
     if (isCustom.value) return hasLinkToken.value ? 'Bài tự soạn không có link mua — bỏ {link} ra khỏi nội dung.' : ''
     return hasLinkToken.value ? '' : 'Thiếu {link} — bài sẽ không có link mua.'
@@ -241,15 +260,81 @@ async function toJpeg(bitmap, maxSide, quality) {
     return blob
 }
 
+// Ảnh vừa chọn hiện bằng URL blob (phải thu hồi); ảnh nạp từ mẫu/bài cũ hiện bằng URL server.
+function revokePreview(photo) {
+    if (photo.src.startsWith('blob:')) URL.revokeObjectURL(photo.src)
+}
+
 function removePhoto(photo) {
     photos.value = photos.value.filter(p => p.key !== photo.key)
-    if (photo.kind === 'upload') URL.revokeObjectURL(photo.src)
+    revokePreview(photo)
 }
 
 function clearPhotos() {
-    photos.value.forEach(p => p.kind === 'upload' && URL.revokeObjectURL(p.src))
+    photos.value.forEach(revokePreview)
     photos.value = []
     photoError.value = ''
+}
+
+// ── Mẫu bài + "Dùng lại" ────────────────────────────────────────────────────
+const activeTemplateId = ref(null)
+const activeTemplate = computed(() => props.templates.find(t => t.id === activeTemplateId.value) || null)
+const savingTemplate = ref(false)
+
+// Nạp nội dung + ảnh (từ mẫu, hoặc từ bài tự soạn đã xếp) vào ô soạn — giữ nguyên nhóm đã tích.
+function loadCustom(source, templateId = null) {
+    if (isDirty.value && !confirm('Thay bài đang soạn bằng nội dung này?')) return
+    const groupIds = form.group_ids
+    mode.value = 'custom'
+    resetDraft()
+    form.group_ids = groupIds
+    form.caption = source.caption
+    photos.value = source.images.slice(0, props.maxImages)
+        .map(img => ({ key: nextKey++, kind: 'upload', src: img.url, name: img.name, uploading: false }))
+    activeTemplateId.value = templateId
+    rollPreview()
+}
+
+function reuseDeal(deal) {
+    loadCustom(deal.reuse)
+    window.scrollTo({ top: 0, behavior: 'smooth' })
+}
+
+const canSaveTemplate = computed(() => !savingTemplate.value && !uploading.value
+    && form.caption.trim() !== '' && !hasLinkToken.value)
+
+function saveTemplate(overwrite) {
+    const current = activeTemplate.value
+    const name = overwrite ? current.name : window.prompt('Tên mẫu (để lần sau chọn lại):', '')?.trim()
+    if (!name) return
+
+    const payload = { name, caption: form.caption, images: photos.value.filter(p => p.kind === 'upload').map(p => p.name) }
+    const options = {
+        preserveScroll: true,
+        preserveState: true,
+        onStart: () => { savingTemplate.value = true },
+        onFinish: () => { savingTemplate.value = false },
+        onSuccess: () => {
+            // Mẫu vừa lưu/sửa đứng đầu danh sách (sắp theo lần sửa gần nhất).
+            activeTemplateId.value = overwrite ? current.id : props.templates[0]?.id ?? null
+            flashToast()
+        },
+        onError: (errs) => toast.error(Object.values(errs)[0] || 'Không lưu được mẫu.'),
+    }
+    if (overwrite) router.put(`/admin/fb-posts/templates/${current.id}`, payload, options)
+    else router.post('/admin/fb-posts/templates', payload, options)
+}
+
+function deleteTemplate(template) {
+    if (!confirm(`Xoá mẫu "${template.name}"? Bài đã xếp từ mẫu này không bị ảnh hưởng.`)) return
+    router.delete(`/admin/fb-posts/templates/${template.id}`, {
+        preserveScroll: true,
+        preserveState: true,
+        onSuccess: () => {
+            if (activeTemplateId.value === template.id) activeTemplateId.value = null
+            flashToast()
+        },
+    })
 }
 
 const imageErrors = computed(() => Object.entries(form.errors).filter(([key]) => key === 'images' || key.startsWith('images.')).map(([, msg]) => msg))
@@ -370,6 +455,29 @@ function retry(post) {
                 <p class="text-xs text-amber-600 mt-1">
                     Link Shopee dán thẳng vào bài tự soạn KHÔNG được đổi sang link của mình (không có hoa hồng). Đăng deal thì dùng "Có link Shopee".
                 </p>
+
+                <div class="mt-4">
+                    <p class="text-xs font-semibold text-[var(--color-ink)] mb-2">Mẫu có sẵn</p>
+                    <p v-if="!templates.length" class="text-xs text-[var(--color-muted)]">
+                        Chưa có mẫu nào — soạn bài bên dưới rồi bấm "Lưu thành mẫu", lần sau bấm vào mẫu là có sẵn chữ và ảnh.
+                    </p>
+                    <div v-else class="flex flex-wrap gap-2">
+                        <div v-for="t in templates" :key="t.id" class="relative">
+                            <button type="button" @click="loadCustom(t, t.id)"
+                                class="flex items-center gap-2 border rounded-xl pl-1.5 pr-8 py-1.5 text-left transition hover:border-[var(--color-accent)]"
+                                :class="activeTemplateId === t.id ? 'border-[var(--color-accent)] bg-[var(--color-peach-soft)]' : 'border-[var(--color-line)]'">
+                                <img v-if="t.images.length" :src="t.images[0].url" alt="" class="w-9 h-9 rounded-lg object-cover shrink-0" />
+                                <span v-else class="w-9 h-9 rounded-lg bg-[var(--color-peach-soft)] flex items-center justify-center text-xs shrink-0">Aa</span>
+                                <span class="min-w-0">
+                                    <span class="block text-sm font-semibold text-[var(--color-ink)] truncate max-w-[12rem]">{{ t.name }}</span>
+                                    <span class="block text-[11px] text-[var(--color-muted)]">{{ t.images.length }} ảnh</span>
+                                </span>
+                            </button>
+                            <button type="button" @click="deleteTemplate(t)" :aria-label="`Xoá mẫu ${t.name}`"
+                                class="absolute top-1 right-1.5 w-6 h-6 rounded-full text-[var(--color-muted)] hover:text-red-500 text-base leading-none">×</button>
+                        </div>
+                    </div>
+                </div>
             </template>
         </section>
 
@@ -396,6 +504,7 @@ function retry(post) {
                         <span class="font-mono">{a|b|c}</span>: mỗi nhóm nhận ngẫu nhiên một lựa chọn, để các nhóm không thấy cùng một câu y hệt.
                     </p>
                     <p v-if="linkTokenError" class="text-red-500 text-xs mt-1">{{ linkTokenError }}</p>
+                    <p v-if="linkWarning" class="text-amber-600 text-xs mt-1">{{ linkWarning }}</p>
                     <p v-if="form.errors.caption" class="text-red-500 text-xs mt-1">{{ form.errors.caption }}</p>
                 </div>
                 <div>
@@ -463,10 +572,22 @@ function retry(post) {
                 <p v-for="(msg, key) in form.errors" :key="key" v-show="key.startsWith('group_ids.') || key.startsWith('fallback') || key === 'shopee_url'" class="text-red-500 text-xs mt-1">{{ msg }}</p>
             </div>
 
-            <button @click="queue" :disabled="!canQueue"
-                class="bg-[var(--color-accent)] hover:bg-[var(--color-accent-deep)] text-white font-semibold px-6 py-2.5 rounded-xl text-sm transition disabled:opacity-50">
-                {{ uploading ? 'Đang tải ảnh lên…' : `Xếp ${form.group_ids.length} bài vào hàng đợi` }}
-            </button>
+            <div class="flex flex-wrap items-center gap-2">
+                <button @click="queue" :disabled="!canQueue"
+                    class="bg-[var(--color-accent)] hover:bg-[var(--color-accent-deep)] text-white font-semibold px-6 py-2.5 rounded-xl text-sm transition disabled:opacity-50">
+                    {{ uploading ? 'Đang tải ảnh lên…' : `Xếp ${form.group_ids.length} bài vào hàng đợi` }}
+                </button>
+                <template v-if="isCustom">
+                    <button type="button" @click="saveTemplate(false)" :disabled="!canSaveTemplate"
+                        class="border border-[var(--color-line)] hover:border-[var(--color-accent)] text-[var(--color-ink)] font-semibold px-4 py-2.5 rounded-xl text-sm transition disabled:opacity-50">
+                        Lưu thành mẫu mới
+                    </button>
+                    <button v-if="activeTemplate" type="button" @click="saveTemplate(true)" :disabled="!canSaveTemplate"
+                        class="border border-[var(--color-line)] hover:border-[var(--color-accent)] text-[var(--color-ink)] font-semibold px-4 py-2.5 rounded-xl text-sm transition disabled:opacity-50 max-w-full truncate">
+                        Lưu đè mẫu "{{ activeTemplate.name }}"
+                    </button>
+                </template>
+            </div>
         </section>
 
         <!-- Bài đã xếp -->
@@ -489,6 +610,8 @@ function retry(post) {
                             Xếp lúc {{ fmt(deal.created_at) }}<template v-if="!deal.custom"> · {{ deal.clicks }} lượt bấm link</template>
                         </p>
                     </div>
+                    <button v-if="deal.reuse" type="button" @click="reuseDeal(deal)"
+                        class="ml-auto shrink-0 text-xs font-semibold text-[var(--color-accent)] hover:underline">Dùng lại</button>
                 </div>
                 <ul class="space-y-1.5">
                     <li v-for="post in deal.posts" :key="post.id" class="flex flex-wrap items-center gap-2 text-sm">

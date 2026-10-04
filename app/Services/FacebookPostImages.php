@@ -3,6 +3,7 @@
 namespace App\Services;
 
 use App\Models\FacebookGroupDeal;
+use App\Models\FacebookPostTemplate;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Storage;
 
@@ -14,7 +15,9 @@ use Illuminate\Support\Facades\Storage;
  * file của người tải lên không bao giờ thành tên file trên server.
  *
  * Trang admin tải từng ảnh lên NGAY lúc chọn (mỗi request một ảnh nhỏ, đã nén ở trình duyệt),
- * bài lưu sau chỉ mang tên file — nên có ảnh tải lên rồi bỏ, prune() dọn sau một ngày.
+ * bài lưu sau chỉ mang tên file — nên có ảnh tải lên rồi bỏ, prune() dọn sau một ngày. Bài và mẫu
+ * bài (FacebookPostTemplate) dùng chung file: file không bao giờ bị sửa, chỉ bị xoá khi không còn
+ * bài hay mẫu nào nhắc tới.
  */
 class FacebookPostImages
 {
@@ -61,6 +64,27 @@ class FacebookPostImages
         return preg_match('/^'.self::NAME_PATTERN.'$/', $name) === 1;
     }
 
+    /** Luật validate cho từng phần tử của mảng tên ảnh gửi lên từ trang admin. */
+    public function existsRule(): \Closure
+    {
+        return function (string $attribute, mixed $value, \Closure $fail) {
+            if (! is_string($value) || ! $this->exists($value)) {
+                $fail('Có ảnh đã tải lên không còn trên server — xoá ảnh đó rồi tải lại.');
+            }
+        };
+    }
+
+    /**
+     * Ảnh tải lên dạng trang admin cần để nạp lại vào ô soạn bài (mẫu bài, "Dùng lại").
+     *
+     * @param  list<string>|null  $names
+     * @return list<array{name: string, url: string}>
+     */
+    public function adminItems(?array $names): array
+    {
+        return array_map(fn (string $name) => ['name' => $name, 'url' => route('admin.fb-posts.image', $name)], $names ?? []);
+    }
+
     /** Ảnh sản phẩm Shopee của bài — null nếu không có hoặc admin đã bỏ. */
     public function productImage(FacebookGroupDeal $deal): ?string
     {
@@ -98,11 +122,14 @@ class FacebookPostImages
         return array_values($urls);
     }
 
-    /** Xoá ảnh tải lên đã lâu mà không bài nào dùng (admin chọn rồi bỏ, hoặc không lưu bài). */
+    /** Xoá ảnh tải lên đã lâu mà không bài hay mẫu nào dùng (admin chọn rồi bỏ, không lưu bài). */
     public function prune(): int
     {
         $disk = Storage::disk('local');
-        $used = FacebookGroupDeal::whereNotNull('images')->pluck('images')->flatten()->flip();
+        $used = FacebookGroupDeal::whereNotNull('images')->pluck('images')
+            ->merge(FacebookPostTemplate::whereNotNull('images')->pluck('images'))
+            ->flatten()
+            ->flip();
         $cutoff = now()->subHours(self::ORPHAN_HOURS)->getTimestamp();
 
         $deleted = 0;

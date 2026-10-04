@@ -6,6 +6,7 @@ use App\Exceptions\AffiliateScanException;
 use App\Models\FacebookGroup;
 use App\Models\FacebookGroupDeal;
 use App\Models\FacebookGroupPost;
+use App\Models\FacebookPostTemplate;
 use App\Models\Setting;
 use App\Services\FacebookGroupRunnerSettings;
 use App\Services\FacebookPostImages;
@@ -82,6 +83,11 @@ class AdminFacebookGroupsTest extends TestCase
         $this->post('/admin/fb-posts', $this->storePayload())->assertForbidden();
         $this->post('/admin/fb-posts/images', ['image' => UploadedFile::fake()->image('a.jpg')])->assertForbidden();
         $this->get('/admin/fb-posts/images/'.str_repeat('a', 32).'.jpg')->assertForbidden();
+        $this->post('/admin/fb-posts/templates', ['name' => 'x', 'caption' => 'x'])->assertForbidden();
+        $template = FacebookPostTemplate::create(['name' => 'Mẫu', 'caption' => 'x']);
+        $this->put("/admin/fb-posts/templates/{$template->id}", ['name' => 'y', 'caption' => 'y'])->assertForbidden();
+        $this->delete("/admin/fb-posts/templates/{$template->id}")->assertForbidden();
+        $this->assertSame('Mẫu', $template->fresh()->name);
     }
 
     public function test_pages_render_for_admin(): void
@@ -147,15 +153,19 @@ class AdminFacebookGroupsTest extends TestCase
         $disk = Storage::disk('local');
         $unused = $this->uploadedImage();
         $used = $this->uploadedImage();
+        $inTemplate = $this->uploadedImage();
         $recent = $this->uploadedImage();
         FacebookGroupDeal::create(['shopee_url' => null, 'caption' => 'x', 'images' => [$used]]);
-        touch($disk->path(FacebookPostImages::DIR.'/'.$unused), now()->subDays(2)->getTimestamp());
-        touch($disk->path(FacebookPostImages::DIR.'/'.$used), now()->subDays(2)->getTimestamp());
+        FacebookPostTemplate::create(['name' => 'Mẫu', 'caption' => 'x', 'images' => [$inTemplate]]);
+        foreach ([$unused, $used, $inTemplate] as $name) {
+            touch($disk->path(FacebookPostImages::DIR.'/'.$name), now()->subDays(2)->getTimestamp());
+        }
 
         $this->admin()->post('/admin/fb-posts/images', ['image' => UploadedFile::fake()->image('a.jpg')])->assertOk();
 
         $disk->assertMissing(FacebookPostImages::DIR.'/'.$unused);
         $disk->assertExists(FacebookPostImages::DIR.'/'.$used);
+        $disk->assertExists(FacebookPostImages::DIR.'/'.$inTemplate);
         $disk->assertExists(FacebookPostImages::DIR.'/'.$recent);
     }
 
@@ -184,6 +194,63 @@ class AdminFacebookGroupsTest extends TestCase
         $this->assertNull($deal->product);
         $this->assertNull($deal->fallback_buy_url);
         $this->assertSame(1, $deal->posts()->count());
+    }
+
+    public function test_templates_can_be_saved_updated_listed_and_deleted(): void
+    {
+        Storage::fake('local');
+        [$a, $b] = [$this->uploadedImage(), $this->uploadedImage()];
+        $caption = "Mã 25% 22% mọi người tranh thủ mua nhé. Lấy mã ở đây 👉\nhttps://dealngon.top";
+
+        $this->admin()->post('/admin/fb-posts/templates', ['name' => '', 'caption' => $caption])->assertSessionHasErrors('name');
+        $this->admin()->post('/admin/fb-posts/templates', ['name' => 'Mã', 'caption' => "x\n{link}"])->assertSessionHasErrors('caption');
+        $this->admin()->post('/admin/fb-posts/templates', ['name' => 'Mã', 'caption' => 'x', 'images' => [str_repeat('a', 32).'.jpg']])
+            ->assertSessionHasErrors('images.0');
+        $this->admin()->post('/admin/fb-posts/templates', ['name' => 'Mã', 'caption' => 'x', 'images' => array_map(fn () => $this->uploadedImage(), range(1, 6))])
+            ->assertSessionHasErrors('images');
+        $this->assertSame(0, FacebookPostTemplate::count());
+
+        $this->admin()->post('/admin/fb-posts/templates', ['name' => ' Mã dealngon ', 'caption' => $caption, 'images' => [$a, $b]])
+            ->assertSessionHasNoErrors();
+        $template = FacebookPostTemplate::firstOrFail();
+        $this->assertSame('Mã dealngon', $template->name);
+        $this->assertSame([$a, $b], $template->images);
+
+        $this->admin()->get('/admin/fb-posts')->assertInertia(fn (Assert $page) => $page
+            ->has('templates', 1)
+            ->where('templates.0.name', 'Mã dealngon')
+            ->where('templates.0.caption', $caption)
+            ->where('templates.0.images', [
+                ['name' => $a, 'url' => route('admin.fb-posts.image', $a)],
+                ['name' => $b, 'url' => route('admin.fb-posts.image', $b)],
+            ]));
+
+        $this->admin()->put("/admin/fb-posts/templates/{$template->id}", ['name' => 'Mã dealngon', 'caption' => 'Nội dung mới', 'images' => [$b]])
+            ->assertSessionHasNoErrors();
+        $template->refresh();
+        $this->assertSame('Nội dung mới', $template->caption);
+        $this->assertSame([$b], $template->images);
+
+        $this->admin()->put("/admin/fb-posts/templates/{$template->id}", ['name' => 'Mã dealngon', 'caption' => 'Không ảnh', 'images' => []])
+            ->assertSessionHasNoErrors();
+        $this->assertNull($template->fresh()->images);
+
+        $this->admin()->delete("/admin/fb-posts/templates/{$template->id}")->assertSessionHasNoErrors();
+        $this->assertSame(0, FacebookPostTemplate::count());
+        Storage::disk('local')->assertExists(FacebookPostImages::DIR.'/'.$a); // prune() dọn sau, không xoá ngay
+    }
+
+    public function test_custom_deals_offer_reuse_but_link_deals_do_not(): void
+    {
+        Storage::fake('local');
+        $name = $this->uploadedImage();
+        FacebookGroupDeal::create(['shopee_url' => 'https://shopee.vn/x-i.1.2', 'caption' => '{link}']);
+        FacebookGroupDeal::create(['shopee_url' => null, 'caption' => 'Bài tự soạn', 'images' => [$name]]);
+
+        $this->admin()->get('/admin/fb-posts')->assertInertia(fn (Assert $page) => $page
+            ->where('deals.0.reuse.caption', 'Bài tự soạn')
+            ->where('deals.0.reuse.images', [['name' => $name, 'url' => route('admin.fb-posts.image', $name)]])
+            ->where('deals.1.reuse', null));
     }
 
     public function test_store_caps_images_including_the_product_image(): void

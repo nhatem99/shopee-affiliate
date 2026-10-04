@@ -7,6 +7,7 @@ use App\Http\Controllers\Controller;
 use App\Models\FacebookGroup;
 use App\Models\FacebookGroupDeal;
 use App\Models\FacebookGroupPost;
+use App\Models\FacebookPostTemplate;
 use App\Models\ShortLink;
 use App\Services\DirectAffiliateLinkService;
 use App\Services\FacebookDealCaption;
@@ -61,6 +62,8 @@ class FacebookGroupPostController extends Controller
                 'custom' => $deal->isCustom(),
                 'excerpt' => $deal->isCustom() ? Str::limit(trim(strtok($deal->caption, "\n")), 120) : null,
                 'images' => $this->images->adminUrlsFor($deal),
+                // Nút "Dùng lại": nạp nội dung + ảnh của bài tự soạn này vào ô soạn bài.
+                'reuse' => $deal->isCustom() ? ['caption' => $deal->caption, 'images' => $this->images->adminItems($deal->images)] : null,
                 'product' => $deal->product,
                 'clicks' => $deal->posts->pluck('short_link_id')->filter()->unique()->sum(fn ($id) => $clicks[$id] ?? 0),
                 'posts' => $deal->posts->sortBy('id')->values()->map(fn (FacebookGroupPost $post) => [
@@ -82,6 +85,12 @@ class FacebookGroupPostController extends Controller
             // Công tắc dùng chung với trang Zalo nick nhóm — xem GroupLinksDirectToggle.vue.
             'groupLinksDirectAffiliate' => DirectAffiliateLinkService::enabled(),
             'maxImages' => FacebookPostImages::MAX_PER_POST,
+            'templates' => FacebookPostTemplate::latest('updated_at')->latest('id')->get()->map(fn (FacebookPostTemplate $template) => [
+                'id' => $template->id,
+                'name' => $template->name,
+                'caption' => $template->caption,
+                'images' => $this->images->adminItems($template->images),
+            ]),
             'runner' => [
                 'version' => $runnerVersion,
                 'supports_uploads' => $runnerSupportsUploads,
@@ -185,11 +194,7 @@ class FacebookGroupPostController extends Controller
             'fallback_ytb_url' => ['nullable', 'string', 'max:500', 'starts_with:'.url('/ytb/')],
             'with_product_image' => ['boolean'],
             'images' => ['nullable', 'array', 'max:'.FacebookPostImages::MAX_PER_POST],
-            'images.*' => ['string', 'distinct', function (string $attribute, mixed $value, \Closure $fail) {
-                if (! $this->images->exists((string) $value)) {
-                    $fail('Có ảnh đã tải lên không còn trên server — xoá ảnh đó rồi tải lại.');
-                }
-            }],
+            'images.*' => ['string', 'distinct', $this->images->existsRule()],
             'group_ids' => ['required', 'array', 'min:1', 'max:500'],
             'group_ids.*' => ['integer', Rule::exists('facebook_groups', 'id')->where('enabled', true)],
         ], [

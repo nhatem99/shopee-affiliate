@@ -2,6 +2,7 @@
 
 use App\Http\Controllers\Admin\FacebookGroupController;
 use App\Http\Controllers\Admin\FacebookGroupPostController;
+use App\Http\Controllers\Admin\FacebookPostTemplateController;
 use App\Http\Controllers\FacebookRunnerController;
 use App\Http\Middleware\VerifyFacebookRunnerToken;
 use App\Services\FacebookPostImages;
@@ -39,6 +40,9 @@ Route::middleware(['web', 'auth', 'auth.admin'])->prefix('admin')->name('admin.'
     Route::post('/fb-posts/compose', [FacebookGroupPostController::class, 'compose'])->name('fb-posts.compose');
     Route::post('/fb-posts/images', [FacebookGroupPostController::class, 'uploadImage'])->name('fb-posts.images');
     Route::get('/fb-posts/images/{name}', [FacebookGroupPostController::class, 'image'])->where('name', FacebookPostImages::NAME_PATTERN)->name('fb-posts.image');
+    Route::post('/fb-posts/templates', [FacebookPostTemplateController::class, 'store'])->name('fb-posts.templates.store');
+    Route::put('/fb-posts/templates/{facebookPostTemplate}', [FacebookPostTemplateController::class, 'update'])->name('fb-posts.templates.update');
+    Route::delete('/fb-posts/templates/{facebookPostTemplate}', [FacebookPostTemplateController::class, 'destroy'])->name('fb-posts.templates.destroy');
     Route::post('/fb-posts', [FacebookGroupPostController::class, 'store'])->name('fb-posts.store');
     Route::post('/fb-posts/{facebookGroupPost}/cancel', [FacebookGroupPostController::class, 'cancel'])->name('fb-posts.cancel');
     Route::post('/fb-posts/{facebookGroupPost}/retry', [FacebookGroupPostController::class, 'retry'])->name('fb-posts.retry');
