@@ -6,9 +6,9 @@ use App\Exceptions\AffiliateScanException;
 use App\Models\Setting;
 
 /**
- * Công tắc "FB nhóm & Zalo: chỉ đổi sang link affiliate" ở Admin > Cài đặt. Bật thì bài đăng
- * nhóm Facebook và bot Zalo nhóm KHÔNG lấy mã (kieushopee/ganma) nữa: link Shopee khách dán
- * được đổi thẳng thành link affiliate chính thức của Shopee mang ID của mình, gửi nguyên link đó
+ * Công tắc "FB nhóm & Zalo: chỉ đổi sang link affiliate" — hiện ở cả trang admin Đăng nhóm FB
+ * lẫn Zalo nick nhóm, cùng một cài đặt. Bật thì bài đăng nhóm Facebook và bot Zalo nhóm KHÔNG
+ * lấy mã (kieushopee/ganma) nữa: link Shopee khách dán được đổi thẳng thành link affiliate chính thức của Shopee mang ID của mình, gửi nguyên link đó
  * — không bọc /go/ của site. Tắt (mặc định) thì vẫn link có mã như cũ.
  *
  * Dạng link là "link tuỳ chỉnh" của Shopee Affiliate:

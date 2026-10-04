@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
+use App\Services\DirectAffiliateLinkService;
 use App\Services\ZaloPersonalBridge;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
@@ -25,6 +26,8 @@ class ZaloNickController extends Controller
             'bridgeUrl' => config('services.zalo_personal.bridge_url'),
             'groupIds' => config('services.zalo_personal.group_ids'),
             'repliesPer10Minutes' => config('services.zalo_personal.replies_per_10_minutes'),
+            // Công tắc dùng chung với trang Đăng nhóm FB — xem GroupLinksDirectToggle.vue.
+            'groupLinksDirectAffiliate' => DirectAffiliateLinkService::enabled(),
         ]);
     }
 

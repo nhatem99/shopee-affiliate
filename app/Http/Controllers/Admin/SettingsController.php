@@ -37,7 +37,6 @@ class SettingsController extends Controller
             'historyRebuyEnabled' => Setting::getBool('history_rebuy_enabled', false),
             'fbigWindowAutoSwitch' => VoucherSourceResolver::autoSwitchEnabled(),
             'ytbWithKieuShopee' => VoucherSourceResolver::ytbWithKieuShopee(),
-            'groupLinksDirectAffiliate' => DirectAffiliateLinkService::enabled(),
             'leaderboardDemo' => Setting::getBool(CashbackLeaderboardService::DEMO_KEY, CashbackLeaderboardService::DEMO_DEFAULT),
             'communityUrl' => Setting::get('community_url') ?: '',
             'messengerUrl' => Setting::get('messenger_url') ?: '',

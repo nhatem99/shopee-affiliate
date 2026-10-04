@@ -73,7 +73,7 @@ class ZaloGroupLinkReplyService
      */
     public function replyFor(string $url): array
     {
-        // Công tắc "chỉ đổi sang link affiliate" ở Admin > Cài đặt: không lấy mã, trả thẳng link
+        // Công tắc "chỉ đổi sang link affiliate" (trang admin Zalo nick nhóm): không lấy mã, trả thẳng link
         // affiliate của Shopee — không bọc /go/ của site.
         if (DirectAffiliateLinkService::enabled()) {
             return $this->directReplyFor($url);

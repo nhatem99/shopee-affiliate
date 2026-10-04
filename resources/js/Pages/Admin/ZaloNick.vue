@@ -3,6 +3,7 @@ import { ref, computed, onMounted, onBeforeUnmount } from 'vue'
 import { router, usePage, Head } from '@inertiajs/vue3'
 import axios from 'axios'
 import AdminLayout from '@/Layouts/AdminLayout.vue'
+import GroupLinksDirectToggle from '@/Components/GroupLinksDirectToggle.vue'
 import { useToast } from '@/composables/useToast'
 
 const toast = useToast()
@@ -13,6 +14,7 @@ const props = defineProps({
     bridgeUrl: String,
     groupIds: Array,
     repliesPer10Minutes: Number,
+    groupLinksDirectAffiliate: Boolean,
 })
 
 const errors = computed(() => page.props.errors || {})
@@ -131,7 +133,7 @@ function relogin() {
         </section>
 
         <!-- 3. Nhóm -->
-        <section class="bg-[var(--color-surface)] rounded-2xl border border-[var(--color-line)] p-5">
+        <section class="bg-[var(--color-surface)] rounded-2xl border border-[var(--color-line)] p-5 mb-5">
             <h2 class="font-extrabold text-[var(--color-ink)] mb-1">3. Nhóm được trả lời</h2>
             <p v-if="groupIds?.length" class="text-sm mb-2">
                 <span v-for="id in groupIds" :key="id" class="inline-block font-mono text-xs bg-[var(--color-peach-soft)] rounded-lg px-2 py-1 mr-2 mb-1">{{ id }}</span>
@@ -142,5 +144,8 @@ function relogin() {
                 <span class="font-mono">ZALO_PERSONAL_GROUP_IDS</span> rồi khởi động lại lệnh nghe tin.
             </p>
         </section>
+
+        <!-- 4. Kiểu link trả lời — cài đặt dùng chung với trang Đăng nhóm FB -->
+        <GroupLinksDirectToggle :enabled="groupLinksDirectAffiliate" />
     </AdminLayout>
 </template>

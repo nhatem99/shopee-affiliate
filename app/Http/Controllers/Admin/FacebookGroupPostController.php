@@ -68,6 +68,8 @@ class FacebookGroupPostController extends Controller
                 'used' => $this->scheduler->countToday(),
                 'max' => $this->settings->cadence()['max_per_day'],
             ],
+            // Công tắc dùng chung với trang Zalo nick nhóm — xem GroupLinksDirectToggle.vue.
+            'groupLinksDirectAffiliate' => DirectAffiliateLinkService::enabled(),
         ]);
     }
 

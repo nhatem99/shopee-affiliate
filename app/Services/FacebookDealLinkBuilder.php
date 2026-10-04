@@ -32,7 +32,7 @@ class FacebookDealLinkBuilder
      */
     public function build(string $shopeeUrl): FacebookDealLink
     {
-        // Công tắc "chỉ đổi sang link affiliate" ở Admin > Cài đặt: không lấy mã, đăng thẳng
+        // Công tắc "chỉ đổi sang link affiliate" (trang admin Đăng nhóm FB): không lấy mã, đăng thẳng
         // link affiliate của Shopee (không bọc /go/ — nên cũng không đếm được lượt bấm).
         if (DirectAffiliateLinkService::enabled()) {
             $direct = $this->direct->build($shopeeUrl, (string) config('services.shopee_affiliate.utm_content_fb_group'));

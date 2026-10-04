@@ -3,6 +3,7 @@ import { ref, computed, onMounted, onBeforeUnmount } from 'vue'
 import { router, useForm, usePage, Head, Link } from '@inertiajs/vue3'
 import axios from 'axios'
 import AdminLayout from '@/Layouts/AdminLayout.vue'
+import GroupLinksDirectToggle from '@/Components/GroupLinksDirectToggle.vue'
 import { useToast } from '@/composables/useToast'
 
 const toast = useToast()
@@ -13,6 +14,7 @@ const props = defineProps({
     deals: Array,
     blocking: Object,
     today: Object,
+    groupLinksDirectAffiliate: Boolean,
 })
 
 const errors = computed(() => page.props.errors || {})
@@ -171,10 +173,16 @@ function retry(post) {
             <Link href="/admin/fb-groups" class="font-semibold text-[var(--color-accent)] hover:underline">Nhóm & bot</Link>
         </p>
 
+        <GroupLinksDirectToggle :enabled="groupLinksDirectAffiliate" class="mb-5" />
+
         <!-- 1. Soạn bài -->
         <section class="bg-[var(--color-surface)] rounded-2xl border border-[var(--color-line)] p-5 mb-5">
             <h2 class="font-extrabold text-[var(--color-ink)] mb-1">1. Dán link sản phẩm Shopee</h2>
-            <p class="text-sm text-[var(--color-muted)] mb-3">Hệ thống lấy mã, tạo link có mã của mình và soạn sẵn bài — bạn sửa lại rồi chọn nhóm.</p>
+            <p class="text-sm text-[var(--color-muted)] mb-3">
+                {{ groupLinksDirectAffiliate
+                    ? 'Hệ thống đổi sang link affiliate Shopee (không mã) và soạn sẵn bài — bạn sửa lại rồi chọn nhóm.'
+                    : 'Hệ thống lấy mã, tạo link có mã của mình và soạn sẵn bài — bạn sửa lại rồi chọn nhóm.' }}
+            </p>
 
             <form @submit.prevent="compose" class="flex flex-col md:flex-row gap-2">
                 <input v-model="url" type="text" required placeholder="https://s.shopee.vn/... hoặc https://shopee.vn/..."

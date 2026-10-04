@@ -98,8 +98,9 @@ const mobileOpen = ref(false)
 // Đóng sidebar mobile mỗi khi chuyển trang, tránh bị kẹt mở đè lên nội dung mới.
 watch(current, () => { mobileOpen.value = false })
 
-// Tách nhóm theo việc admin làm, không theo thứ tự thêm trang: 13 mục xếp thành một cột
-// phẳng là không dò được mục cần bấm. Nhóm nào cũng ngắn (2-4 mục) để mắt quét một nhịp.
+// Tách nhóm theo việc admin làm, không theo thứ tự thêm trang: 20 mục xếp thành một cột
+// phẳng là không dò được mục cần bấm. Mỗi kênh (Facebook, Zalo) một nhóm riêng — admin tìm
+// theo kênh đang làm, không nhớ trang đó được xếp vào "quảng bá" hay "hệ thống".
 const navGroups = [
     {
         label: 'Tổng quan',
@@ -126,17 +127,27 @@ const navGroups = [
             { href: '/admin/vouchers', icon: '🎫', label: 'Voucher FB/YT' },
             { href: '/admin/voucher-buttons', icon: '🔘', label: 'Nút Voucher' },
             { href: '/admin/promo', icon: '📣', label: 'Bài giới thiệu' },
-            { href: '/admin/fb-posts', icon: '📢', label: 'Đăng nhóm FB' },
-            { href: '/admin/fb-groups', icon: '🧑‍🤝‍🧑', label: 'Nhóm FB & bot' },
+        ],
+    },
+    {
+        label: 'Facebook',
+        items: [
+            { href: '/admin/fb-posts', icon: '📢', label: 'Đăng bài vào nhóm' },
+            { href: '/admin/fb-groups', icon: '🧑‍🤝‍🧑', label: 'Nhóm & bot đăng bài' },
+        ],
+    },
+    {
+        label: 'Zalo',
+        items: [
+            { href: '/admin/zalo-nick', icon: '📱', label: 'Nick trả lời nhóm' },
+            { href: '/admin/zalo-bot', icon: '🤖', label: 'Zalo Bot' },
         ],
     },
     {
         label: 'Hệ thống',
         items: [
-            { href: '/admin/settings', icon: '🔧', label: 'Cài đặt' },
+            { href: '/admin/settings', icon: '🔧', label: 'Cài đặt chung' },
             { href: '/admin/api-config', icon: '⚙️', label: 'Cấu hình API' },
-            { href: '/admin/zalo-bot', icon: '🤖', label: 'Zalo Bot' },
-            { href: '/admin/zalo-nick', icon: '📱', label: 'Zalo nick nhóm' },
             { href: '/admin/blocked-ips', icon: '🚫', label: 'Chặn IP' },
             { href: '/admin/logs', icon: '🐞', label: 'Nhật ký lỗi' },
             { href: '/admin/scheduler', icon: '⏱️', label: 'Lịch chạy' },

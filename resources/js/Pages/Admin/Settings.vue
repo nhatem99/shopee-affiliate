@@ -1,8 +1,18 @@
 <script setup>
 import { computed, ref, watch } from 'vue'
-import { Head, router } from '@inertiajs/vue3'
+import { Head, Link, router } from '@inertiajs/vue3'
 import AdminLayout from '@/Layouts/AdminLayout.vue'
 import { useToast } from '@/composables/useToast'
+
+// Các khối xếp theo việc admin cần chỉnh, không theo thứ tự thêm vào. Công tắc của nhóm FB &
+// Zalo không nằm ở đây — nó ở trang Đăng nhóm FB và Zalo nick nhóm (GroupLinksDirectToggle).
+const SECTIONS = [
+    { id: 'truy-cap', label: '🔐 Truy cập & bảo trì' },
+    { id: 'nguon-ma', label: '🎟️ Nguồn lấy mã' },
+    { id: 'hoan-tien', label: '💰 Hoàn tiền & thưởng' },
+    { id: 'trang-khach', label: '🖥️ Trang khách' },
+    { id: 'lien-he', label: '💬 Liên hệ & hỗ trợ' },
+]
 
 const props = defineProps({
     customerAuthEnabled: { type: Boolean, required: true },
@@ -15,7 +25,6 @@ const props = defineProps({
     historyRebuyEnabled: { type: Boolean, default: false },
     fbigWindowAutoSwitch: { type: Boolean, default: false },
     ytbWithKieuShopee: { type: Boolean, default: true },
-    groupLinksDirectAffiliate: { type: Boolean, default: false },
     leaderboardDemo: { type: Boolean, default: true },
     // { url, fileName, video, maxUploadMb } — xem GuideVideoService::adminState().
     guideVideo: { type: Object, default: () => ({ url: '', fileName: null, video: null, maxUploadMb: 0 }) },
@@ -48,8 +57,6 @@ const fbigWindowAutoSwitch = ref(props.fbigWindowAutoSwitch)
 const savingFbigAutoSwitch = ref(false)
 const ytbWithKieuShopee = ref(props.ytbWithKieuShopee)
 const savingYtbWithKieuShopee = ref(false)
-const groupLinksDirectAffiliate = ref(props.groupLinksDirectAffiliate)
-const savingGroupLinksDirect = ref(false)
 const leaderboardDemo = ref(props.leaderboardDemo)
 const savingLeaderboardDemo = ref(false)
 const guideVideoUrl = ref(props.guideVideo?.url ?? '')
@@ -81,7 +88,6 @@ watch(() => props.festiveDecor, (v) => { festiveDecor.value = v })
 watch(() => props.historyRebuyEnabled, (v) => { historyRebuyEnabled.value = v })
 watch(() => props.fbigWindowAutoSwitch, (v) => { fbigWindowAutoSwitch.value = v })
 watch(() => props.ytbWithKieuShopee, (v) => { ytbWithKieuShopee.value = v })
-watch(() => props.groupLinksDirectAffiliate, (v) => { groupLinksDirectAffiliate.value = v })
 watch(() => props.leaderboardDemo, (v) => { leaderboardDemo.value = v })
 watch(() => props.guideVideo, (v) => { guideVideoUrl.value = v?.url ?? '' })
 watch(() => props.communityUrl, (v) => { communityUrl.value = v })
@@ -238,24 +244,6 @@ function toggleYtbWithKieuShopee() {
             toast.error('Không lưu được cài đặt, vui lòng thử lại.')
         },
         onFinish: () => { savingYtbWithKieuShopee.value = false },
-    })
-}
-
-function toggleGroupLinksDirect() {
-    const next = !groupLinksDirectAffiliate.value
-    groupLinksDirectAffiliate.value = next
-    savingGroupLinksDirect.value = true
-
-    router.post('/admin/settings', { group_links_direct_affiliate: next }, {
-        preserveScroll: true,
-        onSuccess: () => toast.success(next
-            ? 'Đã bật — bài nhóm FB và bot Zalo gửi thẳng link affiliate Shopee, không mã.'
-            : 'Đã tắt — bài nhóm FB và bot Zalo lại gửi link có mã như cũ.'),
-        onError: () => {
-            groupLinksDirectAffiliate.value = !next // rollback nếu lưu lỗi
-            toast.error('Không lưu được cài đặt, vui lòng thử lại.')
-        },
-        onFinish: () => { savingGroupLinksDirect.value = false },
     })
 }
 
@@ -502,720 +490,714 @@ function saveCashbackDisplayRate() {
     <AdminLayout>
         <template #title>Cài đặt chung</template>
 
-        <div class="max-w-2xl space-y-6">
-            <div class="bg-[var(--color-surface)] rounded-2xl border border-[var(--color-line)] p-6">
-                <div class="flex items-start justify-between gap-6">
-                    <div class="min-w-0">
-                        <h2 class="font-bold text-[var(--color-ink)] mb-1">Đăng nhập / Đăng ký cho khách</h2>
-                        <p class="text-sm text-[var(--color-muted)] leading-relaxed">
-                            Khi tắt, nút "Đăng nhập" và "Đăng ký" sẽ không hiện trên trang cho khách nữa, và khách gõ thẳng
-                            link <span class="font-mono text-xs">/login</span>, <span class="font-mono text-xs">/register</span>
-                            cũng sẽ được chuyển về trang chủ. Bật lại bất cứ lúc nào khi cần.
-                        </p>
-                    </div>
+        <div class="max-w-2xl space-y-10">
+            <!-- Mục lục: trang gần 20 khối, bấm nhảy thẳng tới nhóm cần sửa thay vì cuộn dò. -->
+            <nav class="flex flex-wrap gap-2">
+                <a
+                    v-for="s in SECTIONS"
+                    :key="s.id"
+                    :href="`#${s.id}`"
+                    class="px-3 py-1.5 rounded-full text-xs font-semibold bg-[var(--color-surface)] border border-[var(--color-line)] text-[var(--color-ink)] hover:border-[var(--color-accent)] transition"
+                >{{ s.label }}</a>
+            </nav>
 
-                    <button
-                        type="button"
-                        role="switch"
-                        :aria-checked="customerAuthEnabled"
-                        @click="toggleCustomerAuth"
-                        :disabled="savingCustomerAuth"
-                        class="relative flex-none w-14 h-8 rounded-full transition-colors duration-200 disabled:opacity-60"
-                        :class="customerAuthEnabled ? 'bg-[var(--color-brand-green)]' : 'bg-[var(--color-line)]'"
-                    >
-                        <span
-                            class="absolute top-1 left-1 w-6 h-6 rounded-full bg-white shadow-md transition-transform duration-200"
-                            :class="customerAuthEnabled ? 'translate-x-6' : 'translate-x-0'"
-                        ></span>
-                    </button>
-                </div>
+            <section id="truy-cap" class="scroll-mt-20 space-y-4">
+                <h2 class="px-1 text-xs font-bold uppercase tracking-wider text-[var(--color-muted)]">🔐 Truy cập &amp; bảo trì</h2>
 
-                <div class="mt-4 pt-4 border-t border-[var(--color-line)] flex items-center gap-2 text-sm">
-                    <span class="w-2 h-2 rounded-full flex-none" :class="customerAuthEnabled ? 'bg-[var(--color-brand-green)]' : 'bg-[var(--color-muted)]'"></span>
-                    <span class="text-[var(--color-ink)] font-medium">
-                        {{ customerAuthEnabled ? 'Đang bật — khách có thể đăng nhập/đăng ký.' : 'Đang tắt — khách không thấy mục đăng nhập/đăng ký.' }}
-                    </span>
-                </div>
-            </div>
+                <div class="bg-[var(--color-surface)] rounded-2xl border border-[var(--color-line)] p-6">
+                    <div class="flex items-start justify-between gap-6">
+                        <div class="min-w-0">
+                            <h2 class="font-bold text-[var(--color-ink)] mb-1">Đăng nhập / Đăng ký cho khách</h2>
+                            <p class="text-sm text-[var(--color-muted)] leading-relaxed">
+                                Khi tắt, nút "Đăng nhập" và "Đăng ký" sẽ không hiện trên trang cho khách nữa, và khách gõ thẳng
+                                link <span class="font-mono text-xs">/login</span>, <span class="font-mono text-xs">/register</span>
+                                cũng sẽ được chuyển về trang chủ. Bật lại bất cứ lúc nào khi cần.
+                            </p>
+                        </div>
 
-            <div class="bg-[var(--color-surface)] rounded-2xl border border-[var(--color-line)] p-6">
-                <div class="flex items-start justify-between gap-6">
-                    <div class="min-w-0">
-                        <h2 class="font-bold text-[var(--color-ink)] mb-1">Chế độ bảo trì</h2>
-                        <p class="text-sm text-[var(--color-muted)] leading-relaxed">
-                            Khi bật, toàn bộ trang cho khách (trang chủ, blog, quét link, lịch sử, tài khoản...) hiện
-                            thông báo "đang bảo trì" thay vì nội dung thật. Trang <span class="font-mono text-xs">/login</span>
-                            và khu vực admin vẫn vào được bình thường để bạn tự tắt lại khi xong.
-                            <strong class="text-[var(--color-ink)]">Tài khoản admin vẫn dùng được đầy đủ trang khách</strong>
-                            (dán link, tìm mã, bấm thử link) để kiểm tra chức năng trong lúc khách bị chặn.
-                        </p>
-                    </div>
-
-                    <button
-                        type="button"
-                        role="switch"
-                        :aria-checked="maintenanceMode"
-                        @click="toggleMaintenance"
-                        :disabled="savingMaintenance"
-                        class="relative flex-none w-14 h-8 rounded-full transition-colors duration-200 disabled:opacity-60"
-                        :class="maintenanceMode ? 'bg-amber-500' : 'bg-[var(--color-line)]'"
-                    >
-                        <span
-                            class="absolute top-1 left-1 w-6 h-6 rounded-full bg-white shadow-md transition-transform duration-200"
-                            :class="maintenanceMode ? 'translate-x-6' : 'translate-x-0'"
-                        ></span>
-                    </button>
-                </div>
-
-                <div class="mt-4 pt-4 border-t border-[var(--color-line)] flex items-center gap-2 text-sm">
-                    <span class="w-2 h-2 rounded-full flex-none" :class="maintenanceMode ? 'bg-amber-500' : 'bg-[var(--color-muted)]'"></span>
-                    <span class="text-[var(--color-ink)] font-medium">
-                        {{ maintenanceMode ? 'Đang bảo trì — khách không vào được trang, admin vẫn dùng bình thường.' : 'Đang tắt — trang hoạt động bình thường.' }}
-                    </span>
-                </div>
-            </div>
-
-            <div class="bg-[var(--color-surface)] rounded-2xl border border-[var(--color-line)] p-6">
-                <div class="flex items-start justify-between gap-6">
-                    <div class="min-w-0">
-                        <h2 class="font-bold text-[var(--color-ink)] mb-1">🚑 Tự bảo trì khi nguồn mã lỗi</h2>
-                        <p class="text-sm text-[var(--color-muted)] leading-relaxed">
-                            Cứ <b>5 phút</b> hệ thống gọi thử nguồn mã <b>kieushopee</b>.
-                            Lỗi <b>2 lượt liên tiếp</b> (≈10 phút) thì tự bật chế độ bảo trì, nguồn sống lại thì tự tắt.
-                            Để ganma thì vẫn kiểm tra kieushopee — kể cả khi ganma ra mã được, kieushopee chết vẫn đóng trang
-                            (trừ khi đã tắt <b>Mã YTB gọi kèm kieushopee</b> — lúc đó không kiểm tra gì).
-                            Riêng khi đang để <b>laymavoucher</b> (nguồn dự phòng) thì kiểm tra laymavoucher thay cho kieushopee.
-                            Bạn tự tay gạt công tắc bảo trì ở trên thì hệ thống <b>không tắt hộ nữa</b>;
-                            tắt công tắc này thì trang đang bảo trì tự động sẽ được mở lại ngay.
-                        </p>
-                    </div>
-
-                    <button
-                        type="button"
-                        role="switch"
-                        :aria-checked="autoMaintenanceEnabled"
-                        @click="toggleAutoMaintenance"
-                        :disabled="savingAutoMaintenance"
-                        class="relative flex-none w-14 h-8 rounded-full transition-colors duration-200 disabled:opacity-60"
-                        :class="autoMaintenanceEnabled ? 'bg-amber-500' : 'bg-[var(--color-line)]'"
-                    >
-                        <span
-                            class="absolute top-1 left-1 w-6 h-6 rounded-full bg-white shadow-md transition-transform duration-200"
-                            :class="autoMaintenanceEnabled ? 'translate-x-6' : 'translate-x-0'"
-                        ></span>
-                    </button>
-                </div>
-
-                <div class="mt-4 pt-4 border-t border-[var(--color-line)] flex items-start gap-2 text-sm">
-                    <span
-                        class="w-2 h-2 mt-1.5 rounded-full flex-none"
-                        :class="!autoMaintenanceEnabled ? 'bg-[var(--color-muted)]' : (sourceHealth?.ok ? 'bg-[var(--color-brand-green)]' : 'bg-amber-500')"
-                    ></span>
-                    <span class="text-[var(--color-ink)] font-medium">{{ sourceHealthLine }}</span>
-                </div>
-            </div>
-
-            <div class="bg-[var(--color-surface)] rounded-2xl border border-[var(--color-line)] p-6">
-                <div class="flex items-start justify-between gap-6">
-                    <div class="min-w-0">
-                        <h2 class="font-bold text-[var(--color-ink)] mb-1">🏮 Trang trí Trung thu</h2>
-                        <p class="text-sm text-[var(--color-muted)] leading-relaxed">
-                            Đèn lồng, bánh trung thu, trăng và mây trôi lơ lửng trên mọi trang khách. Chỉ là lớp
-                            trang trí, không che nút bấm. Hết mùa thì tắt ở đây — không cần sửa gì khác.
-                        </p>
-                    </div>
-
-                    <button
-                        type="button"
-                        role="switch"
-                        :aria-checked="festiveDecor"
-                        @click="toggleFestive"
-                        :disabled="savingFestive"
-                        class="relative flex-none w-14 h-8 rounded-full transition-colors duration-200 disabled:opacity-60"
-                        :class="festiveDecor ? 'bg-[var(--color-accent)]' : 'bg-[var(--color-line)]'"
-                    >
-                        <span
-                            class="absolute top-1 left-1 w-6 h-6 rounded-full bg-white shadow-md transition-transform duration-200"
-                            :class="festiveDecor ? 'translate-x-6' : 'translate-x-0'"
-                        ></span>
-                    </button>
-                </div>
-            </div>
-
-            <div class="bg-[var(--color-surface)] rounded-2xl border border-[var(--color-line)] p-6">
-                <div class="flex items-start justify-between gap-6">
-                    <div class="min-w-0">
-                        <h2 class="font-bold text-[var(--color-ink)] mb-1">🕘 Mua lại từ lịch sử</h2>
-                        <p class="text-sm text-[var(--color-muted)] leading-relaxed">
-                            Cho khách bấm mua thẳng từ mục đã quét trước đó — cả khối lịch sử dưới ô dán link
-                            ở trang chủ lẫn trang Lịch sử. Tắt thì mỗi mục chỉ còn là sổ ghi, muốn mua phải
-                            dán lại link để quét mới. Nên tắt: mã trong link cũ có thể đã hết lượt hoặc hết
-                            hạn từ lúc quét, và lượt bấm đi từ đó không chắc được ghi nhận.
-                        </p>
-                    </div>
-
-                    <button
-                        type="button"
-                        role="switch"
-                        :aria-checked="historyRebuyEnabled"
-                        @click="toggleHistoryRebuy"
-                        :disabled="savingHistoryRebuy"
-                        class="relative flex-none w-14 h-8 rounded-full transition-colors duration-200 disabled:opacity-60"
-                        :class="historyRebuyEnabled ? 'bg-[var(--color-accent)]' : 'bg-[var(--color-line)]'"
-                    >
-                        <span
-                            class="absolute top-1 left-1 w-6 h-6 rounded-full bg-white shadow-md transition-transform duration-200"
-                            :class="historyRebuyEnabled ? 'translate-x-6' : 'translate-x-0'"
-                        ></span>
-                    </button>
-                </div>
-
-                <div class="mt-4 pt-4 border-t border-[var(--color-line)] flex items-center gap-2 text-sm">
-                    <span class="w-2 h-2 rounded-full flex-none" :class="historyRebuyEnabled ? 'bg-[var(--color-accent)]' : 'bg-[var(--color-muted)]'"></span>
-                    <span class="text-[var(--color-ink)] font-medium">
-                        {{ historyRebuyEnabled
-                            ? 'Đang bật — lịch sử có nút mua, khách bấm lại được không cần dán link.'
-                            : 'Đang tắt — khách luôn phải dán lại link khi muốn mua.' }}
-                    </span>
-                </div>
-            </div>
-
-            <div class="bg-[var(--color-surface)] rounded-2xl border border-[var(--color-line)] p-6">
-                <div class="flex items-start justify-between gap-6">
-                    <div class="min-w-0">
-                        <h2 class="font-bold text-[var(--color-ink)] mb-1">▶️ Mã YTB gọi kèm kieushopee</h2>
-                        <p class="text-sm text-[var(--color-muted)] leading-relaxed">
-                            Chỉ có tác dụng khi nguồn lấy mã đang là <b>ganma (mã YouTube)</b>.
-                            <b>Bật</b>: gọi cả ganma lẫn kieushopee — khách đi <b>2 bước</b> (kích hoạt YouTube rồi mới mua),
-                            có cả mã YTB lẫn mã FB-IG.
-                            <b>Tắt</b>: chỉ gọi ganma — khách nhận thẳng link ganma, đi <b>1 bước</b>, chỉ có mã YTB.
-                            Nên tắt khi <b>kieushopee đang lỗi</b>: khách khỏi chờ thêm tới 20 giây cho một nguồn chắc chắn hỏng,
-                            khung giờ FB-IG không tự chuyển sang kieushopee, và kieushopee lỗi cũng không làm trang tự bảo trì.
-                        </p>
-                    </div>
-
-                    <button
-                        type="button"
-                        role="switch"
-                        :aria-checked="ytbWithKieuShopee"
-                        @click="toggleYtbWithKieuShopee"
-                        :disabled="savingYtbWithKieuShopee"
-                        class="relative flex-none w-14 h-8 rounded-full transition-colors duration-200 disabled:opacity-60"
-                        :class="ytbWithKieuShopee ? 'bg-[var(--color-accent)]' : 'bg-[var(--color-line)]'"
-                    >
-                        <span
-                            class="absolute top-1 left-1 w-6 h-6 rounded-full bg-white shadow-md transition-transform duration-200"
-                            :class="ytbWithKieuShopee ? 'translate-x-6' : 'translate-x-0'"
-                        ></span>
-                    </button>
-                </div>
-
-                <div class="mt-4 pt-4 border-t border-[var(--color-line)] flex items-center gap-2 text-sm">
-                    <span class="w-2 h-2 rounded-full flex-none" :class="ytbWithKieuShopee ? 'bg-[var(--color-accent)]' : 'bg-[var(--color-muted)]'"></span>
-                    <span class="text-[var(--color-ink)] font-medium">
-                        {{ ytbWithKieuShopee
-                            ? 'Đang bật — chế độ mã YTB gọi cả ganma lẫn kieushopee.'
-                            : 'Đang tắt — chế độ mã YTB chỉ gọi ganma, không đụng tới kieushopee.' }}
-                    </span>
-                </div>
-            </div>
-
-            <div class="bg-[var(--color-surface)] rounded-2xl border border-[var(--color-line)] p-6">
-                <div class="flex items-start justify-between gap-6">
-                    <div class="min-w-0">
-                        <h2 class="font-bold text-[var(--color-ink)] mb-1">🔗 Nhóm FB &amp; Zalo: chỉ đổi sang link affiliate</h2>
-                        <p class="text-sm text-[var(--color-muted)] leading-relaxed">
-                            Áp cho <b>bài đăng nhóm Facebook</b> và <b>bot Zalo nhóm</b>.
-                            <b>Bật</b>: không lấy mã nữa — link Shopee được đổi thẳng thành link affiliate chính thức của Shopee
-                            (<span class="font-mono text-xs">s.shopee.vn/an_redir…</span>) mang ID của bạn, gửi nguyên link đó, không qua tietkiemvi.com.
-                            Nhanh, không phụ thuộc nguồn mã, nhưng <b>khách không có mã giảm giá</b> và không đếm được lượt bấm ở trang admin.
-                            <b>Tắt</b>: link có mã qua tietkiemvi.com như hiện nay.
-                            Cả hai cách đều chưa hoàn tiền được cho khách trong nhóm — không biết ai là người mua.
-                        </p>
-                    </div>
-
-                    <button
-                        type="button"
-                        role="switch"
-                        :aria-checked="groupLinksDirectAffiliate"
-                        @click="toggleGroupLinksDirect"
-                        :disabled="savingGroupLinksDirect"
-                        class="relative flex-none w-14 h-8 rounded-full transition-colors duration-200 disabled:opacity-60"
-                        :class="groupLinksDirectAffiliate ? 'bg-[var(--color-accent)]' : 'bg-[var(--color-line)]'"
-                    >
-                        <span
-                            class="absolute top-1 left-1 w-6 h-6 rounded-full bg-white shadow-md transition-transform duration-200"
-                            :class="groupLinksDirectAffiliate ? 'translate-x-6' : 'translate-x-0'"
-                        ></span>
-                    </button>
-                </div>
-
-                <div class="mt-4 pt-4 border-t border-[var(--color-line)] flex items-center gap-2 text-sm">
-                    <span class="w-2 h-2 rounded-full flex-none" :class="groupLinksDirectAffiliate ? 'bg-[var(--color-accent)]' : 'bg-[var(--color-muted)]'"></span>
-                    <span class="text-[var(--color-ink)] font-medium">
-                        {{ groupLinksDirectAffiliate
-                            ? 'Đang bật — nhóm FB và Zalo nhận link affiliate Shopee, không mã.'
-                            : 'Đang tắt — nhóm FB và Zalo nhận link có mã qua tietkiemvi.com.' }}
-                    </span>
-                </div>
-            </div>
-
-            <div class="bg-[var(--color-surface)] rounded-2xl border border-[var(--color-line)] p-6">
-                <div class="flex items-start justify-between gap-6">
-                    <div class="min-w-0">
-                        <h2 class="font-bold text-[var(--color-ink)] mb-1">⚡ Tự chuyển sang FB-IG trong khung giờ back mã</h2>
-                        <p class="text-sm text-[var(--color-muted)] leading-relaxed">
-                            Khi nguồn lấy mã đang là <b>ganma (mã YouTube)</b>: tới khung giờ back mã FB-IG
-                            (<b>0h, 9h, 15h, 20h — mỗi khung 30 phút</b>, giờ VN) thì tạm chuyển sang
-                            <b>kieushopee</b>, hết khung tự quay lại ganma. Đang để kieushopee sẵn thì không đổi gì.
-                            Công tắc nguồn ở trang Cấu hình API <b>không bị sửa</b> — đây chỉ là lớp ghi đè tạm thời.
-                            Giao diện khách không đổi gì cả. Đã tắt <b>Mã YTB gọi kèm kieushopee</b> thì không chuyển.
-                        </p>
-                    </div>
-
-                    <button
-                        type="button"
-                        role="switch"
-                        :aria-checked="fbigWindowAutoSwitch"
-                        @click="toggleFbigAutoSwitch"
-                        :disabled="savingFbigAutoSwitch"
-                        class="relative flex-none w-14 h-8 rounded-full transition-colors duration-200 disabled:opacity-60"
-                        :class="fbigWindowAutoSwitch ? 'bg-[var(--color-accent)]' : 'bg-[var(--color-line)]'"
-                    >
-                        <span
-                            class="absolute top-1 left-1 w-6 h-6 rounded-full bg-white shadow-md transition-transform duration-200"
-                            :class="fbigWindowAutoSwitch ? 'translate-x-6' : 'translate-x-0'"
-                        ></span>
-                    </button>
-                </div>
-
-                <div class="mt-4 pt-4 border-t border-[var(--color-line)] flex items-center gap-2 text-sm">
-                    <span class="w-2 h-2 rounded-full flex-none" :class="fbigWindowAutoSwitch ? 'bg-[var(--color-accent)]' : 'bg-[var(--color-muted)]'"></span>
-                    <span class="text-[var(--color-ink)] font-medium">
-                        {{ fbigWindowAutoSwitch
-                            ? 'Đang bật — xem nguồn nào thật sự đang phục vụ khách ở trang Cấu hình API.'
-                            : 'Đang tắt — nguồn lấy mã luôn đúng lựa chọn ở trang Cấu hình API.' }}
-                    </span>
-                </div>
-            </div>
-
-            <div class="bg-[var(--color-surface)] rounded-2xl border border-[var(--color-line)] p-6">
-                <div class="flex items-start justify-between gap-6">
-                    <div class="min-w-0">
-                        <h2 class="font-bold text-[var(--color-ink)] mb-1">🏆 Số liệu minh hoạ cho bảng xếp hạng</h2>
-                        <p class="text-sm text-[var(--color-muted)] leading-relaxed">
-                            Khi tháng này <strong class="text-[var(--color-ink)]">chưa có ai</strong> được hoàn tiền, bảng vàng ở trang chủ
-                            và /hoan-tien sẽ hiện 7 người mẫu (tên che sẵn) y như bảng thật thay vì để trống.
-                            Có người thật đầu tiên là mẫu tự biến mất. Chỉ hiện khi chương trình hoàn tiền đang bật.
-                        </p>
-                    </div>
-
-                    <button
-                        type="button"
-                        role="switch"
-                        :aria-checked="leaderboardDemo"
-                        @click="toggleLeaderboardDemo"
-                        :disabled="savingLeaderboardDemo"
-                        class="relative flex-none w-14 h-8 rounded-full transition-colors duration-200 disabled:opacity-60"
-                        :class="leaderboardDemo ? 'bg-[var(--color-accent)]' : 'bg-[var(--color-line)]'"
-                    >
-                        <span
-                            class="absolute top-1 left-1 w-6 h-6 rounded-full bg-white shadow-md transition-transform duration-200"
-                            :class="leaderboardDemo ? 'translate-x-6' : 'translate-x-0'"
-                        ></span>
-                    </button>
-                </div>
-            </div>
-
-            <div class="bg-[var(--color-surface)] rounded-2xl border border-[var(--color-line)] p-6">
-                <h2 class="font-bold text-[var(--color-ink)] mb-1">Tỉ lệ hoàn tiền cho khách</h2>
-                <p class="text-sm text-[var(--color-muted)] leading-relaxed mb-4">
-                    Phần trăm <strong class="text-[var(--color-ink)]">hoa hồng ròng</strong> (đã trừ phí MCN) trả lại cho khách
-                    mỗi khi một đơn hàng <strong class="text-[var(--color-ink)]">Hoàn thành</strong> trong báo cáo Shopee.
-                    Để <strong class="text-[var(--color-ink)]">0</strong> là tắt hẳn — nhập báo cáo vẫn chạy nhưng không đồng nào vào ví khách.
-                    Đổi tỉ lệ sẽ <strong class="text-[var(--color-ink)]">tính lại cả những đơn đã nhập trước đó</strong>, trừ đơn đã chi trả.
-                </p>
-
-                <div class="flex flex-col sm:flex-row gap-2">
-                    <div class="relative flex-1 min-w-0">
-                        <input
-                            v-model="cashbackRate"
-                            type="number"
-                            min="0"
-                            max="100"
-                            step="1"
-                            @keydown.enter="saveCashbackRate"
-                            class="w-full px-4 py-2.5 pr-10 rounded-xl border border-[var(--color-line)] bg-[var(--color-bg)] text-sm text-[var(--color-ink)] tabular-nums focus:outline-none focus:border-[var(--color-accent)]"
-                        />
-                        <span class="absolute right-4 top-1/2 -translate-y-1/2 text-sm text-[var(--color-muted)] pointer-events-none">%</span>
-                    </div>
-                    <button
-                        type="button"
-                        @click="saveCashbackRate"
-                        :disabled="savingCashbackRate"
-                        class="btn-fire px-6 py-2.5 rounded-xl text-sm whitespace-nowrap disabled:opacity-60"
-                    >{{ savingCashbackRate ? 'Đang lưu...' : 'Lưu tỉ lệ' }}</button>
-                </div>
-
-                <div class="mt-4 pt-4 border-t border-[var(--color-line)] flex items-center gap-2 text-sm">
-                    <span class="w-2 h-2 rounded-full flex-none" :class="Number(cashbackRate) > 0 ? 'bg-[var(--color-brand-green)]' : 'bg-[var(--color-muted)]'"></span>
-                    <span class="text-[var(--color-ink)] font-medium">
-                        {{ Number(cashbackRate) > 0
-                            ? `Đang hoàn ${Number(cashbackRate)}% hoa hồng ròng cho khách.`
-                            : 'Đang tắt — chưa trả hoa hồng cho khách nào.' }}
-                    </span>
-                </div>
-            </div>
-
-            <div class="bg-[var(--color-surface)] rounded-2xl border border-[var(--color-line)] p-6">
-                <h2 class="font-bold text-[var(--color-ink)] mb-1">Tỉ lệ hiển thị cho khách</h2>
-                <p class="text-sm text-[var(--color-muted)] leading-relaxed mb-4">
-                    Con số khách <strong class="text-[var(--color-ink)]">nhìn thấy</strong> trên trang chủ, trang Hoàn tiền và các bài mẫu ở mục Nội dung quảng bá.
-                    <strong class="text-[var(--color-ink)]">Không dùng để tính tiền</strong> — tiền vào ví luôn tính theo tỉ lệ ở khung trên.
-                    Để trống là khách thấy đúng tỉ lệ thực. Tắt hoàn tiền (tỉ lệ thực = 0) thì số này cũng tự ẩn.
-                </p>
-
-                <div class="flex flex-col sm:flex-row gap-2">
-                    <div class="relative flex-1 min-w-0">
-                        <input
-                            v-model="cashbackDisplayRate"
-                            type="number"
-                            min="0"
-                            max="100"
-                            step="1"
-                            :placeholder="`Trống = theo tỉ lệ thực (${Number(cashbackRate)}%)`"
-                            @keydown.enter="saveCashbackDisplayRate"
-                            class="w-full px-4 py-2.5 pr-10 rounded-xl border border-[var(--color-line)] bg-[var(--color-bg)] text-sm text-[var(--color-ink)] tabular-nums focus:outline-none focus:border-[var(--color-accent)]"
-                        />
-                        <span class="absolute right-4 top-1/2 -translate-y-1/2 text-sm text-[var(--color-muted)] pointer-events-none">%</span>
-                    </div>
-                    <button
-                        type="button"
-                        @click="saveCashbackDisplayRate"
-                        :disabled="savingCashbackDisplayRate"
-                        class="btn-fire px-6 py-2.5 rounded-xl text-sm whitespace-nowrap disabled:opacity-60"
-                    >{{ savingCashbackDisplayRate ? 'Đang lưu...' : 'Lưu số hiển thị' }}</button>
-                </div>
-
-                <div
-                    v-if="String(cashbackDisplayRate).trim() !== '' && Number(cashbackDisplayRate) !== Number(cashbackRate)"
-                    class="mt-4 pt-4 border-t border-[var(--color-line)] text-sm text-amber-700 dark:text-amber-400"
-                >
-                    ⚠️ Khách đang thấy <strong>{{ Number(cashbackDisplayRate) }}%</strong> nhưng ví thực trả <strong>{{ Number(cashbackRate) }}%</strong>.
-                    Trang Đơn hàng của khách vẫn ghi tỉ lệ thực vì nó giải thích cách tính từng khoản tiền.
-                </div>
-            </div>
-
-            <div class="bg-[var(--color-surface)] rounded-2xl border border-[var(--color-line)] p-6">
-                <div class="flex items-start justify-between gap-6">
-                    <div class="min-w-0">
-                        <h2 class="font-bold text-[var(--color-ink)] mb-1">Thưởng người mới</h2>
-                        <p class="text-sm text-[var(--color-muted)] leading-relaxed">
-                            Cộng thẳng vào ví ngay khi khách tạo tài khoản (email hoặc Google), kèm thông báo.
-                            Khách <strong class="text-[var(--color-ink)]">không rút được</strong> nếu chưa có đơn nào được hoàn tiền thật,
-                            nên không sợ cày tài khoản ảo. Đổi số tiền chỉ áp cho tài khoản đăng ký từ đó về sau.
-                        </p>
-                    </div>
-                    <button
-                        type="button"
-                        role="switch"
-                        :aria-checked="welcomeBonusEnabled"
-                        :disabled="savingWelcomeBonus"
-                        @click="toggleWelcomeBonus"
-                        class="relative inline-flex h-7 w-12 flex-none items-center rounded-full transition-colors disabled:opacity-60"
-                        :class="welcomeBonusEnabled ? 'bg-[var(--color-brand-green)]' : 'bg-[var(--color-line)]'"
-                    >
-                        <span class="inline-block h-5 w-5 rounded-full bg-white shadow transition-transform" :class="welcomeBonusEnabled ? 'translate-x-6' : 'translate-x-1'"></span>
-                    </button>
-                </div>
-
-                <div class="mt-4 flex flex-col sm:flex-row gap-2">
-                    <div class="relative flex-1 min-w-0">
-                        <input
-                            v-model="welcomeBonusAmount"
-                            type="number"
-                            min="0"
-                            step="1000"
-                            @keydown.enter="saveWelcomeBonusAmount"
-                            class="w-full px-4 py-2.5 pr-10 rounded-xl border border-[var(--color-line)] bg-[var(--color-bg)] text-sm text-[var(--color-ink)] tabular-nums focus:outline-none focus:border-[var(--color-accent)]"
-                        />
-                        <span class="absolute right-4 top-1/2 -translate-y-1/2 text-sm text-[var(--color-muted)] pointer-events-none">đ</span>
-                    </div>
-                    <button
-                        type="button"
-                        @click="saveWelcomeBonusAmount"
-                        :disabled="savingWelcomeBonusAmount"
-                        class="btn-fire px-6 py-2.5 rounded-xl text-sm whitespace-nowrap disabled:opacity-60"
-                    >{{ savingWelcomeBonusAmount ? 'Đang lưu...' : 'Lưu số tiền' }}</button>
-                </div>
-
-                <div class="mt-4 pt-4 border-t border-[var(--color-line)] flex items-center gap-2 text-sm">
-                    <span class="w-2 h-2 rounded-full flex-none" :class="welcomeBonusEnabled && Number(welcomeBonusAmount) > 0 ? 'bg-[var(--color-brand-green)]' : 'bg-[var(--color-muted)]'"></span>
-                    <span class="text-[var(--color-ink)] font-medium">
-                        {{ welcomeBonusEnabled && Number(welcomeBonusAmount) > 0
-                            ? `Đang tặng ${Number(welcomeBonusAmount).toLocaleString('vi-VN')} đ cho mỗi tài khoản mới.`
-                            : 'Đang tắt — tài khoản mới không được thưởng.' }}
-                    </span>
-                </div>
-            </div>
-
-            <div class="bg-[var(--color-surface)] rounded-2xl border border-[var(--color-line)] p-6">
-                <div class="flex items-start justify-between gap-6">
-                    <div class="min-w-0">
-                        <h2 class="font-bold text-[var(--color-ink)] mb-1">🏅 Hạng thành viên &amp; Đặc quyền</h2>
-                        <p class="text-sm text-[var(--color-muted)] leading-relaxed">
-                            Khách mua càng nhiều, hạng càng cao, tỉ lệ hoàn tiền được cộng thêm tới
-                            <strong class="text-[var(--color-ink)]">+5 điểm phần trăm</strong>
-                            (Tân binh +0% · Đồng +1% · Bạc +2% · Vàng +3% · Bạch kim +4% · Kim cương +5%).
-                            Hạng xét theo <strong class="text-[var(--color-ink)]">tiền hoàn đã duyệt của quý trước</strong>
-                            và tự cập nhật đầu mỗi quý — lệnh <code>tiers:refresh</code> chạy hàng ngày, xem ở mục Tác vụ nền.
-                            Tắt hoàn tiền (tỉ lệ = 0) thì khối hạng cũng tự ẩn khỏi trang khách.
-                        </p>
-                    </div>
-                    <button
-                        type="button"
-                        role="switch"
-                        :aria-checked="membershipTierEnabled"
-                        :disabled="savingMembershipTier"
-                        @click="toggleMembershipTier"
-                        class="relative inline-flex h-7 w-12 flex-none items-center rounded-full transition-colors disabled:opacity-60"
-                        :class="membershipTierEnabled ? 'bg-[var(--color-brand-green)]' : 'bg-[var(--color-line)]'"
-                    >
-                        <span class="inline-block h-5 w-5 rounded-full bg-white shadow transition-transform" :class="membershipTierEnabled ? 'translate-x-6' : 'translate-x-1'"></span>
-                    </button>
-                </div>
-
-                <div class="mt-4 pt-4 border-t border-[var(--color-line)] flex items-center gap-2 text-sm">
-                    <span class="w-2 h-2 rounded-full flex-none" :class="membershipTierEnabled && Number(cashbackRate) > 0 ? 'bg-[var(--color-brand-green)]' : 'bg-[var(--color-muted)]'"></span>
-                    <span class="text-[var(--color-ink)] font-medium">
-                        {{ !membershipTierEnabled
-                            ? 'Đang tắt — mọi khách nhận đúng tỉ lệ nền.'
-                            : (Number(cashbackRate) > 0
-                                ? `Đang chạy — khách hạng Kim cương nhận tới ${Math.min(100, Number(cashbackRate) + 5)}% hoa hồng ròng.`
-                                : 'Đã bật nhưng chưa chạy: tỉ lệ hoàn tiền đang là 0.') }}
-                    </span>
-                </div>
-            </div>
-
-            <div class="bg-[var(--color-surface)] rounded-2xl border border-[var(--color-line)] p-6">
-                <div class="flex items-start justify-between gap-6">
-                    <div class="min-w-0">
-                        <h2 class="font-bold text-[var(--color-ink)] mb-1">📅 Điểm danh nhận quà</h2>
-                        <p class="text-sm text-[var(--color-muted)] leading-relaxed">
-                            Thẻ trên trang chủ: khách bấm một lần mỗi ngày, bốc ngẫu nhiên một phần quà trong kho quà
-                            của ngày hôm đó, điểm danh liên tiếp đủ mốc thì được thưởng thêm. Tiền vào ví ngay nhưng
-                            khách <strong class="text-[var(--color-ink)]">không rút được</strong> nếu chưa có đơn nào được hoàn tiền thật,
-                            nên không sợ cày tài khoản ảo. Kho quà tự đầy lại lúc 0 giờ; sửa mệnh giá và số phần
-                            trong <code>DailyCheckInService::PRIZES</code>.
-                        </p>
-                    </div>
-                    <button
-                        type="button"
-                        role="switch"
-                        :aria-checked="checkinEnabled"
-                        :disabled="savingCheckin"
-                        @click="toggleCheckin"
-                        class="relative inline-flex h-7 w-12 flex-none items-center rounded-full transition-colors disabled:opacity-60"
-                        :class="checkinEnabled ? 'bg-[var(--color-brand-green)]' : 'bg-[var(--color-line)]'"
-                    >
-                        <span class="inline-block h-5 w-5 rounded-full bg-white shadow transition-transform" :class="checkinEnabled ? 'translate-x-6' : 'translate-x-1'"></span>
-                    </button>
-                </div>
-
-                <div v-if="checkinPrizes" class="mt-4 pt-4 border-t border-[var(--color-line)]">
-                    <p class="text-xs font-bold uppercase tracking-wide text-[var(--color-muted)] mb-2">Kho quà hôm nay</p>
-                    <ul class="space-y-1.5">
-                        <li
-                            v-for="prize in checkinPrizes.prizes"
-                            :key="prize.amount"
-                            class="flex items-center justify-between gap-3 text-sm"
+                        <button
+                            type="button"
+                            role="switch"
+                            :aria-checked="customerAuthEnabled"
+                            @click="toggleCustomerAuth"
+                            :disabled="savingCustomerAuth"
+                            class="relative flex-none w-14 h-8 rounded-full transition-colors duration-200 disabled:opacity-60"
+                            :class="customerAuthEnabled ? 'bg-[var(--color-brand-green)]' : 'bg-[var(--color-line)]'"
                         >
-                            <span class="font-semibold text-[var(--color-ink)] tabular-nums">{{ money(prize.amount) }}</span>
-                            <span v-if="prize.quantity === null" class="text-xs text-[var(--color-muted)]">Không giới hạn</span>
-                            <span v-else class="text-xs tabular-nums" :class="prize.left > 0 ? 'text-[var(--color-muted)]' : 'text-[var(--color-accent)]'">
-                                {{ prize.left > 0 ? `còn ${prize.left}/${prize.quantity} phần` : 'đã hết hôm nay' }}
-                            </span>
-                        </li>
-                    </ul>
-                    <p class="text-xs text-[var(--color-muted)] mt-3 leading-relaxed">
-                        Mốc chuỗi ngày:
-                        <template v-for="(m, mi) in checkinPrizes.milestones" :key="m.days">
-                            <span v-if="mi">, </span>{{ m.days }} ngày +{{ money(m.amount) }}
-                        </template>
-                        — lặp lại, trùng cả hai thì lấy mốc lớn.
+                            <span
+                                class="absolute top-1 left-1 w-6 h-6 rounded-full bg-white shadow-md transition-transform duration-200"
+                                :class="customerAuthEnabled ? 'translate-x-6' : 'translate-x-0'"
+                            ></span>
+                        </button>
+                    </div>
+
+                    <div class="mt-4 pt-4 border-t border-[var(--color-line)] flex items-center gap-2 text-sm">
+                        <span class="w-2 h-2 rounded-full flex-none" :class="customerAuthEnabled ? 'bg-[var(--color-brand-green)]' : 'bg-[var(--color-muted)]'"></span>
+                        <span class="text-[var(--color-ink)] font-medium">
+                            {{ customerAuthEnabled ? 'Đang bật — khách có thể đăng nhập/đăng ký.' : 'Đang tắt — khách không thấy mục đăng nhập/đăng ký.' }}
+                        </span>
+                    </div>
+                </div>
+
+                <div class="bg-[var(--color-surface)] rounded-2xl border border-[var(--color-line)] p-6">
+                    <div class="flex items-start justify-between gap-6">
+                        <div class="min-w-0">
+                            <h2 class="font-bold text-[var(--color-ink)] mb-1">Chế độ bảo trì</h2>
+                            <p class="text-sm text-[var(--color-muted)] leading-relaxed">
+                                Khi bật, toàn bộ trang cho khách (trang chủ, blog, quét link, lịch sử, tài khoản...) hiện
+                                thông báo "đang bảo trì" thay vì nội dung thật. Trang <span class="font-mono text-xs">/login</span>
+                                và khu vực admin vẫn vào được bình thường để bạn tự tắt lại khi xong.
+                                <strong class="text-[var(--color-ink)]">Tài khoản admin vẫn dùng được đầy đủ trang khách</strong>
+                                (dán link, tìm mã, bấm thử link) để kiểm tra chức năng trong lúc khách bị chặn.
+                            </p>
+                        </div>
+
+                        <button
+                            type="button"
+                            role="switch"
+                            :aria-checked="maintenanceMode"
+                            @click="toggleMaintenance"
+                            :disabled="savingMaintenance"
+                            class="relative flex-none w-14 h-8 rounded-full transition-colors duration-200 disabled:opacity-60"
+                            :class="maintenanceMode ? 'bg-amber-500' : 'bg-[var(--color-line)]'"
+                        >
+                            <span
+                                class="absolute top-1 left-1 w-6 h-6 rounded-full bg-white shadow-md transition-transform duration-200"
+                                :class="maintenanceMode ? 'translate-x-6' : 'translate-x-0'"
+                            ></span>
+                        </button>
+                    </div>
+
+                    <div class="mt-4 pt-4 border-t border-[var(--color-line)] flex items-center gap-2 text-sm">
+                        <span class="w-2 h-2 rounded-full flex-none" :class="maintenanceMode ? 'bg-amber-500' : 'bg-[var(--color-muted)]'"></span>
+                        <span class="text-[var(--color-ink)] font-medium">
+                            {{ maintenanceMode ? 'Đang bảo trì — khách không vào được trang, admin vẫn dùng bình thường.' : 'Đang tắt — trang hoạt động bình thường.' }}
+                        </span>
+                    </div>
+                </div>
+
+                <div class="bg-[var(--color-surface)] rounded-2xl border border-[var(--color-line)] p-6">
+                    <div class="flex items-start justify-between gap-6">
+                        <div class="min-w-0">
+                            <h2 class="font-bold text-[var(--color-ink)] mb-1">🚑 Tự bảo trì khi nguồn mã lỗi</h2>
+                            <p class="text-sm text-[var(--color-muted)] leading-relaxed">
+                                Cứ <b>5 phút</b> hệ thống gọi thử nguồn mã <b>kieushopee</b>.
+                                Lỗi <b>2 lượt liên tiếp</b> (≈10 phút) thì tự bật chế độ bảo trì, nguồn sống lại thì tự tắt.
+                                Để ganma thì vẫn kiểm tra kieushopee — kể cả khi ganma ra mã được, kieushopee chết vẫn đóng trang
+                                (trừ khi đã tắt <b>Mã YTB gọi kèm kieushopee</b> — lúc đó không kiểm tra gì).
+                                Riêng khi đang để <b>laymavoucher</b> (nguồn dự phòng) thì kiểm tra laymavoucher thay cho kieushopee.
+                                Bạn tự tay gạt công tắc bảo trì ở trên thì hệ thống <b>không tắt hộ nữa</b>;
+                                tắt công tắc này thì trang đang bảo trì tự động sẽ được mở lại ngay.
+                            </p>
+                        </div>
+
+                        <button
+                            type="button"
+                            role="switch"
+                            :aria-checked="autoMaintenanceEnabled"
+                            @click="toggleAutoMaintenance"
+                            :disabled="savingAutoMaintenance"
+                            class="relative flex-none w-14 h-8 rounded-full transition-colors duration-200 disabled:opacity-60"
+                            :class="autoMaintenanceEnabled ? 'bg-amber-500' : 'bg-[var(--color-line)]'"
+                        >
+                            <span
+                                class="absolute top-1 left-1 w-6 h-6 rounded-full bg-white shadow-md transition-transform duration-200"
+                                :class="autoMaintenanceEnabled ? 'translate-x-6' : 'translate-x-0'"
+                            ></span>
+                        </button>
+                    </div>
+
+                    <div class="mt-4 pt-4 border-t border-[var(--color-line)] flex items-start gap-2 text-sm">
+                        <span
+                            class="w-2 h-2 mt-1.5 rounded-full flex-none"
+                            :class="!autoMaintenanceEnabled ? 'bg-[var(--color-muted)]' : (sourceHealth?.ok ? 'bg-[var(--color-brand-green)]' : 'bg-amber-500')"
+                        ></span>
+                        <span class="text-[var(--color-ink)] font-medium">{{ sourceHealthLine }}</span>
+                    </div>
+                </div>
+            </section>
+
+            <section id="nguon-ma" class="scroll-mt-20 space-y-4">
+                <h2 class="px-1 text-xs font-bold uppercase tracking-wider text-[var(--color-muted)]">🎟️ Nguồn lấy mã</h2>
+                <p class="px-1 text-sm text-[var(--color-muted)]">
+                    Chọn nguồn chính ở trang <Link href="/admin/api-config" class="font-semibold text-[var(--color-accent)] hover:underline">Cấu hình API</Link>
+                    — hai công tắc dưới chỉnh cách nguồn ganma (mã YouTube) chạy.
+                </p>
+
+                <div class="bg-[var(--color-surface)] rounded-2xl border border-[var(--color-line)] p-6">
+                    <div class="flex items-start justify-between gap-6">
+                        <div class="min-w-0">
+                            <h2 class="font-bold text-[var(--color-ink)] mb-1">▶️ Mã YTB gọi kèm kieushopee</h2>
+                            <p class="text-sm text-[var(--color-muted)] leading-relaxed">
+                                Chỉ có tác dụng khi nguồn lấy mã đang là <b>ganma (mã YouTube)</b>.
+                                <b>Bật</b>: gọi cả ganma lẫn kieushopee — khách đi <b>2 bước</b> (kích hoạt YouTube rồi mới mua),
+                                có cả mã YTB lẫn mã FB-IG.
+                                <b>Tắt</b>: chỉ gọi ganma — khách nhận thẳng link ganma, đi <b>1 bước</b>, chỉ có mã YTB.
+                                Nên tắt khi <b>kieushopee đang lỗi</b>: khách khỏi chờ thêm tới 20 giây cho một nguồn chắc chắn hỏng,
+                                khung giờ FB-IG không tự chuyển sang kieushopee, và kieushopee lỗi cũng không làm trang tự bảo trì.
+                            </p>
+                        </div>
+
+                        <button
+                            type="button"
+                            role="switch"
+                            :aria-checked="ytbWithKieuShopee"
+                            @click="toggleYtbWithKieuShopee"
+                            :disabled="savingYtbWithKieuShopee"
+                            class="relative flex-none w-14 h-8 rounded-full transition-colors duration-200 disabled:opacity-60"
+                            :class="ytbWithKieuShopee ? 'bg-[var(--color-accent)]' : 'bg-[var(--color-line)]'"
+                        >
+                            <span
+                                class="absolute top-1 left-1 w-6 h-6 rounded-full bg-white shadow-md transition-transform duration-200"
+                                :class="ytbWithKieuShopee ? 'translate-x-6' : 'translate-x-0'"
+                            ></span>
+                        </button>
+                    </div>
+
+                    <div class="mt-4 pt-4 border-t border-[var(--color-line)] flex items-center gap-2 text-sm">
+                        <span class="w-2 h-2 rounded-full flex-none" :class="ytbWithKieuShopee ? 'bg-[var(--color-accent)]' : 'bg-[var(--color-muted)]'"></span>
+                        <span class="text-[var(--color-ink)] font-medium">
+                            {{ ytbWithKieuShopee
+                                ? 'Đang bật — chế độ mã YTB gọi cả ganma lẫn kieushopee.'
+                                : 'Đang tắt — chế độ mã YTB chỉ gọi ganma, không đụng tới kieushopee.' }}
+                        </span>
+                    </div>
+                </div>
+
+                <div class="bg-[var(--color-surface)] rounded-2xl border border-[var(--color-line)] p-6">
+                    <div class="flex items-start justify-between gap-6">
+                        <div class="min-w-0">
+                            <h2 class="font-bold text-[var(--color-ink)] mb-1">⚡ Tự chuyển sang FB-IG trong khung giờ back mã</h2>
+                            <p class="text-sm text-[var(--color-muted)] leading-relaxed">
+                                Khi nguồn lấy mã đang là <b>ganma (mã YouTube)</b>: tới khung giờ back mã FB-IG
+                                (<b>0h, 9h, 15h, 20h — mỗi khung 30 phút</b>, giờ VN) thì tạm chuyển sang
+                                <b>kieushopee</b>, hết khung tự quay lại ganma. Đang để kieushopee sẵn thì không đổi gì.
+                                Công tắc nguồn ở trang Cấu hình API <b>không bị sửa</b> — đây chỉ là lớp ghi đè tạm thời.
+                                Giao diện khách không đổi gì cả. Đã tắt <b>Mã YTB gọi kèm kieushopee</b> thì không chuyển.
+                            </p>
+                        </div>
+
+                        <button
+                            type="button"
+                            role="switch"
+                            :aria-checked="fbigWindowAutoSwitch"
+                            @click="toggleFbigAutoSwitch"
+                            :disabled="savingFbigAutoSwitch"
+                            class="relative flex-none w-14 h-8 rounded-full transition-colors duration-200 disabled:opacity-60"
+                            :class="fbigWindowAutoSwitch ? 'bg-[var(--color-accent)]' : 'bg-[var(--color-line)]'"
+                        >
+                            <span
+                                class="absolute top-1 left-1 w-6 h-6 rounded-full bg-white shadow-md transition-transform duration-200"
+                                :class="fbigWindowAutoSwitch ? 'translate-x-6' : 'translate-x-0'"
+                            ></span>
+                        </button>
+                    </div>
+
+                    <div class="mt-4 pt-4 border-t border-[var(--color-line)] flex items-center gap-2 text-sm">
+                        <span class="w-2 h-2 rounded-full flex-none" :class="fbigWindowAutoSwitch ? 'bg-[var(--color-accent)]' : 'bg-[var(--color-muted)]'"></span>
+                        <span class="text-[var(--color-ink)] font-medium">
+                            {{ fbigWindowAutoSwitch
+                                ? 'Đang bật — xem nguồn nào thật sự đang phục vụ khách ở trang Cấu hình API.'
+                                : 'Đang tắt — nguồn lấy mã luôn đúng lựa chọn ở trang Cấu hình API.' }}
+                        </span>
+                    </div>
+                </div>
+            </section>
+
+            <section id="hoan-tien" class="scroll-mt-20 space-y-4">
+                <h2 class="px-1 text-xs font-bold uppercase tracking-wider text-[var(--color-muted)]">💰 Hoàn tiền &amp; thưởng</h2>
+
+                <div class="bg-[var(--color-surface)] rounded-2xl border border-[var(--color-line)] p-6">
+                    <h2 class="font-bold text-[var(--color-ink)] mb-1">Tỉ lệ hoàn tiền cho khách</h2>
+                    <p class="text-sm text-[var(--color-muted)] leading-relaxed mb-4">
+                        Phần trăm <strong class="text-[var(--color-ink)]">hoa hồng ròng</strong> (đã trừ phí MCN) trả lại cho khách
+                        mỗi khi một đơn hàng <strong class="text-[var(--color-ink)]">Hoàn thành</strong> trong báo cáo Shopee.
+                        Để <strong class="text-[var(--color-ink)]">0</strong> là tắt hẳn — nhập báo cáo vẫn chạy nhưng không đồng nào vào ví khách.
+                        Đổi tỉ lệ sẽ <strong class="text-[var(--color-ink)]">tính lại cả những đơn đã nhập trước đó</strong>, trừ đơn đã chi trả.
                     </p>
+
+                    <div class="flex flex-col sm:flex-row gap-2">
+                        <div class="relative flex-1 min-w-0">
+                            <input
+                                v-model="cashbackRate"
+                                type="number"
+                                min="0"
+                                max="100"
+                                step="1"
+                                @keydown.enter="saveCashbackRate"
+                                class="w-full px-4 py-2.5 pr-10 rounded-xl border border-[var(--color-line)] bg-[var(--color-bg)] text-sm text-[var(--color-ink)] tabular-nums focus:outline-none focus:border-[var(--color-accent)]"
+                            />
+                            <span class="absolute right-4 top-1/2 -translate-y-1/2 text-sm text-[var(--color-muted)] pointer-events-none">%</span>
+                        </div>
+                        <button
+                            type="button"
+                            @click="saveCashbackRate"
+                            :disabled="savingCashbackRate"
+                            class="btn-fire px-6 py-2.5 rounded-xl text-sm whitespace-nowrap disabled:opacity-60"
+                        >{{ savingCashbackRate ? 'Đang lưu...' : 'Lưu tỉ lệ' }}</button>
+                    </div>
+
+                    <div class="mt-4 pt-4 border-t border-[var(--color-line)] flex items-center gap-2 text-sm">
+                        <span class="w-2 h-2 rounded-full flex-none" :class="Number(cashbackRate) > 0 ? 'bg-[var(--color-brand-green)]' : 'bg-[var(--color-muted)]'"></span>
+                        <span class="text-[var(--color-ink)] font-medium">
+                            {{ Number(cashbackRate) > 0
+                                ? `Đang hoàn ${Number(cashbackRate)}% hoa hồng ròng cho khách.`
+                                : 'Đang tắt — chưa trả hoa hồng cho khách nào.' }}
+                        </span>
+                    </div>
                 </div>
 
-                <div class="mt-4 pt-4 border-t border-[var(--color-line)] flex items-center gap-2 text-sm">
-                    <span class="w-2 h-2 rounded-full flex-none" :class="checkinEnabled ? 'bg-[var(--color-brand-green)]' : 'bg-[var(--color-muted)]'"></span>
-                    <span class="text-[var(--color-ink)] font-medium">
-                        {{ checkinEnabled
-                            ? `Đang chạy — hôm nay còn ${(checkinPrizes?.gifts_left ?? 0).toLocaleString('vi-VN')}/${checkinTotalGifts.toLocaleString('vi-VN')} phần quà có hạn, giải cao nhất còn lại ${money(checkinPrizes?.top_prize ?? 0)}.`
-                            : 'Đang tắt — thẻ điểm danh không hiện trên trang chủ.' }}
-                    </span>
-                </div>
-            </div>
-
-            <div class="bg-[var(--color-surface)] rounded-2xl border border-[var(--color-line)] p-6">
-                <h2 class="font-bold text-[var(--color-ink)] mb-1">🎬 Video hướng dẫn lấy mã</h2>
-                <p class="text-sm text-[var(--color-muted)] leading-relaxed mb-4">
-                    Hiện ở đầu trang công khai
-                    <a href="/huong-dan" target="_blank" rel="noopener" class="font-mono text-xs text-[var(--color-accent)] underline underline-offset-2">/huong-dan</a>
-                    — dán link đó vào bài đăng Facebook/Zalo hoặc gửi cho khách đang bí ở bước kích hoạt mã.
-                    Chọn <strong class="text-[var(--color-ink)]">một trong hai</strong> cách bên dưới:
-                    đặt cách này thì cách kia tự bị gỡ. Để trống cả hai thì trang vẫn chạy, chỉ còn phần hướng dẫn bằng chữ.
-                </p>
-
-                <div class="mb-5 flex items-center gap-2 text-sm">
-                    <span class="w-2 h-2 rounded-full flex-none" :class="guideVideo?.video ? 'bg-[var(--color-brand-green)]' : 'bg-[var(--color-muted)]'"></span>
-                    <span class="text-[var(--color-ink)] font-medium min-w-0 break-words">{{ guideVideoLabel }}</span>
-                </div>
-
-                <label class="block text-xs font-bold text-[var(--color-ink)] uppercase tracking-wide mb-2">Cách 1 — dán link</label>
-                <div class="flex flex-col sm:flex-row gap-2">
-                    <input
-                        v-model="guideVideoUrl"
-                        type="url"
-                        placeholder="https://www.youtube.com/watch?v=..."
-                        @keydown.enter="saveGuideVideoUrl"
-                        class="flex-1 min-w-0 px-4 py-2.5 rounded-xl border border-[var(--color-line)] bg-[var(--color-bg)] text-sm text-[var(--color-ink)] focus:outline-none focus:border-[var(--color-accent)]"
-                    />
-                    <button
-                        type="button"
-                        @click="saveGuideVideoUrl"
-                        :disabled="savingGuideVideo"
-                        class="btn-fire px-6 py-2.5 rounded-xl text-sm whitespace-nowrap disabled:opacity-60"
-                    >{{ savingGuideVideo ? 'Đang lưu...' : 'Lưu link' }}</button>
-                </div>
-                <p class="text-xs text-[var(--color-muted)] leading-relaxed mt-2">
-                    Nhận YouTube (kể cả Shorts), TikTok dạng đầy đủ <span class="font-mono">tiktok.com/@ten/video/...</span>,
-                    Facebook, hoặc link <span class="font-mono">.mp4</span> trực tiếp.
-                    Link TikTok rút gọn <span class="font-mono">vt.tiktok.com</span> không dùng được — mở ra rồi copy lại link đầy đủ trên thanh địa chỉ.
-                </p>
-
-                <div class="mt-5 pt-5 border-t border-[var(--color-line)]">
-                    <label class="block text-xs font-bold text-[var(--color-ink)] uppercase tracking-wide mb-2">Cách 2 — tải file lên</label>
-                    <input
-                        type="file"
-                        accept="video/mp4,video/webm,video/quicktime"
-                        :disabled="savingGuideVideo"
-                        @change="uploadGuideVideo"
-                        class="w-full text-sm text-[var(--color-ink)] file:mr-3 file:px-4 file:py-2 file:rounded-xl file:border-0 file:text-sm file:font-semibold file:bg-[var(--color-peach-soft)] file:text-[var(--color-accent)] disabled:opacity-60"
-                    />
-                    <p class="text-xs text-[var(--color-muted)] leading-relaxed mt-2">
-                        MP4, WebM hoặc MOV — tối đa <strong class="text-[var(--color-ink)]">{{ guideVideo?.maxUploadMb ?? 0 }} MB</strong>
-                        (trần thật của máy chủ này, đã tính cả giới hạn PHP). Chọn file xong là tải lên luôn, không cần bấm Lưu.
-                        File nằm trong <span class="font-mono">public/uploads</span> nên mỗi lượt xem đều ăn băng thông VPS —
-                        video dài thì dùng Cách 1 sẽ nhẹ hơn.
+                <div class="bg-[var(--color-surface)] rounded-2xl border border-[var(--color-line)] p-6">
+                    <h2 class="font-bold text-[var(--color-ink)] mb-1">Tỉ lệ hiển thị cho khách</h2>
+                    <p class="text-sm text-[var(--color-muted)] leading-relaxed mb-4">
+                        Con số khách <strong class="text-[var(--color-ink)]">nhìn thấy</strong> trên trang chủ, trang Hoàn tiền và các bài mẫu ở mục Nội dung quảng bá.
+                        <strong class="text-[var(--color-ink)]">Không dùng để tính tiền</strong> — tiền vào ví luôn tính theo tỉ lệ ở khung trên.
+                        Để trống là khách thấy đúng tỉ lệ thực. Tắt hoàn tiền (tỉ lệ thực = 0) thì số này cũng tự ẩn.
                     </p>
+
+                    <div class="flex flex-col sm:flex-row gap-2">
+                        <div class="relative flex-1 min-w-0">
+                            <input
+                                v-model="cashbackDisplayRate"
+                                type="number"
+                                min="0"
+                                max="100"
+                                step="1"
+                                :placeholder="`Trống = theo tỉ lệ thực (${Number(cashbackRate)}%)`"
+                                @keydown.enter="saveCashbackDisplayRate"
+                                class="w-full px-4 py-2.5 pr-10 rounded-xl border border-[var(--color-line)] bg-[var(--color-bg)] text-sm text-[var(--color-ink)] tabular-nums focus:outline-none focus:border-[var(--color-accent)]"
+                            />
+                            <span class="absolute right-4 top-1/2 -translate-y-1/2 text-sm text-[var(--color-muted)] pointer-events-none">%</span>
+                        </div>
+                        <button
+                            type="button"
+                            @click="saveCashbackDisplayRate"
+                            :disabled="savingCashbackDisplayRate"
+                            class="btn-fire px-6 py-2.5 rounded-xl text-sm whitespace-nowrap disabled:opacity-60"
+                        >{{ savingCashbackDisplayRate ? 'Đang lưu...' : 'Lưu số hiển thị' }}</button>
+                    </div>
+
+                    <div
+                        v-if="String(cashbackDisplayRate).trim() !== '' && Number(cashbackDisplayRate) !== Number(cashbackRate)"
+                        class="mt-4 pt-4 border-t border-[var(--color-line)] text-sm text-amber-700 dark:text-amber-400"
+                    >
+                        ⚠️ Khách đang thấy <strong>{{ Number(cashbackDisplayRate) }}%</strong> nhưng ví thực trả <strong>{{ Number(cashbackRate) }}%</strong>.
+                        Trang Đơn hàng của khách vẫn ghi tỉ lệ thực vì nó giải thích cách tính từng khoản tiền.
+                    </div>
                 </div>
 
-                <div v-if="guideVideo?.video" class="mt-5 pt-5 border-t border-[var(--color-line)] flex flex-wrap items-center gap-3">
-                    <a
-                        href="/huong-dan"
-                        target="_blank"
-                        rel="noopener"
-                        class="text-sm font-semibold text-[var(--color-accent)] underline underline-offset-2"
-                    >Xem thử trang hướng dẫn →</a>
-                    <button
-                        type="button"
-                        @click="removeGuideVideo"
-                        :disabled="savingGuideVideo"
-                        class="ml-auto text-sm font-semibold text-[#c00000] underline underline-offset-2 disabled:opacity-60"
-                    >Gỡ video</button>
+                <div class="bg-[var(--color-surface)] rounded-2xl border border-[var(--color-line)] p-6">
+                    <div class="flex items-start justify-between gap-6">
+                        <div class="min-w-0">
+                            <h2 class="font-bold text-[var(--color-ink)] mb-1">Thưởng người mới</h2>
+                            <p class="text-sm text-[var(--color-muted)] leading-relaxed">
+                                Cộng thẳng vào ví ngay khi khách tạo tài khoản (email hoặc Google), kèm thông báo.
+                                Khách <strong class="text-[var(--color-ink)]">không rút được</strong> nếu chưa có đơn nào được hoàn tiền thật,
+                                nên không sợ cày tài khoản ảo. Đổi số tiền chỉ áp cho tài khoản đăng ký từ đó về sau.
+                            </p>
+                        </div>
+                        <button
+                            type="button"
+                            role="switch"
+                            :aria-checked="welcomeBonusEnabled"
+                            :disabled="savingWelcomeBonus"
+                            @click="toggleWelcomeBonus"
+                            class="relative inline-flex h-7 w-12 flex-none items-center rounded-full transition-colors disabled:opacity-60"
+                            :class="welcomeBonusEnabled ? 'bg-[var(--color-brand-green)]' : 'bg-[var(--color-line)]'"
+                        >
+                            <span class="inline-block h-5 w-5 rounded-full bg-white shadow transition-transform" :class="welcomeBonusEnabled ? 'translate-x-6' : 'translate-x-1'"></span>
+                        </button>
+                    </div>
+
+                    <div class="mt-4 flex flex-col sm:flex-row gap-2">
+                        <div class="relative flex-1 min-w-0">
+                            <input
+                                v-model="welcomeBonusAmount"
+                                type="number"
+                                min="0"
+                                step="1000"
+                                @keydown.enter="saveWelcomeBonusAmount"
+                                class="w-full px-4 py-2.5 pr-10 rounded-xl border border-[var(--color-line)] bg-[var(--color-bg)] text-sm text-[var(--color-ink)] tabular-nums focus:outline-none focus:border-[var(--color-accent)]"
+                            />
+                            <span class="absolute right-4 top-1/2 -translate-y-1/2 text-sm text-[var(--color-muted)] pointer-events-none">đ</span>
+                        </div>
+                        <button
+                            type="button"
+                            @click="saveWelcomeBonusAmount"
+                            :disabled="savingWelcomeBonusAmount"
+                            class="btn-fire px-6 py-2.5 rounded-xl text-sm whitespace-nowrap disabled:opacity-60"
+                        >{{ savingWelcomeBonusAmount ? 'Đang lưu...' : 'Lưu số tiền' }}</button>
+                    </div>
+
+                    <div class="mt-4 pt-4 border-t border-[var(--color-line)] flex items-center gap-2 text-sm">
+                        <span class="w-2 h-2 rounded-full flex-none" :class="welcomeBonusEnabled && Number(welcomeBonusAmount) > 0 ? 'bg-[var(--color-brand-green)]' : 'bg-[var(--color-muted)]'"></span>
+                        <span class="text-[var(--color-ink)] font-medium">
+                            {{ welcomeBonusEnabled && Number(welcomeBonusAmount) > 0
+                                ? `Đang tặng ${Number(welcomeBonusAmount).toLocaleString('vi-VN')} đ cho mỗi tài khoản mới.`
+                                : 'Đang tắt — tài khoản mới không được thưởng.' }}
+                        </span>
+                    </div>
                 </div>
-            </div>
 
-            <div class="bg-[var(--color-surface)] rounded-2xl border border-[var(--color-line)] p-6">
-                <h2 class="font-bold text-[var(--color-ink)] mb-1">Link cộng đồng săn sale</h2>
-                <p class="text-sm text-[var(--color-muted)] leading-relaxed mb-4">
-                    Hiện ở dòng cuối banner <strong class="text-[var(--color-ink)]">"Săn sale mỗi ngày"</strong> (khung giờ back mã)
-                    trên trang chủ và trang kết quả. Dán link nhóm Zalo, Telegram hoặc Facebook đều được.
-                    Để trống thì banner tự ẩn dòng link đi.
-                </p>
+                <div class="bg-[var(--color-surface)] rounded-2xl border border-[var(--color-line)] p-6">
+                    <div class="flex items-start justify-between gap-6">
+                        <div class="min-w-0">
+                            <h2 class="font-bold text-[var(--color-ink)] mb-1">🏅 Hạng thành viên &amp; Đặc quyền</h2>
+                            <p class="text-sm text-[var(--color-muted)] leading-relaxed">
+                                Khách mua càng nhiều, hạng càng cao, tỉ lệ hoàn tiền được cộng thêm tới
+                                <strong class="text-[var(--color-ink)]">+5 điểm phần trăm</strong>
+                                (Tân binh +0% · Đồng +1% · Bạc +2% · Vàng +3% · Bạch kim +4% · Kim cương +5%).
+                                Hạng xét theo <strong class="text-[var(--color-ink)]">tiền hoàn đã duyệt của quý trước</strong>
+                                và tự cập nhật đầu mỗi quý — lệnh <code>tiers:refresh</code> chạy hàng ngày, xem ở mục Tác vụ nền.
+                                Tắt hoàn tiền (tỉ lệ = 0) thì khối hạng cũng tự ẩn khỏi trang khách.
+                            </p>
+                        </div>
+                        <button
+                            type="button"
+                            role="switch"
+                            :aria-checked="membershipTierEnabled"
+                            :disabled="savingMembershipTier"
+                            @click="toggleMembershipTier"
+                            class="relative inline-flex h-7 w-12 flex-none items-center rounded-full transition-colors disabled:opacity-60"
+                            :class="membershipTierEnabled ? 'bg-[var(--color-brand-green)]' : 'bg-[var(--color-line)]'"
+                        >
+                            <span class="inline-block h-5 w-5 rounded-full bg-white shadow transition-transform" :class="membershipTierEnabled ? 'translate-x-6' : 'translate-x-1'"></span>
+                        </button>
+                    </div>
 
-                <div class="flex flex-col sm:flex-row gap-2">
-                    <input
-                        v-model="communityUrl"
-                        type="url"
-                        placeholder="https://zalo.me/g/..."
-                        @keydown.enter="saveCommunityUrl"
-                        class="flex-1 min-w-0 px-4 py-2.5 rounded-xl border border-[var(--color-line)] bg-[var(--color-bg)] text-sm text-[var(--color-ink)] focus:outline-none focus:border-[var(--color-accent)]"
-                    />
-                    <button
-                        type="button"
-                        @click="saveCommunityUrl"
-                        :disabled="savingCommunityUrl"
-                        class="btn-fire px-6 py-2.5 rounded-xl text-sm whitespace-nowrap disabled:opacity-60"
-                    >{{ savingCommunityUrl ? 'Đang lưu...' : 'Lưu link' }}</button>
+                    <div class="mt-4 pt-4 border-t border-[var(--color-line)] flex items-center gap-2 text-sm">
+                        <span class="w-2 h-2 rounded-full flex-none" :class="membershipTierEnabled && Number(cashbackRate) > 0 ? 'bg-[var(--color-brand-green)]' : 'bg-[var(--color-muted)]'"></span>
+                        <span class="text-[var(--color-ink)] font-medium">
+                            {{ !membershipTierEnabled
+                                ? 'Đang tắt — mọi khách nhận đúng tỉ lệ nền.'
+                                : (Number(cashbackRate) > 0
+                                    ? `Đang chạy — khách hạng Kim cương nhận tới ${Math.min(100, Number(cashbackRate) + 5)}% hoa hồng ròng.`
+                                    : 'Đã bật nhưng chưa chạy: tỉ lệ hoàn tiền đang là 0.') }}
+                        </span>
+                    </div>
                 </div>
-            </div>
 
-            <div class="bg-[var(--color-surface)] rounded-2xl border border-[var(--color-line)] p-6">
-                <div class="flex items-start justify-between gap-6">
-                    <div class="min-w-0">
-                        <h2 class="font-bold text-[var(--color-ink)] mb-1">💬 Chat với hỗ trợ ngay trong web</h2>
-                        <p class="text-sm text-[var(--color-muted)] leading-relaxed">
-                            Khách đã đăng nhập nhắn tin ở <span class="font-mono text-xs">/ho-tro</span>, bạn đọc và trả lời ở mục
-                            <strong class="text-[var(--color-ink)]">Hỗ trợ</strong> trong menu bên trái (có badge số người đang chờ).
-                            Khách nhận thông báo 🔔 khi bạn trả lời mà họ không mở trang.
-                            Bật cái này thì nút nổi góc màn hình của khách đã đăng nhập dẫn vào đây thay vì sang Messenger —
-                            <strong class="text-[var(--color-ink)]">tắt đi nếu bạn không định kiểm tra thường xuyên</strong>,
-                            tin nhắn không ai trả lời còn tệ hơn là không có ô chat.
+                <div class="bg-[var(--color-surface)] rounded-2xl border border-[var(--color-line)] p-6">
+                    <div class="flex items-start justify-between gap-6">
+                        <div class="min-w-0">
+                            <h2 class="font-bold text-[var(--color-ink)] mb-1">📅 Điểm danh nhận quà</h2>
+                            <p class="text-sm text-[var(--color-muted)] leading-relaxed">
+                                Thẻ trên trang chủ: khách bấm một lần mỗi ngày, bốc ngẫu nhiên một phần quà trong kho quà
+                                của ngày hôm đó, điểm danh liên tiếp đủ mốc thì được thưởng thêm. Tiền vào ví ngay nhưng
+                                khách <strong class="text-[var(--color-ink)]">không rút được</strong> nếu chưa có đơn nào được hoàn tiền thật,
+                                nên không sợ cày tài khoản ảo. Kho quà tự đầy lại lúc 0 giờ; sửa mệnh giá và số phần
+                                trong <code>DailyCheckInService::PRIZES</code>.
+                            </p>
+                        </div>
+                        <button
+                            type="button"
+                            role="switch"
+                            :aria-checked="checkinEnabled"
+                            :disabled="savingCheckin"
+                            @click="toggleCheckin"
+                            class="relative inline-flex h-7 w-12 flex-none items-center rounded-full transition-colors disabled:opacity-60"
+                            :class="checkinEnabled ? 'bg-[var(--color-brand-green)]' : 'bg-[var(--color-line)]'"
+                        >
+                            <span class="inline-block h-5 w-5 rounded-full bg-white shadow transition-transform" :class="checkinEnabled ? 'translate-x-6' : 'translate-x-1'"></span>
+                        </button>
+                    </div>
+
+                    <div v-if="checkinPrizes" class="mt-4 pt-4 border-t border-[var(--color-line)]">
+                        <p class="text-xs font-bold uppercase tracking-wide text-[var(--color-muted)] mb-2">Kho quà hôm nay</p>
+                        <ul class="space-y-1.5">
+                            <li
+                                v-for="prize in checkinPrizes.prizes"
+                                :key="prize.amount"
+                                class="flex items-center justify-between gap-3 text-sm"
+                            >
+                                <span class="font-semibold text-[var(--color-ink)] tabular-nums">{{ money(prize.amount) }}</span>
+                                <span v-if="prize.quantity === null" class="text-xs text-[var(--color-muted)]">Không giới hạn</span>
+                                <span v-else class="text-xs tabular-nums" :class="prize.left > 0 ? 'text-[var(--color-muted)]' : 'text-[var(--color-accent)]'">
+                                    {{ prize.left > 0 ? `còn ${prize.left}/${prize.quantity} phần` : 'đã hết hôm nay' }}
+                                </span>
+                            </li>
+                        </ul>
+                        <p class="text-xs text-[var(--color-muted)] mt-3 leading-relaxed">
+                            Mốc chuỗi ngày:
+                            <template v-for="(m, mi) in checkinPrizes.milestones" :key="m.days">
+                                <span v-if="mi">, </span>{{ m.days }} ngày +{{ money(m.amount) }}
+                            </template>
+                            — lặp lại, trùng cả hai thì lấy mốc lớn.
                         </p>
                     </div>
-                    <button
-                        type="button"
-                        role="switch"
-                        :aria-checked="supportChatEnabled"
-                        :disabled="savingSupportChat"
-                        @click="toggleSupportChat"
-                        class="relative inline-flex h-7 w-12 flex-none items-center rounded-full transition-colors disabled:opacity-60"
-                        :class="supportChatEnabled ? 'bg-[var(--color-brand-green)]' : 'bg-[var(--color-line)]'"
-                    >
-                        <span class="inline-block h-5 w-5 rounded-full bg-white shadow transition-transform" :class="supportChatEnabled ? 'translate-x-6' : 'translate-x-1'"></span>
-                    </button>
+
+                    <div class="mt-4 pt-4 border-t border-[var(--color-line)] flex items-center gap-2 text-sm">
+                        <span class="w-2 h-2 rounded-full flex-none" :class="checkinEnabled ? 'bg-[var(--color-brand-green)]' : 'bg-[var(--color-muted)]'"></span>
+                        <span class="text-[var(--color-ink)] font-medium">
+                            {{ checkinEnabled
+                                ? `Đang chạy — hôm nay còn ${(checkinPrizes?.gifts_left ?? 0).toLocaleString('vi-VN')}/${checkinTotalGifts.toLocaleString('vi-VN')} phần quà có hạn, giải cao nhất còn lại ${money(checkinPrizes?.top_prize ?? 0)}.`
+                                : 'Đang tắt — thẻ điểm danh không hiện trên trang chủ.' }}
+                        </span>
+                    </div>
                 </div>
 
-                <div class="mt-4 pt-4 border-t border-[var(--color-line)] flex items-center gap-2 text-sm">
-                    <span class="w-2 h-2 rounded-full flex-none" :class="supportChatEnabled ? 'bg-[var(--color-brand-green)]' : 'bg-[var(--color-muted)]'"></span>
-                    <span class="text-[var(--color-ink)] font-medium">
-                        {{ supportChatEnabled ? 'Đang bật — khách nhắn thẳng trong web.' : 'Đang tắt — khách dùng icon Messenger bên dưới.' }}
-                    </span>
-                </div>
-            </div>
+                <div class="bg-[var(--color-surface)] rounded-2xl border border-[var(--color-line)] p-6">
+                    <div class="flex items-start justify-between gap-6">
+                        <div class="min-w-0">
+                            <h2 class="font-bold text-[var(--color-ink)] mb-1">🏆 Số liệu minh hoạ cho bảng xếp hạng</h2>
+                            <p class="text-sm text-[var(--color-muted)] leading-relaxed">
+                                Khi tháng này <strong class="text-[var(--color-ink)]">chưa có ai</strong> được hoàn tiền, bảng vàng ở trang chủ
+                                và /hoan-tien sẽ hiện 7 người mẫu (tên che sẵn) y như bảng thật thay vì để trống.
+                                Có người thật đầu tiên là mẫu tự biến mất. Chỉ hiện khi chương trình hoàn tiền đang bật.
+                            </p>
+                        </div>
 
-            <div class="bg-[var(--color-surface)] rounded-2xl border border-[var(--color-line)] p-6">
-                <h2 class="font-bold text-[var(--color-ink)] mb-1">💬 Icon Messenger cho khách nhắn tin</h2>
-                <p class="text-sm text-[var(--color-muted)] leading-relaxed mb-4">
-                    Hiện icon Messenger nổi ở góc màn hình trên mọi trang khách — bấm vào sẽ nhảy thẳng sang
-                    Messenger để chat với fanpage. Dán link dạng <span class="font-mono text-xs">https://m.me/tenpage</span>
-                    (lấy trong phần Cài đặt trang trên Facebook). Để trống thì icon tự ẩn.
-                </p>
+                        <button
+                            type="button"
+                            role="switch"
+                            :aria-checked="leaderboardDemo"
+                            @click="toggleLeaderboardDemo"
+                            :disabled="savingLeaderboardDemo"
+                            class="relative flex-none w-14 h-8 rounded-full transition-colors duration-200 disabled:opacity-60"
+                            :class="leaderboardDemo ? 'bg-[var(--color-accent)]' : 'bg-[var(--color-line)]'"
+                        >
+                            <span
+                                class="absolute top-1 left-1 w-6 h-6 rounded-full bg-white shadow-md transition-transform duration-200"
+                                :class="leaderboardDemo ? 'translate-x-6' : 'translate-x-0'"
+                            ></span>
+                        </button>
+                    </div>
+                </div>
+            </section>
 
-                <div class="flex flex-col sm:flex-row gap-2">
-                    <input
-                        v-model="messengerUrl"
-                        type="url"
-                        placeholder="https://m.me/tenpage"
-                        @keydown.enter="saveMessengerUrl"
-                        class="flex-1 min-w-0 px-4 py-2.5 rounded-xl border border-[var(--color-line)] bg-[var(--color-bg)] text-sm text-[var(--color-ink)] focus:outline-none focus:border-[var(--color-accent)]"
-                    />
-                    <button
-                        type="button"
-                        @click="saveMessengerUrl"
-                        :disabled="savingMessengerUrl"
-                        class="btn-fire px-6 py-2.5 rounded-xl text-sm whitespace-nowrap disabled:opacity-60"
-                    >{{ savingMessengerUrl ? 'Đang lưu...' : 'Lưu link' }}</button>
+            <section id="trang-khach" class="scroll-mt-20 space-y-4">
+                <h2 class="px-1 text-xs font-bold uppercase tracking-wider text-[var(--color-muted)]">🖥️ Trang khách</h2>
+
+                <div class="bg-[var(--color-surface)] rounded-2xl border border-[var(--color-line)] p-6">
+                    <div class="flex items-start justify-between gap-6">
+                        <div class="min-w-0">
+                            <h2 class="font-bold text-[var(--color-ink)] mb-1">🏮 Trang trí Trung thu</h2>
+                            <p class="text-sm text-[var(--color-muted)] leading-relaxed">
+                                Đèn lồng, bánh trung thu, trăng và mây trôi lơ lửng trên mọi trang khách. Chỉ là lớp
+                                trang trí, không che nút bấm. Hết mùa thì tắt ở đây — không cần sửa gì khác.
+                            </p>
+                        </div>
+
+                        <button
+                            type="button"
+                            role="switch"
+                            :aria-checked="festiveDecor"
+                            @click="toggleFestive"
+                            :disabled="savingFestive"
+                            class="relative flex-none w-14 h-8 rounded-full transition-colors duration-200 disabled:opacity-60"
+                            :class="festiveDecor ? 'bg-[var(--color-accent)]' : 'bg-[var(--color-line)]'"
+                        >
+                            <span
+                                class="absolute top-1 left-1 w-6 h-6 rounded-full bg-white shadow-md transition-transform duration-200"
+                                :class="festiveDecor ? 'translate-x-6' : 'translate-x-0'"
+                            ></span>
+                        </button>
+                    </div>
                 </div>
 
-                <div class="mt-4 pt-4 border-t border-[var(--color-line)] flex items-center gap-2 text-sm">
-                    <span class="w-2 h-2 rounded-full flex-none" :class="messengerUrl.trim() ? 'bg-[var(--color-brand-green)]' : 'bg-[var(--color-muted)]'"></span>
-                    <span class="text-[var(--color-ink)] font-medium">
-                        {{ messengerUrl.trim() ? 'Đang hiện icon Messenger trên trang khách.' : 'Đang ẩn — chưa đặt link Messenger.' }}
-                    </span>
+                <div class="bg-[var(--color-surface)] rounded-2xl border border-[var(--color-line)] p-6">
+                    <div class="flex items-start justify-between gap-6">
+                        <div class="min-w-0">
+                            <h2 class="font-bold text-[var(--color-ink)] mb-1">🕘 Mua lại từ lịch sử</h2>
+                            <p class="text-sm text-[var(--color-muted)] leading-relaxed">
+                                Cho khách bấm mua thẳng từ mục đã quét trước đó — cả khối lịch sử dưới ô dán link
+                                ở trang chủ lẫn trang Lịch sử. Tắt thì mỗi mục chỉ còn là sổ ghi, muốn mua phải
+                                dán lại link để quét mới. Nên tắt: mã trong link cũ có thể đã hết lượt hoặc hết
+                                hạn từ lúc quét, và lượt bấm đi từ đó không chắc được ghi nhận.
+                            </p>
+                        </div>
+
+                        <button
+                            type="button"
+                            role="switch"
+                            :aria-checked="historyRebuyEnabled"
+                            @click="toggleHistoryRebuy"
+                            :disabled="savingHistoryRebuy"
+                            class="relative flex-none w-14 h-8 rounded-full transition-colors duration-200 disabled:opacity-60"
+                            :class="historyRebuyEnabled ? 'bg-[var(--color-accent)]' : 'bg-[var(--color-line)]'"
+                        >
+                            <span
+                                class="absolute top-1 left-1 w-6 h-6 rounded-full bg-white shadow-md transition-transform duration-200"
+                                :class="historyRebuyEnabled ? 'translate-x-6' : 'translate-x-0'"
+                            ></span>
+                        </button>
+                    </div>
+
+                    <div class="mt-4 pt-4 border-t border-[var(--color-line)] flex items-center gap-2 text-sm">
+                        <span class="w-2 h-2 rounded-full flex-none" :class="historyRebuyEnabled ? 'bg-[var(--color-accent)]' : 'bg-[var(--color-muted)]'"></span>
+                        <span class="text-[var(--color-ink)] font-medium">
+                            {{ historyRebuyEnabled
+                                ? 'Đang bật — lịch sử có nút mua, khách bấm lại được không cần dán link.'
+                                : 'Đang tắt — khách luôn phải dán lại link khi muốn mua.' }}
+                        </span>
+                    </div>
                 </div>
-            </div>
+
+                <div class="bg-[var(--color-surface)] rounded-2xl border border-[var(--color-line)] p-6">
+                    <h2 class="font-bold text-[var(--color-ink)] mb-1">🎬 Video hướng dẫn lấy mã</h2>
+                    <p class="text-sm text-[var(--color-muted)] leading-relaxed mb-4">
+                        Hiện ở đầu trang công khai
+                        <a href="/huong-dan" target="_blank" rel="noopener" class="font-mono text-xs text-[var(--color-accent)] underline underline-offset-2">/huong-dan</a>
+                        — dán link đó vào bài đăng Facebook/Zalo hoặc gửi cho khách đang bí ở bước kích hoạt mã.
+                        Chọn <strong class="text-[var(--color-ink)]">một trong hai</strong> cách bên dưới:
+                        đặt cách này thì cách kia tự bị gỡ. Để trống cả hai thì trang vẫn chạy, chỉ còn phần hướng dẫn bằng chữ.
+                    </p>
+
+                    <div class="mb-5 flex items-center gap-2 text-sm">
+                        <span class="w-2 h-2 rounded-full flex-none" :class="guideVideo?.video ? 'bg-[var(--color-brand-green)]' : 'bg-[var(--color-muted)]'"></span>
+                        <span class="text-[var(--color-ink)] font-medium min-w-0 break-words">{{ guideVideoLabel }}</span>
+                    </div>
+
+                    <label class="block text-xs font-bold text-[var(--color-ink)] uppercase tracking-wide mb-2">Cách 1 — dán link</label>
+                    <div class="flex flex-col sm:flex-row gap-2">
+                        <input
+                            v-model="guideVideoUrl"
+                            type="url"
+                            placeholder="https://www.youtube.com/watch?v=..."
+                            @keydown.enter="saveGuideVideoUrl"
+                            class="flex-1 min-w-0 px-4 py-2.5 rounded-xl border border-[var(--color-line)] bg-[var(--color-bg)] text-sm text-[var(--color-ink)] focus:outline-none focus:border-[var(--color-accent)]"
+                        />
+                        <button
+                            type="button"
+                            @click="saveGuideVideoUrl"
+                            :disabled="savingGuideVideo"
+                            class="btn-fire px-6 py-2.5 rounded-xl text-sm whitespace-nowrap disabled:opacity-60"
+                        >{{ savingGuideVideo ? 'Đang lưu...' : 'Lưu link' }}</button>
+                    </div>
+                    <p class="text-xs text-[var(--color-muted)] leading-relaxed mt-2">
+                        Nhận YouTube (kể cả Shorts), TikTok dạng đầy đủ <span class="font-mono">tiktok.com/@ten/video/...</span>,
+                        Facebook, hoặc link <span class="font-mono">.mp4</span> trực tiếp.
+                        Link TikTok rút gọn <span class="font-mono">vt.tiktok.com</span> không dùng được — mở ra rồi copy lại link đầy đủ trên thanh địa chỉ.
+                    </p>
+
+                    <div class="mt-5 pt-5 border-t border-[var(--color-line)]">
+                        <label class="block text-xs font-bold text-[var(--color-ink)] uppercase tracking-wide mb-2">Cách 2 — tải file lên</label>
+                        <input
+                            type="file"
+                            accept="video/mp4,video/webm,video/quicktime"
+                            :disabled="savingGuideVideo"
+                            @change="uploadGuideVideo"
+                            class="w-full text-sm text-[var(--color-ink)] file:mr-3 file:px-4 file:py-2 file:rounded-xl file:border-0 file:text-sm file:font-semibold file:bg-[var(--color-peach-soft)] file:text-[var(--color-accent)] disabled:opacity-60"
+                        />
+                        <p class="text-xs text-[var(--color-muted)] leading-relaxed mt-2">
+                            MP4, WebM hoặc MOV — tối đa <strong class="text-[var(--color-ink)]">{{ guideVideo?.maxUploadMb ?? 0 }} MB</strong>
+                            (trần thật của máy chủ này, đã tính cả giới hạn PHP). Chọn file xong là tải lên luôn, không cần bấm Lưu.
+                            File nằm trong <span class="font-mono">public/uploads</span> nên mỗi lượt xem đều ăn băng thông VPS —
+                            video dài thì dùng Cách 1 sẽ nhẹ hơn.
+                        </p>
+                    </div>
+
+                    <div v-if="guideVideo?.video" class="mt-5 pt-5 border-t border-[var(--color-line)] flex flex-wrap items-center gap-3">
+                        <a
+                            href="/huong-dan"
+                            target="_blank"
+                            rel="noopener"
+                            class="text-sm font-semibold text-[var(--color-accent)] underline underline-offset-2"
+                        >Xem thử trang hướng dẫn →</a>
+                        <button
+                            type="button"
+                            @click="removeGuideVideo"
+                            :disabled="savingGuideVideo"
+                            class="ml-auto text-sm font-semibold text-[#c00000] underline underline-offset-2 disabled:opacity-60"
+                        >Gỡ video</button>
+                    </div>
+                </div>
+
+                <div class="bg-[var(--color-surface)] rounded-2xl border border-[var(--color-line)] p-6">
+                    <h2 class="font-bold text-[var(--color-ink)] mb-1">Link cộng đồng săn sale</h2>
+                    <p class="text-sm text-[var(--color-muted)] leading-relaxed mb-4">
+                        Hiện ở dòng cuối banner <strong class="text-[var(--color-ink)]">"Săn sale mỗi ngày"</strong> (khung giờ back mã)
+                        trên trang chủ và trang kết quả. Dán link nhóm Zalo, Telegram hoặc Facebook đều được.
+                        Để trống thì banner tự ẩn dòng link đi.
+                    </p>
+
+                    <div class="flex flex-col sm:flex-row gap-2">
+                        <input
+                            v-model="communityUrl"
+                            type="url"
+                            placeholder="https://zalo.me/g/..."
+                            @keydown.enter="saveCommunityUrl"
+                            class="flex-1 min-w-0 px-4 py-2.5 rounded-xl border border-[var(--color-line)] bg-[var(--color-bg)] text-sm text-[var(--color-ink)] focus:outline-none focus:border-[var(--color-accent)]"
+                        />
+                        <button
+                            type="button"
+                            @click="saveCommunityUrl"
+                            :disabled="savingCommunityUrl"
+                            class="btn-fire px-6 py-2.5 rounded-xl text-sm whitespace-nowrap disabled:opacity-60"
+                        >{{ savingCommunityUrl ? 'Đang lưu...' : 'Lưu link' }}</button>
+                    </div>
+                </div>
+            </section>
+
+            <section id="lien-he" class="scroll-mt-20 space-y-4">
+                <h2 class="px-1 text-xs font-bold uppercase tracking-wider text-[var(--color-muted)]">💬 Liên hệ &amp; hỗ trợ</h2>
+
+                <div class="bg-[var(--color-surface)] rounded-2xl border border-[var(--color-line)] p-6">
+                    <div class="flex items-start justify-between gap-6">
+                        <div class="min-w-0">
+                            <h2 class="font-bold text-[var(--color-ink)] mb-1">💬 Chat với hỗ trợ ngay trong web</h2>
+                            <p class="text-sm text-[var(--color-muted)] leading-relaxed">
+                                Khách đã đăng nhập nhắn tin ở <span class="font-mono text-xs">/ho-tro</span>, bạn đọc và trả lời ở mục
+                                <strong class="text-[var(--color-ink)]">Hỗ trợ</strong> trong menu bên trái (có badge số người đang chờ).
+                                Khách nhận thông báo 🔔 khi bạn trả lời mà họ không mở trang.
+                                Bật cái này thì nút nổi góc màn hình của khách đã đăng nhập dẫn vào đây thay vì sang Messenger —
+                                <strong class="text-[var(--color-ink)]">tắt đi nếu bạn không định kiểm tra thường xuyên</strong>,
+                                tin nhắn không ai trả lời còn tệ hơn là không có ô chat.
+                            </p>
+                        </div>
+                        <button
+                            type="button"
+                            role="switch"
+                            :aria-checked="supportChatEnabled"
+                            :disabled="savingSupportChat"
+                            @click="toggleSupportChat"
+                            class="relative inline-flex h-7 w-12 flex-none items-center rounded-full transition-colors disabled:opacity-60"
+                            :class="supportChatEnabled ? 'bg-[var(--color-brand-green)]' : 'bg-[var(--color-line)]'"
+                        >
+                            <span class="inline-block h-5 w-5 rounded-full bg-white shadow transition-transform" :class="supportChatEnabled ? 'translate-x-6' : 'translate-x-1'"></span>
+                        </button>
+                    </div>
+
+                    <div class="mt-4 pt-4 border-t border-[var(--color-line)] flex items-center gap-2 text-sm">
+                        <span class="w-2 h-2 rounded-full flex-none" :class="supportChatEnabled ? 'bg-[var(--color-brand-green)]' : 'bg-[var(--color-muted)]'"></span>
+                        <span class="text-[var(--color-ink)] font-medium">
+                            {{ supportChatEnabled ? 'Đang bật — khách nhắn thẳng trong web.' : 'Đang tắt — khách dùng icon Messenger bên dưới.' }}
+                        </span>
+                    </div>
+                </div>
+
+                <div class="bg-[var(--color-surface)] rounded-2xl border border-[var(--color-line)] p-6">
+                    <h2 class="font-bold text-[var(--color-ink)] mb-1">💬 Icon Messenger cho khách nhắn tin</h2>
+                    <p class="text-sm text-[var(--color-muted)] leading-relaxed mb-4">
+                        Hiện icon Messenger nổi ở góc màn hình trên mọi trang khách — bấm vào sẽ nhảy thẳng sang
+                        Messenger để chat với fanpage. Dán link dạng <span class="font-mono text-xs">https://m.me/tenpage</span>
+                        (lấy trong phần Cài đặt trang trên Facebook). Để trống thì icon tự ẩn.
+                    </p>
+
+                    <div class="flex flex-col sm:flex-row gap-2">
+                        <input
+                            v-model="messengerUrl"
+                            type="url"
+                            placeholder="https://m.me/tenpage"
+                            @keydown.enter="saveMessengerUrl"
+                            class="flex-1 min-w-0 px-4 py-2.5 rounded-xl border border-[var(--color-line)] bg-[var(--color-bg)] text-sm text-[var(--color-ink)] focus:outline-none focus:border-[var(--color-accent)]"
+                        />
+                        <button
+                            type="button"
+                            @click="saveMessengerUrl"
+                            :disabled="savingMessengerUrl"
+                            class="btn-fire px-6 py-2.5 rounded-xl text-sm whitespace-nowrap disabled:opacity-60"
+                        >{{ savingMessengerUrl ? 'Đang lưu...' : 'Lưu link' }}</button>
+                    </div>
+
+                    <div class="mt-4 pt-4 border-t border-[var(--color-line)] flex items-center gap-2 text-sm">
+                        <span class="w-2 h-2 rounded-full flex-none" :class="messengerUrl.trim() ? 'bg-[var(--color-brand-green)]' : 'bg-[var(--color-muted)]'"></span>
+                        <span class="text-[var(--color-ink)] font-medium">
+                            {{ messengerUrl.trim() ? 'Đang hiện icon Messenger trên trang khách.' : 'Đang ẩn — chưa đặt link Messenger.' }}
+                        </span>
+                    </div>
+                </div>
+            </section>
         </div>
     </AdminLayout>
 </template>
