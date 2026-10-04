@@ -3,7 +3,6 @@
 namespace App\Http\Controllers;
 
 use App\Exceptions\AffiliateScanException;
-use App\Models\PlatformVoucher;
 use App\Services\FacebookRedirectFlagService;
 use App\Services\ShopeeLinkResolverService;
 use App\Services\TrackingService;
@@ -84,7 +83,6 @@ class ShopeeVoucherController extends Controller
         $ref = isset($data['voucher_link']) ? $this->maskVoucherLink($result) : null;
 
         return Inertia::render('Home', [
-            'vouchers' => PlatformVoucher::suggestedList(),
             'voucherResult' => [
                 'canonical_url' => $canonicalUrl,
                 'product' => $product,

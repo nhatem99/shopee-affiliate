@@ -18,7 +18,6 @@ class DatabaseSeeder extends Seeder
             RoleSeeder::class,
             AdminUserSeeder::class,
             ApiConfigSeeder::class,
-            PlatformVoucherSeeder::class,
             BlogPostSeeder::class,
             VoucherButtonConfigSeeder::class,
         ]);

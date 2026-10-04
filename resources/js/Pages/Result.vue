@@ -9,7 +9,6 @@ import RestockSchedule from '@/Components/RestockSchedule.vue'
 const props = defineProps({
     product: Object,
     vouchers: Array,
-    platformVouchers: Array,
     affiliateLink: String,
     cashback: Number,
     savings: Object,
@@ -89,26 +88,6 @@ const platformLabels = {
                         </div>
                         <div v-else class="bg-[var(--color-peach-soft)] rounded-2xl p-6 text-center text-[var(--color-muted)] text-sm">
                             Không tìm thấy mã giảm giá sản phẩm nào.
-                        </div>
-                    </div>
-
-                    <!-- Platform vouchers (Facebook / YouTube) -->
-                    <div v-if="platformVouchers?.length">
-                        <h3 class="font-extrabold text-[var(--color-ink)] mb-1">Voucher toàn sàn</h3>
-                        <p class="text-xs text-[var(--color-muted)] mb-3">Mã từ Facebook &amp; YouTube — áp dụng khi thanh toán</p>
-                        <div class="space-y-3">
-                            <CouponTicket
-                                v-for="v in platformVouchers"
-                                :key="v.id"
-                                :code="v.code"
-                                :discount-type="v.discount_type"
-                                :discount-value="v.discount_value"
-                                :minimum-order="v.minimum_order"
-                                :expires-at="v.expires_at"
-                                :is-freeship="v.discount_type === 'freeship'"
-                                :source="v.source"
-                                :subtitle="v.title"
-                            />
                         </div>
                     </div>
 

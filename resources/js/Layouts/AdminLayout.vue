@@ -124,7 +124,6 @@ const navGroups = [
     {
         label: 'Mã & quảng bá',
         items: [
-            { href: '/admin/vouchers', icon: '🎫', label: 'Voucher FB/YT' },
             { href: '/admin/voucher-buttons', icon: '🔘', label: 'Nút Voucher' },
             { href: '/admin/promo', icon: '📣', label: 'Bài giới thiệu' },
         ],

@@ -5,7 +5,6 @@ import { router } from '@inertiajs/vue3'
 import axios from 'axios'
 import { useLocalStorage } from '@vueuse/core'
 import AppLayout from '@/Layouts/AppLayout.vue'
-import CouponTicket from '@/Components/CouponTicket.vue'
 import RestockSchedule from '@/Components/RestockSchedule.vue'
 import YtbVoucherStatus from '@/Components/YtbVoucherStatus.vue'
 import CashbackExplainer from '@/Components/CashbackExplainer.vue'
@@ -19,7 +18,6 @@ import { useFestive } from '@/composables/useFestive'
 import { useAuthStore } from '@/Stores/useAuthStore'
 
 const props = defineProps({
-    vouchers: { type: Array, default: () => [] },
     // Mã YTB đang có + % đã dùng — null khi nguồn không phải ganma (xem YtbVoucherStatusService).
     ytbVouchers: { type: Array, default: null },
     voucherResult: { type: Object, default: null },
@@ -628,21 +626,6 @@ function vnd(n) {
     return '₫' + Number(n || 0).toLocaleString('vi-VN')
 }
 
-// --- Mã gợi ý ---
-const platformTabs = [
-    { key: 'all', label: 'Tất cả' },
-    { key: 'shopee', label: 'Shopee' },
-    { key: 'lazada', label: 'Lazada' },
-    { key: 'tiki', label: 'Tiki' },
-    { key: 'tiktok', label: 'TikTok' },
-]
-const activePlatform = ref('all')
-
-const filteredVouchers = computed(() => {
-    if (activePlatform.value === 'all') return props.vouchers
-    return props.vouchers.filter(v => v.platform === activePlatform.value || v.platform === 'all')
-})
-
 // Hướng dẫn chính thức của trang, hiện thành thanh bước ngang ngay dưới ô dán link
 // (Components/HowItWorksSteps.vue). Khi hoàn tiền đang bật thì bước ĐĂNG NHẬP phải nằm ngay
 // trong đây: sub_id chỉ được gắn tại đúng giây khách bấm nút mua, nên khách làm đủ ba bước cũ
@@ -1145,61 +1128,15 @@ onUnmounted(() => {
             </div>
         </section>
 
-        <!-- Hoàn tiền: đặt NGAY SAU công cụ, trước mọi section dài khác. Trên điện thoại, section
-             "Mã giảm giá gợi ý" bên dưới là một grid một cột dài hàng chục màn hình — nhét khối
-             giải thích xuống sau nó thì coi như không ai đọc.
+        <!-- Hoàn tiền: đặt NGAY SAU công cụ, trước mọi section dài khác.
              Bản RÚT GỌN: chỉ giữ hai cột ✓/✕ rồi dẫn sang /hoan-tien. Bản đầy đủ dài 3-4 màn
-             hình điện thoại, đẩy mục mã gợi ý và FAQ xuống quá sâu. -->
+             hình điện thoại, đẩy FAQ xuống quá sâu. -->
         <CashbackExplainer v-if="cashbackOn" compact />
 
         <!-- Hạng thành viên: đứng ngay dưới khối hoàn tiền rút gọn, vì nó trả lời câu hỏi kế
              tiếp của người vừa đọc xong "có được hoàn không" — hoàn bao nhiêu, và mua nhiều thì
              có hơn gì không. Khách đã đăng nhập còn thấy luôn hạng của mình ở đây. -->
         <MembershipTiers v-if="membershipTiers" v-bind="membershipTiers" />
-
-        <!-- Mã giảm giá gợi ý -->
-        <section v-if="vouchers.length" class="py-16 px-4 bg-[var(--color-bg)]">
-            <div class="max-w-5xl mx-auto">
-                <div class="text-center mb-8">
-                    <h2 class="text-2xl md:text-3xl font-extrabold text-[var(--color-ink)] mb-2">🎁 Mã giảm giá gợi ý</h2>
-                    <p class="text-[var(--color-muted)] text-sm">Mã từ Facebook & YouTube đang có hiệu lực — copy và dùng ngay khi mua hàng.</p>
-                </div>
-
-                <!-- Platform filter -->
-                <div class="flex flex-wrap justify-center gap-2 mb-8">
-                    <button
-                        v-for="tab in platformTabs"
-                        :key="tab.key"
-                        @click="activePlatform = tab.key"
-                        :class="activePlatform === tab.key
-                            ? 'btn-fire'
-                            : 'bg-[var(--color-surface)] text-[var(--color-ink)] border border-[var(--color-line)] hover:border-[var(--color-accent)] hover:text-[var(--color-accent)]'"
-                        class="px-4 py-2 rounded-xl text-sm font-semibold transition"
-                    >
-                        {{ tab.label }}
-                    </button>
-                </div>
-
-                <!-- Voucher grid -->
-                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <CouponTicket
-                        v-for="v in filteredVouchers"
-                        :key="v.id"
-                        :code="v.code"
-                        :discount-type="v.discount_type"
-                        :discount-value="Number(v.discount_value)"
-                        :minimum-order="Number(v.minimum_order)"
-                        :expires-at="v.expires_at"
-                        :is-freeship="v.discount_type === 'freeship'"
-                        :source="v.source"
-                        :subtitle="v.title"
-                    />
-                </div>
-                <p v-if="!filteredVouchers.length" class="text-center text-[var(--color-muted)] text-sm py-8">
-                    Chưa có mã cho sàn này. Thử chọn sàn khác nhé!
-                </p>
-            </div>
-        </section>
 
         <!-- FAQ -->
         <section class="py-16 px-4 bg-[var(--color-bg)]">

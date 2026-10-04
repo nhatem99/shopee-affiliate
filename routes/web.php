@@ -15,7 +15,6 @@ use App\Http\Controllers\Admin\SettingsController;
 use App\Http\Controllers\Admin\ShopeeOrderController;
 use App\Http\Controllers\Admin\UserController as AdminUserController;
 use App\Http\Controllers\Admin\VoucherButtonConfigController;
-use App\Http\Controllers\Admin\VoucherController;
 use App\Http\Controllers\Admin\WithdrawalController as AdminWithdrawalController;
 use App\Http\Controllers\Admin\ZaloBotController;
 use App\Http\Controllers\Admin\ZaloNickController;
@@ -37,7 +36,6 @@ use App\Http\Controllers\ShortLinkController;
 use App\Http\Controllers\TrackingController;
 use App\Http\Controllers\VoucherCatalogController;
 use App\Http\Controllers\WithdrawalController;
-use App\Models\PlatformVoucher;
 use App\Services\CashbackLeaderboardService;
 use App\Services\CashbackService;
 use App\Services\DailyCheckInService;
@@ -53,7 +51,6 @@ Route::get('/', function (Request $request, TrackingService $tracking, CashbackS
     $tracking->log('page_view', $request, ['url' => $request->fullUrl()]);
 
     return Inertia::render('Home', [
-        'vouchers' => PlatformVoucher::suggestedList(),
         // Công cụ lấy mã chỉ dùng được trên điện thoại — admin luôn xem/test được từ máy tính.
         'canUseVoucherTool' => TrackingService::isMobile($request->userAgent())
             || ($request->user()?->isAdmin() ?? false),
@@ -216,10 +213,6 @@ Route::middleware(['auth', 'auth.admin'])->prefix('admin')->name('admin.')->grou
     Route::get('/api-config/{config}/facebook-posts', [ApiConfigController::class, 'facebookPosts'])->name('api-config.facebook-posts');
     Route::post('/api-config/{config}/probe-comment', [ApiConfigController::class, 'probeComment'])->name('api-config.probe-comment');
     Route::delete('/api-config/{config}/probe-comment', [ApiConfigController::class, 'deleteProbeComment'])->name('api-config.probe-comment.delete');
-    Route::get('/vouchers', [VoucherController::class, 'index'])->name('vouchers');
-    Route::post('/vouchers', [VoucherController::class, 'store'])->name('vouchers.store');
-    Route::patch('/vouchers/{voucher}', [VoucherController::class, 'update'])->name('vouchers.update');
-    Route::delete('/vouchers/{voucher}', [VoucherController::class, 'destroy'])->name('vouchers.destroy');
     Route::get('/withdrawals', [AdminWithdrawalController::class, 'index'])->name('withdrawals');
     Route::patch('/withdrawals/{withdrawal}', [AdminWithdrawalController::class, 'update'])->name('withdrawals.update');
     // Quan ly tai khoan khach: tim kiem, sua thong tin, doi quyen, dat lai mat khau, khoa/mo.
