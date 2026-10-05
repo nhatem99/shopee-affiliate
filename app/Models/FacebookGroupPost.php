@@ -9,7 +9,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 /**
  * Một lượt đăng một deal vào một nhóm — đơn vị việc bot trên máy nhà nhận về làm.
  */
-#[Fillable(['facebook_group_deal_id', 'facebook_group_id', 'status', 'queued_at', 'claim_key', 'claimed_at', 'finished_at', 'caption', 'buy_url', 'link_kind', 'short_link_id', 'error'])]
+#[Fillable(['facebook_group_deal_id', 'facebook_group_id', 'facebook_profile_id', 'status', 'queued_at', 'claim_key', 'claimed_at', 'finished_at', 'caption', 'buy_url', 'link_kind', 'short_link_id', 'error', 'review_state', 'reviewed_at', 'post_url'])]
 class FacebookGroupPost extends Model
 {
     public const PENDING = 'pending';
@@ -36,6 +36,12 @@ class FacebookGroupPost extends Model
     /** Nick bị đăng xuất hoặc bắt xác minh. */
     public const CHECKPOINT = 'checkpoint';
 
+    /**
+     * Bot không chuyển được sang page được giao — chưa mở nhóm, chưa có gì lên Facebook. Chỉ là
+     * kết quả bot báo về: server đưa bài về hàng chờ cho page khác và cho page đó nghỉ.
+     */
+    public const SWITCH_FAILED = 'switch_failed';
+
     public const CANCELLED = 'cancelled';
 
     public const EXPIRED = 'expired';
@@ -43,11 +49,26 @@ class FacebookGroupPost extends Model
     /** Kết quả bot được phép báo về. */
     public const RESULTS = [
         self::POSTED, self::PENDING_APPROVAL, self::FAILED, self::AMBIGUOUS,
-        self::NOT_ALLOWED, self::BLOCKED, self::CHECKPOINT,
+        self::NOT_ALLOWED, self::BLOCKED, self::CHECKPOINT, self::SWITCH_FAILED,
     ];
 
     /** Tính vào trần bài mỗi ngày: mọi lượt có thể đã đưa bài lên Facebook. */
     public const COUNTS_TOWARD_CAP = [self::CLAIMED, self::POSTED, self::PENDING_APPROVAL, self::AMBIGUOUS];
+
+    /**
+     * Bài nằm ở đâu trong "Nội dung của bạn" của nhóm — bot kiểm tra sau khi đăng
+     * (FacebookGroupReviewChecker). Khác status: status là điều bot thấy lúc bấm Đăng.
+     */
+    public const REVIEW_PUBLISHED = 'published';
+
+    public const REVIEW_PENDING = 'pending';
+
+    public const REVIEW_DECLINED = 'declined';
+
+    public const REVIEW_REMOVED = 'removed';
+
+    /** Tab đang chờ và đã đăng đều mở được mà không thấy bài — có thể đã bị xoá, hoặc chưa từng lên. */
+    public const REVIEW_MISSING = 'missing';
 
     /** Admin được bấm "đăng lại". AMBIGUOUS cũng được, nhưng trang admin hỏi lại vì có thể trùng. */
     public const RETRYABLE = [
@@ -61,6 +82,7 @@ class FacebookGroupPost extends Model
             'queued_at' => 'datetime',
             'claimed_at' => 'datetime',
             'finished_at' => 'datetime',
+            'reviewed_at' => 'datetime',
         ];
     }
 
@@ -72,6 +94,12 @@ class FacebookGroupPost extends Model
     public function group(): BelongsTo
     {
         return $this->belongsTo(FacebookGroup::class, 'facebook_group_id');
+    }
+
+    /** Page (hoặc nick chính) bot dùng để đăng bài này — gán lúc bot nhận bài. */
+    public function profile(): BelongsTo
+    {
+        return $this->belongsTo(FacebookProfile::class, 'facebook_profile_id');
     }
 
     public function shortLink(): BelongsTo

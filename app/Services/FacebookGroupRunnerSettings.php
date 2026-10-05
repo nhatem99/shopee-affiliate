@@ -34,9 +34,14 @@ class FacebookGroupRunnerSettings
 
     private const SYNCED_KEY = 'fb_runner_synced_at';
 
+    private const NEXT_REVIEW_KEY = 'fb_runner_next_review_at';
+
+    private const REVIEW_REQUESTED_KEY = 'fb_runner_review_requested_at';
+
     /**
      * Mặc định "thận trọng": một nick cá nhân đăng cùng một link vào nhiều nhóm là đúng kiểu
-     * Facebook bắt spam — mất nick đắt hơn nhiều so với đăng chậm.
+     * Facebook bắt spam — mất nick đắt hơn nhiều so với đăng chậm. max_per_day là trần chung của
+     * mọi page cộng lại; trần riêng từng page nằm ở facebook_profiles.max_per_day.
      */
     public const DEFAULT_CADENCE = [
         'max_per_day' => 10,
@@ -123,11 +128,38 @@ class FacebookGroupRunnerSettings
         Setting::set(self::NEXT_ALLOWED_KEY, $at?->toIso8601String() ?? '');
     }
 
+    /** Lượt kiểm tra duyệt bài kế tiếp được giao từ lúc nào — các lượt cách nhau vài phút. */
+    public function nextReviewAt(): ?CarbonImmutable
+    {
+        $value = Setting::get(self::NEXT_REVIEW_KEY);
+
+        return is_string($value) && $value !== '' ? CarbonImmutable::parse($value) : null;
+    }
+
+    public function setNextReviewAt(?CarbonInterface $at): void
+    {
+        Setting::set(self::NEXT_REVIEW_KEY, $at?->toIso8601String() ?? '');
+    }
+
+    /** Admin bấm "Kiểm tra duyệt bài ngay": nhóm nào chưa kiểm tra từ lúc đó thì kiểm tra luôn. */
+    public function reviewRequestedAt(): ?CarbonImmutable
+    {
+        $value = Setting::get(self::REVIEW_REQUESTED_KEY);
+
+        return is_string($value) && $value !== '' ? CarbonImmutable::parse($value) : null;
+    }
+
+    public function requestReview(): void
+    {
+        Setting::set(self::REVIEW_REQUESTED_KEY, now()->toIso8601String());
+        $this->setNextReviewAt(null);
+    }
+
     /**
      * Mỗi lượt bot hỏi việc là một nhịp "còn sống" — trang admin dựa vào đây để biết bot có
      * đang chạy trên máy nhà không.
      *
-     * @param  array{state?: ?string, version?: ?string, account?: ?string}  $info
+     * @param  array{state?: ?string, version?: ?string, account?: ?string, account_id?: ?string, actor_id?: ?string}  $info
      */
     public function recordRunner(array $info): void
     {
@@ -136,18 +168,21 @@ class FacebookGroupRunnerSettings
             'state' => $info['state'] ?? 'ok',
             'version' => $info['version'] ?? null,
             'account' => $info['account'] ?? null,
+            // uid nick (c_user) và uid page đang mở (i_user, trùng nick nếu không ở page nào).
+            'account_id' => $info['account_id'] ?? null,
+            'actor_id' => $info['actor_id'] ?? null,
         ]));
     }
 
     /**
-     * @return array{last_seen_at: ?string, state: ?string, version: ?string, account: ?string}
+     * @return array{last_seen_at: ?string, state: ?string, version: ?string, account: ?string, account_id: ?string, actor_id: ?string}
      */
     public function runnerStatus(): array
     {
         $stored = json_decode((string) Setting::get(self::STATUS_KEY, '{}'), true);
 
         return array_merge(
-            ['last_seen_at' => null, 'state' => null, 'version' => null, 'account' => null],
+            ['last_seen_at' => null, 'state' => null, 'version' => null, 'account' => null, 'account_id' => null, 'actor_id' => null],
             is_array($stored) ? $stored : [],
         );
     }
@@ -160,6 +195,11 @@ class FacebookGroupRunnerSettings
     public function syncRequested(): bool
     {
         return (string) Setting::get(self::SYNC_REQUESTED_KEY, '') !== '';
+    }
+
+    public function clearSyncRequest(): void
+    {
+        Setting::set(self::SYNC_REQUESTED_KEY, '');
     }
 
     public function markSynced(): void

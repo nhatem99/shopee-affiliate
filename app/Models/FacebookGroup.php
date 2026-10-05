@@ -5,9 +5,10 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
-#[Fillable(['fb_group_key', 'name', 'url', 'enabled', 'source', 'disabled_reason', 'last_seen_at', 'last_attempt_at', 'last_posted_at'])]
+#[Fillable(['fb_group_key', 'name', 'url', 'enabled', 'source', 'disabled_reason', 'last_seen_at', 'last_attempt_at', 'last_posted_at', 'last_checked_at'])]
 class FacebookGroup extends Model
 {
     /**
@@ -27,12 +28,19 @@ class FacebookGroup extends Model
             'last_seen_at' => 'datetime',
             'last_attempt_at' => 'datetime',
             'last_posted_at' => 'datetime',
+            'last_checked_at' => 'datetime',
         ];
     }
 
     public function posts(): HasMany
     {
         return $this->hasMany(FacebookGroupPost::class);
+    }
+
+    /** Các page (kể cả nick chính) đã vào nhóm này — bot chỉ đăng nhóm bằng những page đó. */
+    public function profiles(): BelongsToMany
+    {
+        return $this->belongsToMany(FacebookProfile::class, 'facebook_group_profile')->withPivot('last_seen_at')->withTimestamps();
     }
 
     public function scopeEnabled(Builder $query): Builder

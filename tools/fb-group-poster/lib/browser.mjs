@@ -47,8 +47,16 @@ export async function launch(cfg) {
 
 // uid Facebook của nick đang đăng nhập (cookie c_user) — không có là chưa đăng nhập.
 export async function accountId(context) {
+  return (await identity(context)).accountId;
+}
+
+// accountId: uid nick (c_user). actorId: uid đang dùng để đăng — page (cookie i_user) nếu đã
+// "Chuyển" sang một Trang, không thì chính nick. Chưa đăng nhập thì cả hai null.
+export async function identity(context) {
   const cookies = await context.cookies('https://www.facebook.com');
-  return cookies.find((c) => c.name === 'c_user' && c.value)?.value ?? null;
+  const value = (name) => cookies.find((c) => c.name === name && c.value)?.value ?? null;
+  const account = value('c_user');
+  return { accountId: account, actorId: account ? value('i_user') ?? account : null };
 }
 
 export async function overlayText(page) {

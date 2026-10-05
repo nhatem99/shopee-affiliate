@@ -7,6 +7,7 @@ use App\Models\FacebookGroup;
 use App\Models\FacebookGroupDeal;
 use App\Models\FacebookGroupPost;
 use App\Models\FacebookPostTemplate;
+use App\Models\FacebookProfile;
 use App\Models\Setting;
 use App\Services\FacebookGroupRunnerSettings;
 use App\Services\FacebookPostImages;
@@ -43,13 +44,17 @@ class AdminFacebookGroupsTest extends TestCase
         static $n = 0;
         $n++;
 
-        return FacebookGroup::create(array_merge([
+        $group = FacebookGroup::create(array_merge([
             'fb_group_key' => "g{$n}",
             'name' => "Nhóm {$n}",
             'url' => FacebookGroup::urlFor("g{$n}"),
             'enabled' => true,
             'source' => 'sync',
         ], $attributes));
+        // Nhóm bot lấy về là nhóm nick chính đã vào.
+        $group->profiles()->attach(FacebookProfile::primary());
+
+        return $group;
     }
 
     /** Ảnh "đã tải lên" nằm sẵn trên disk — tên đúng dạng server sinh. */

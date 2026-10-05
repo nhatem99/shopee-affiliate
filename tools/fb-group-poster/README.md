@@ -1,7 +1,8 @@
 # Bot đăng deal vào nhóm Facebook — bản chạy trên điện thoại
 
 Bản Node của bot ở `deploy/fb-group-runner` (bản Python cho Mac). Hai bản nói chuyện với server
-giống hệt nhau, chỉ **chạy một bản một lúc**.
+giống nhau, chỉ **chạy một bản một lúc** — riêng việc kiểm tra bài có được duyệt không (bên dưới)
+chỉ bản Node từ 1.2.0 làm, đăng bằng nhiều page chỉ bản Node từ 1.3.0 làm.
 
 Bot chạy trên **điện thoại Android (Termux)**, dùng wifi nhà. Không chạy trên VPS: Facebook nhận
 ra IP trung tâm dữ liệu và bắt xác minh/khoá nick.
@@ -11,8 +12,8 @@ Facebook. Cứ 1–2 phút bot hỏi server "có bài nào cần đăng không";
 kết quả. Giờ giấc, số bài/ngày, khoảng nghỉ đều do server quyết — chỉnh ở `/admin/fb-groups`.
 
 > ⚠️ Facebook không cho phép tự động đăng bài. Nick có thể bị bắt xác minh hoặc khoá nếu đăng dày.
-> Khi thấy Facebook bắt xác minh, đăng xuất nick hoặc "tạm thời bị chặn", server tự **tạm dừng**
-> và báo qua Zalo.
+> Khi thấy Facebook bắt xác minh hoặc đăng xuất nick, server tự **tạm dừng** cả bot; khi một page
+> bị "tạm thời bị chặn", chỉ page đó **nghỉ**, page sau đăng tiếp. Cả hai đều báo qua Zalo.
 
 ## Cài đặt (một lần)
 
@@ -88,6 +89,45 @@ Bài soạn ở /admin/fb-posts có thể kèm tới 5 ảnh (ảnh sản phẩm
 "bài tự soạn" không link. Ảnh tự tải lên chỉ bot từ bản 1.1.0 đăng được — bot cũ hơn được server
 cho qua những bài đó (trang admin báo "đang chờ"), nên nhớ `git pull` rồi chạy lại bot.
 
+## 3b. Thử đọc "Nội dung của bạn" của một nhóm
+
+Từ bản 1.2.0, lúc rảnh bot tự mở "Nội dung của bạn" trong nhóm (Đang chờ / Đã đăng / Bị từ chối / Đã
+gỡ) để biết bài đã đăng có được admin nhóm duyệt không. Thử tay trên một nhóm — chỉ đọc, không gọi
+server:
+
+```bash
+node poster.mjs review --group https://www.facebook.com/groups/<id-nhom-test>
+node poster.mjs review --group https://www.facebook.com/groups/<id-nhom-test> --text "đoạn đầu bài đã đăng"
+```
+
+Mỗi tab in ra: mở được không, các bài thấy được (kèm link nếu có). Có `--text` thì in thêm bài đó
+nằm ở tab nào. Tab nào báo "KHÔNG mở được" mà trên Facebook vẫn có tab đó: mở tab bằng tay, chép
+đường dẫn trên thanh địa chỉ gửi cho người sửa code (đường dẫn các tab nằm ở
+`FacebookGroupReviewChecker::TABS` phía server và `lib/review.mjs`).
+
+## 3c. Đăng bằng nhiều page
+
+Từ bản 1.3.0, ngoài nick chính bot đăng được bằng các Trang (fanpage) mà nick đang quản trị. Thêm
+Trang ở mục **Page đăng bài** trên `/admin/fb-groups`. Các page đăng lần lượt theo thứ tự: page trên
+đăng đủ số bài/ngày của nó rồi mới tới page dưới. Trước mỗi bài bot chuyển sang đúng page bằng cách
+mở trang của page rồi bấm **Chuyển ngay** (như bấm tay). Muốn về nick chính thì bot bỏ cookie
+`i_user`. Trang phải tự tham gia từng nhóm, và nhóm phải cho Trang tham gia. Thêm page xong, bot tự
+lấy danh sách nhóm của page đó.
+
+Thử tay trước khi cho bot chạy thật. **Tắt bot chạy nền trước** (xem cuối mục 4): hai bot cùng
+điều khiển một Chromium sẽ giẫm chân nhau.
+
+```bash
+node poster.mjs whoami
+node poster.mjs switch --to https://www.facebook.com/profile.php?id=<uid-page>
+node poster.mjs whoami
+node poster.mjs switch --to primary
+```
+
+`switch` in ra những cookie bị đổi sau khi chuyển. Không chuyển được thì gửi các dòng nó in ra (kèm
+ảnh màn hình Termux:X11) cho người sửa code. Chữ trên nút nằm ở `SWITCH_BUTTON` trong `lib/ui.mjs`,
+cách nhận ra page đang dùng nằm ở `identity()` trong `lib/browser.mjs`.
+
 ## 4. Chạy
 
 Chạy tay (Ctrl+C để dừng):
@@ -108,8 +148,13 @@ Script giữ máy thức (`termux-wake-lock`), mở Chromium, chạy bot, bot t�
 Trong cài đặt Android của Xiaomi, với **Termux**, **Termux:X11**, **Termux:Boot**: bật *Tự khởi
 động*, chọn *Không hạn chế* ở Tiết kiệm pin. Không làm thì MIUI sẽ tắt bot khi tắt màn hình.
 
-- **Lấy danh sách nhóm:** bấm **Lấy nhóm đã tham gia** ở `/admin/fb-groups` (hoặc `node poster.mjs sync`).
+- **Lấy danh sách nhóm:** bấm **Lấy nhóm đã tham gia** ở `/admin/fb-groups`. Bot lần lượt chuyển
+  sang từng page đang bật để lấy nhóm của page đó. `node poster.mjs sync` chỉ lấy nhóm của page
+  đang mở.
 - **Bật nhóm:** nhóm lấy về đều đang tắt — tự tích nhóm được đăng, đọc nội quy nhóm trước.
+- **Bài có được duyệt không:** bot tự kiểm tra khoảng 1 giờ sau khi đăng, lúc rảnh và trong khung
+  giờ đăng; kết quả hiện ở `/admin/fb-posts` (từng bài) và cột **Duyệt** ở `/admin/fb-groups` (từng
+  nhóm). Muốn kiểm tra ngay: nút **Kiểm tra duyệt bài ngay** ở `/admin/fb-groups`.
 - **Theo dõi:** `/admin/fb-posts`. Nhật ký: `~/.local/share/tietkiemvi-fb-runner/logs/`. Ảnh chụp
   màn hình khi lỗi: `~/.local/share/tietkiemvi-fb-runner/screenshots/`.
 
@@ -120,7 +165,8 @@ Tắt bot chạy nền: `pkill -f boot/fb-poster.sh` trước, rồi `pkill -f "
 | Thấy gì | Làm gì |
 |---|---|
 | Admin báo bot **tạm dừng** vì xác minh / đăng xuất | Mở Termux:X11, xác minh hoặc đăng nhập lại, rồi bấm **Chạy tiếp** ở `/admin/fb-groups`. |
-| Tạm dừng vì Facebook **tạm chặn đăng bài** | Đừng chạy tiếp ngay. Để nick nghỉ 1–2 ngày, giảm số bài/ngày, nới khoảng nghỉ. |
+| Một page **đang nghỉ** vì Facebook tạm chặn đăng bài | Bot đã tự chuyển sang page sau. Để page đó nghỉ 1–2 ngày, giảm số bài/ngày của nó rồi mới bấm **Mở lại**. |
+| Một page **đang nghỉ** vì "Bot không chuyển được sang page này" | Mở Termux:X11 xem trang của page còn nút **Chuyển ngay** không, nick còn quản trị page không. Thử `node poster.mjs switch --to <link page>` (mục 3c), sửa xong bấm **Mở lại**. |
 | Bài **"Không rõ — xem nhóm"** | Bot đã bấm Đăng nhưng không xác nhận được. Mở nhóm xem; chỉ **Đăng lại** khi chắc chắn bài chưa lên. |
 | `Server từ chối token (403)` | Token đã bị tạo lại — dán token mới vào `config.json`. |
 | `Chromium không mở được cổng 9222` | Xem `~/.local/share/tietkiemvi-fb-runner/chromium.log`; mở app Termux:X11 một lần rồi chạy lại. |

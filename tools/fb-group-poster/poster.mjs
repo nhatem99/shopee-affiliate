@@ -7,17 +7,24 @@
 //   node poster.mjs check                 kiểm tra kết nối server + trình duyệt + đã đăng nhập chưa
 //   node poster.mjs dry-run --group URL   thử trên một nhóm: điền hết nhưng KHÔNG bấm Đăng
 //                                         (thêm --image <ảnh> tối đa 5 lần để thử kèm ảnh)
+//   node poster.mjs review --group URL    xem "Nội dung của bạn" của một nhóm bot đọc được gì
+//                                         (thêm --text "đoạn đầu bài" để xem bài đó nằm ở tab nào)
+//   node poster.mjs whoami                đang dùng nick chính hay page nào
+//   node poster.mjs switch --to LINK      thử chuyển sang một page (link trang hoặc uid), --to primary
+//                                         để về nick chính — không gọi server
 import fs from 'node:fs';
 import path from 'node:path';
 import readline from 'node:readline/promises';
 import { parseArgs } from 'node:util';
 
 import { Api, ApiError, AuthError, errorText } from './lib/api.mjs';
-import { accountId, launch } from './lib/browser.mjs';
+import { accountId, identity, launch } from './lib/browser.mjs';
 import * as configModule from './lib/config.mjs';
 import { ScrapeError, scrapeJoinedGroups } from './lib/groups.mjs';
 import { MAX_IMAGES, downloadAsJpeg, fetchAsJpeg, isUpload } from './lib/images.mjs';
-import { postToGroup } from './lib/post.mjs';
+import { GROUP_URL, postToGroup } from './lib/post.mjs';
+import { PROFILE_URL, profileFromInput, switchTo } from './lib/profiles.mjs';
+import { fingerprint, scanTabs, tabUrls } from './lib/review.mjs';
 import { State } from './lib/state.mjs';
 
 let logFile = null;
@@ -38,7 +45,11 @@ function log(message) {
   if (logFile) fs.appendFileSync(logFile, `${line}\n`);
 }
 
-const accountLabel = (uid) => (uid ? `uid ${uid}` : null);
+const accountLabel = (uid, actor = uid) => (uid ? `uid ${uid}${actor && actor !== uid ? ` · page ${actor}` : ''}` : null);
+
+// Facebook bắt xác minh/chặn lúc kiểm tra duyệt bài hay lấy nhóm — báo ở lượt hỏi việc kế tiếp để
+// server cho page đang mở nghỉ (hoặc dừng cả bot) và báo admin. Lượt đăng bài thì báo qua kết quả bài.
+let pendingState = null;
 
 // Một lượt (hỏi việc + đăng + báo kết quả) bình thường dưới 5 phút; lấy nhóm nhiều thì lâu hơn.
 const TICK_LIMIT_MS = (Number(process.env.FB_TICK_LIMIT_SECONDS) || 15 * 60) * 1000;
@@ -128,27 +139,124 @@ async function cmdDryRun(cfg, group, caption, images) {
   return result.status === 'dry_run' ? 0 : 1;
 }
 
+// ── review ───────────────────────────────────────────────────────────────────
+
+const TAB_NAMES = { pending: 'Đang chờ', published: 'Đã đăng', declined: 'Bị từ chối', removed: 'Đã gỡ' };
+
+// Chạy tay, không gọi server: in ra những gì bot đọc được ở từng tab — để thử khi Facebook đổi
+// giao diện hoặc đường dẫn các tab.
+async function cmdReview(cfg, group, text) {
+  const snippet = text ? [...fingerprint(text)].slice(0, 30).join('') : null;
+  const browser = await launch(cfg);
+  let opened = 0;
+  try {
+    const tabs = await scanTabs(browser.page, tabUrls(group));
+    for (const [state, tab] of Object.entries(tabs)) {
+      const name = TAB_NAMES[state] || state;
+      if (!tab.ok) {
+        log(`[${name}] KHÔNG mở được: ${tab.error}`);
+        continue;
+      }
+      opened++;
+      const posts = tab.items.filter((item) => !item.page);
+      log(`[${name}] mở được — ${posts.length} bài dạng thẻ${posts.length ? '' : ' (server sẽ dò trong cả khối chữ của trang)'}`);
+      for (const item of posts) log(`    • ${item.text.split(/\s+/).join(' ').slice(0, 100)}${item.url ? `  ${item.url}` : ''}`);
+      if (snippet) {
+        const hit = tab.items.some((item) => fingerprint(item.text).includes(snippet));
+        log(hit ? '    → THẤY bài có đoạn đầu này ở tab này' : '    → không thấy bài có đoạn đầu này');
+      }
+    }
+  } finally {
+    await browser.close();
+  }
+  return opened ? 0 : 1;
+}
+
+// ── whoami / switch ──────────────────────────────────────────────────────────
+
+async function cmdWhoami(cfg) {
+  const browser = await launch(cfg);
+  try {
+    const { accountId: uid, actorId } = await identity(browser.context);
+    if (!uid) log('Chưa đăng nhập Facebook — chạy: node poster.mjs login');
+    else log(actorId === uid ? `Đang dùng nick chính (uid ${uid}).` : `Nick uid ${uid}, đang dùng page uid ${actorId}.`);
+    return uid ? 0 : 1;
+  } finally {
+    await browser.close();
+  }
+}
+
+// Chạy tay để thử chuyển page trên Facebook thật. In thêm cookie nào đổi sau khi chuyển — nếu
+// Facebook thôi dùng i_user thì nhìn đây biết phải sửa gì ở lib/browser.mjs.
+async function cmdSwitch(cfg, to) {
+  const browser = await launch(cfg);
+  try {
+    const snapshot = async () => new Map((await browser.context.cookies('https://www.facebook.com')).map((c) => [c.name, c.value]));
+    const before = await snapshot();
+    const result = await switchTo(browser, profileFromInput(to), { log });
+    const after = await snapshot();
+    const changed = [...new Set([...before.keys(), ...after.keys()])].filter((name) => before.get(name) !== after.get(name));
+    log(`Cookie đổi: ${changed.length ? changed.join(', ') : '(không)'}`);
+    if (!result.ok) {
+      log(`KHÔNG chuyển được: ${result.error}`);
+      return 1;
+    }
+    log(`Đã chuyển — đang dùng uid ${result.actorId}.`);
+    return 0;
+  } finally {
+    await browser.close();
+  }
+}
+
 // ── sync ─────────────────────────────────────────────────────────────────────
 
-async function syncGroups(api, browser) {
-  const uid = await accountId(browser.context);
-  if (!uid) {
+// profiles: server (từ 1.3.0) giao danh sách page — lần lượt chuyển sang từng page, lấy nhóm của
+// page đó. Không có (server cũ, lệnh sync chạy tay) thì lấy nhóm của page đang mở.
+async function syncGroups(api, browser, profiles = null) {
+  const who = await identity(browser.context);
+  if (!who.accountId) {
     log('Chưa đăng nhập Facebook — không lấy được nhóm.');
     return;
   }
+  if (!profiles?.length) {
+    await syncOne(api, browser, who, null);
+    return;
+  }
+  for (const profile of profiles) {
+    const switched = await switchTo(browser, profile, { log });
+    if (!switched.ok) {
+      log(`Bỏ qua ${profile.name}: ${switched.error}`);
+      if (['checkpoint', 'blocked'].includes(switched.status)) {
+        pendingState = switched.status;
+        return;
+      }
+      continue;
+    }
+    log(`Lấy nhóm của ${profile.name}.`);
+    if (!(await syncOne(api, browser, { accountId: who.accountId, actorId: switched.actorId }, profile))) return;
+  }
+}
+
+// false = Facebook chặn/bắt xác minh — đừng lấy tiếp các page sau.
+async function syncOne(api, browser, who, profile) {
   let groups;
   try {
     groups = await scrapeJoinedGroups(browser.page, { log });
   } catch (error) {
     if (error instanceof ScrapeError) {
       log(`Không lấy được nhóm: ${error.message}`);
-      return;
+      if (['checkpoint', 'blocked'].includes(error.status)) {
+        pendingState = error.status;
+        return false;
+      }
+      return true;
     }
     throw error;
   }
   if (!groups.length) log('Không thấy nhóm nào trên trang Nhóm của bạn — có thể Facebook đổi giao diện.');
-  const result = await api.uploadGroups(groups, accountLabel(uid));
+  const result = await api.uploadGroups(groups, accountLabel(who.accountId, who.actorId), { profileId: profile?.id ?? null, ...who });
   log(`Đã gửi ${groups.length} nhóm lên server: thêm mới ${result.created}, cập nhật ${result.updated}.`);
+  return true;
 }
 
 async function cmdSync(cfg) {
@@ -185,7 +293,18 @@ async function flushUnreported(api, state) {
 async function doPost(api, state, cfg, browser, job) {
   const { post_id: postId, claim_key: claimKey } = job;
   state.start(postId, claimKey);
-  log(`Đăng bài #${postId} vào nhóm ${job.group_name || job.group_url}`);
+  log(`Đăng bài #${postId} vào nhóm ${job.group_name || job.group_url}${job.profile ? ` bằng ${job.profile.name}` : ''}`);
+
+  // Server từ 1.3.0 giao kèm page phải dùng. Chưa mở nhóm nên hỏng ở đây chưa có gì lên Facebook.
+  let actorId = null;
+  if (job.profile) {
+    const switched = await switchTo(browser, job.profile, { log });
+    if (!switched.ok) {
+      await finishPost(api, state, cfg, browser, postId, claimKey, { status: switched.status || 'switch_failed', error: switched.error }, null);
+      return;
+    }
+    actorId = switched.actorId;
+  }
 
   // Server cũ chỉ gửi image_url; server mới gửi "images" (ảnh sản phẩm + ảnh admin tự tải lên).
   const refs = Array.isArray(job.images) ? job.images : job.image_url ? [job.image_url] : [];
@@ -218,6 +337,10 @@ async function doPost(api, state, cfg, browser, job) {
     for (const file of imagePaths) fs.rmSync(file, { force: true });
   }
 
+  await finishPost(api, state, cfg, browser, postId, claimKey, result, actorId);
+}
+
+async function finishPost(api, state, cfg, browser, postId, claimKey, result, actorId) {
   if (result.status !== 'posted') {
     const shot = path.join(cfg.dataDir, 'screenshots', `post-${postId}-${stamp().replace(/\D/g, '')}.png`);
     try {
@@ -231,9 +354,34 @@ async function doPost(api, state, cfg, browser, job) {
 
   state.finish(result.status, result.error);
   log(`Kết quả bài #${postId}: ${result.status}${result.error ? ` — ${result.error}` : ''}`);
-  await api.report(postId, claimKey, result.status, result.error);
+  await api.report(postId, claimKey, result.status, result.error, actorId);
   state.clear();
   state.newClaimKey();
+}
+
+async function doReview(api, browser, job) {
+  log(`Kiểm tra bài đã đăng ở nhóm ${job.group_name || job.group_url}${job.profile ? ` (bài của ${job.profile.name})` : ''}`);
+  // "Nội dung của bạn" là bài của page đang mở — phải xem bằng đúng page đã đăng.
+  if (job.profile) {
+    const switched = await switchTo(browser, job.profile, { log });
+    if (!switched.ok) {
+      log(`Bỏ qua lượt kiểm tra: ${switched.error}`);
+      if (['checkpoint', 'blocked'].includes(switched.status)) pendingState = switched.status;
+      return;
+    }
+  }
+  const tabs = await scanTabs(browser.page, job.tabs || {});
+  const issue = Object.values(tabs).find((tab) => tab.issue);
+  if (issue) {
+    pendingState = issue.issue;
+    log(`Facebook báo: ${issue.error}`);
+  }
+  for (const [state, tab] of Object.entries(tabs)) {
+    if (!tab.ok) log(`  Tab ${TAB_NAMES[state] || state} không mở được: ${tab.error}`);
+  }
+  const payload = Object.fromEntries(Object.entries(tabs).map(([state, tab]) => [state, { ok: tab.ok, error: tab.error, items: tab.items }]));
+  const summary = await api.reportReview(job.group_id, payload, job.profile?.id ?? null);
+  log(`Kết quả kiểm tra: thấy ${summary.found}/${summary.checked} bài trong "Nội dung của bạn".`);
 }
 
 // Vì sao server chưa giao bài (reason trong FacebookGroupPostScheduler::poll/blockingReason).
@@ -245,6 +393,8 @@ const IDLE_REASONS = {
   paused: 'Server đang TẠM DỪNG bot — xem lý do và bấm "Chạy tiếp" ở /admin/fb-groups.',
   busy: 'Server còn chờ kết quả một bài khác.',
   preparing: 'Server đang chuẩn bị bài (tạo link mua)...',
+  no_profile: 'Chưa bật page nào để đăng — bật ở mục "Page đăng bài" trên /admin/fb-groups.',
+  all_blocked: 'Mọi page đều đang nghỉ vì Facebook chặn — bấm "Mở lại" ở /admin/fb-groups khi hết chặn.',
 };
 let lastIdle = null;
 
@@ -259,18 +409,25 @@ function logIdle(reason) {
 async function tick(api, state, cfg, browser) {
   await flushUnreported(api, state);
 
-  const uid = await accountId(browser.context);
-  const job = await api.poll(state.claimKey, uid ? 'ok' : 'logged_out', accountLabel(uid));
+  const who = await identity(browser.context);
+  const uid = who.accountId;
+  const job = await api.poll(state.claimKey, pendingState ?? (uid ? 'ok' : 'logged_out'), accountLabel(uid, who.actorId), who);
+  pendingState = null;
 
   if (job.type === 'post') {
     lastIdle = null;
     await doPost(api, state, cfg, browser, job);
     return rand(20, 40);
   }
+  if (job.type === 'review_group') {
+    lastIdle = null;
+    await doReview(api, browser, job);
+    return rand(20, 40);
+  }
   if (job.type === 'sync_groups') {
     lastIdle = null;
     log('Server yêu cầu lấy danh sách nhóm.');
-    await syncGroups(api, browser);
+    await syncGroups(api, browser, job.profiles);
     return 20;
   }
 
@@ -363,15 +520,21 @@ async function main() {
       group: { type: 'string' },
       caption: { type: 'string', default: 'Bài thử (không đăng)\nDòng 2\nhttps://shopee.vn' },
       image: { type: 'string', multiple: true, default: [] },
+      text: { type: 'string' },
+      to: { type: 'string' },
     },
   });
 
-  if (!['login', 'run', 'sync', 'check', 'dry-run'].includes(command)) {
-    console.error('Dùng: node poster.mjs <login|run|sync|check|dry-run --group URL>');
+  if (!['login', 'run', 'sync', 'check', 'dry-run', 'review', 'whoami', 'switch'].includes(command)) {
+    console.error('Dùng: node poster.mjs <login|run|sync|check|whoami|dry-run --group URL|review --group URL|switch --to LINK>');
     return 1;
   }
-  if (command === 'dry-run' && !values.group) {
-    console.error('dry-run cần --group https://www.facebook.com/groups/...');
+  if (command === 'switch' && values.to !== 'primary' && !PROFILE_URL.test(profileFromInput(values.to || '').url || '')) {
+    console.error('switch cần --to https://www.facebook.com/profile.php?id=... (hoặc uid, hoặc tên rút gọn của page), hoặc --to primary');
+    return 1;
+  }
+  if (['dry-run', 'review'].includes(command) && !GROUP_URL.test(values.group || '')) {
+    console.error(`${command} cần --group https://www.facebook.com/groups/...`);
     return 1;
   }
 
@@ -389,6 +552,9 @@ async function main() {
   if (command === 'login') return cmdLogin(cfg);
   if (command === 'check') return cmdCheck(cfg);
   if (command === 'dry-run') return cmdDryRun(cfg, values.group, values.caption, values.image);
+  if (command === 'review') return cmdReview(cfg, values.group, values.text);
+  if (command === 'whoami') return cmdWhoami(cfg);
+  if (command === 'switch') return cmdSwitch(cfg, values.to);
   if (command === 'sync') return cmdSync(cfg);
   return cmdRun(cfg);
 }
