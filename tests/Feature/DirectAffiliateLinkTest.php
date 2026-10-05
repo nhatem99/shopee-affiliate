@@ -5,6 +5,7 @@ namespace Tests\Feature;
 use App\Models\FacebookGroup;
 use App\Models\FacebookGroupDeal;
 use App\Models\FacebookGroupPost;
+use App\Models\FacebookProfile;
 use App\Models\Setting;
 use App\Models\ShortLink;
 use App\Services\DirectAffiliateLinkService;
@@ -65,13 +66,17 @@ class DirectAffiliateLinkTest extends TestCase
 
     private function group(): FacebookGroup
     {
-        return FacebookGroup::create([
+        $group = FacebookGroup::create([
             'fb_group_key' => 'g1',
             'name' => 'Nhóm 1',
             'url' => FacebookGroup::urlFor('g1'),
             'enabled' => true,
             'source' => 'sync',
         ]);
+        // Nhóm bot lấy về là nhóm nick chính đã vào.
+        $group->profiles()->attach(FacebookProfile::primary());
+
+        return $group;
     }
 
     public function test_switch_is_off_by_default_and_saved_from_settings(): void

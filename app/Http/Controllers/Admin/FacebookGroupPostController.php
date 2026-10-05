@@ -43,7 +43,7 @@ class FacebookGroupPostController extends Controller
 
     public function index(): Response
     {
-        $deals = FacebookGroupDeal::with(['posts.group:id,name,url'])->latest('id')->limit(30)->get();
+        $deals = FacebookGroupDeal::with(['posts.group:id,name,url', 'posts.profile:id,name,is_primary'])->latest('id')->limit(30)->get();
 
         // Một link mua có thể dùng chung cho nhiều nhóm (ShortLinkService tái dùng link cùng
         // đích) — cộng lượt bấm theo link riêng biệt của từng bài deal, không theo từng nhóm.
@@ -80,6 +80,7 @@ class FacebookGroupPostController extends Controller
                     'status' => $post->status,
                     'group_name' => $post->group?->name,
                     'group_url' => $post->group?->url,
+                    'profile_name' => $post->profile?->label(),
                     'claimed_at' => $post->claimed_at,
                     'finished_at' => $post->finished_at,
                     'link_kind' => $post->link_kind,
@@ -236,7 +237,7 @@ class FacebookGroupPostController extends Controller
         // Trang chọn nhóm đã khoá nhóm chưa tới giờ — chặn thêm ở đây phòng trang mở đã lâu.
         $readiness = $this->scheduler->groupReadiness(FacebookGroup::whereKey($groupIds)->get(['id', 'last_attempt_at']));
         if (collect($readiness)->contains('ready', false)) {
-            return back()->withErrors(['group_ids' => 'Có nhóm chưa tới giờ đăng hoặc đã có bài đang chờ — tải lại trang rồi chọn lại.']);
+            return back()->withErrors(['group_ids' => 'Có nhóm chưa tới giờ đăng, đã có bài đang chờ hoặc chưa page nào vào — tải lại trang rồi chọn lại.']);
         }
 
         DB::transaction(function () use ($data, $custom, $product, $withProductImage, $uploads, $groupIds, $request) {
@@ -286,6 +287,8 @@ class FacebookGroupPostController extends Controller
         $facebookGroupPost->forceFill([
             'status' => FacebookGroupPost::PENDING,
             'queued_at' => now(),
+            // Page nhận lại lúc bot nhận bài — có thể khác page lần trước (vd page đó đang bị chặn).
+            'facebook_profile_id' => null,
             'claim_key' => null,
             'claimed_at' => null,
             'finished_at' => null,

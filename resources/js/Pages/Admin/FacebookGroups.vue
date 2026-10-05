@@ -21,6 +21,10 @@ const props = defineProps({
     // { supported, min_version, requested_at } — kiểm tra duyệt bài cần bot đủ mới.
     review: Object,
     baseUrl: String,
+    // Page đăng bài theo thứ tự — xem FacebookGroupController::index.
+    profiles: Array,
+    profilesSupported: Boolean,
+    profilesMinVersion: String,
     groups: Array,
 })
 
@@ -38,7 +42,7 @@ function fmt(iso) {
 // Trang tự tải lại trạng thái mỗi 30 giây — bot hỏi việc 1-2 phút/lần, nhìn trang là biết nó còn chạy.
 let timer = null
 onMounted(() => {
-    timer = setInterval(() => router.reload({ only: ['runner', 'paused', 'pausedReason', 'blocking', 'today', 'syncRequested', 'lastSyncedAt', 'review', 'groups'] }), 30000)
+    timer = setInterval(() => router.reload({ only: ['runner', 'paused', 'pausedReason', 'blocking', 'today', 'syncRequested', 'lastSyncedAt', 'review', 'profiles', 'profilesSupported', 'groups'] }), 30000)
 })
 onBeforeUnmount(() => clearInterval(timer))
 
@@ -48,7 +52,9 @@ const blockingText = computed(() => {
     switch (b.reason) {
         case 'paused': return 'Đang tạm dừng.'
         case 'outside_window': return `Ngoài khung giờ đăng — đăng tiếp lúc ${fmt(b.until)}.`
-        case 'daily_cap': return `Đã đủ ${props.cadence.max_per_day} bài hôm nay — đăng tiếp lúc ${fmt(b.until)}.`
+        case 'daily_cap': return `Các page đã đủ bài hôm nay — đăng tiếp lúc ${fmt(b.until)}.`
+        case 'no_profile': return 'Chưa bật page nào để đăng.'
+        case 'all_blocked': return 'Mọi page đang nghỉ vì Facebook chặn — bấm "Mở lại" khi hết chặn.'
         case 'gap': return `Đang nghỉ giữa hai bài — bài kế tiếp sau ${fmt(b.until)}.`
         default: return b.reason
     }
@@ -67,6 +73,50 @@ function setPaused(paused) {
 
 function clearWait() {
     router.post('/admin/fb-groups/clear-wait', {}, { preserveScroll: true, onSuccess: flashToast })
+}
+
+// ── Page đăng bài ───────────────────────────────────────────────────────────
+const actingProfile = computed(() => props.profiles.find(p => p.acting))
+const profileLabels = computed(() => Object.fromEntries(props.profiles.map(p => [p.id, p.label])))
+
+function profileState(p) {
+    if (!p.enabled) return ['Tắt', 'text-[var(--color-muted)]']
+    if (p.blocked_at) return [`Đang nghỉ từ ${fmt(p.blocked_at)}`, 'font-semibold text-red-500']
+    if (p.next) return ['Tới lượt đăng', 'font-semibold text-green-600']
+    if (p.used_today >= p.max_per_day) return ['Đủ bài hôm nay', 'text-[var(--color-muted)]']
+    return ['Chờ tới lượt', 'text-[var(--color-muted)]']
+}
+
+function updateProfile(p, data) {
+    router.patch(`/admin/fb-groups/profiles/${p.id}`, data, { preserveScroll: true })
+}
+
+function setProfileCap(p, event) {
+    const value = Number(event.target.value)
+    if (value >= 1 && value !== p.max_per_day) updateProfile(p, { max_per_day: value })
+}
+
+function moveProfile(p, direction) {
+    router.post(`/admin/fb-groups/profiles/${p.id}/move`, { direction }, { preserveScroll: true })
+}
+
+function unblockProfile(p) {
+    if (!confirm(`Facebook chặn "${p.label}" lúc ${fmt(p.blocked_at)}. Đã để page nghỉ đủ (1–2 ngày) chưa? Mở lại thì bot đăng bằng page này ngay khi tới lượt.`)) return
+    router.post(`/admin/fb-groups/profiles/${p.id}/unblock`, {}, { preserveScroll: true, onSuccess: flashToast })
+}
+
+function removeProfile(p) {
+    if (!confirm(`Xoá "${p.label}" khỏi danh sách page đăng bài?`)) return
+    router.delete(`/admin/fb-groups/profiles/${p.id}`, { preserveScroll: true, onSuccess: flashToast })
+}
+
+const profileForm = useForm({ url: '', name: '', max_per_day: 20 })
+
+function addProfile() {
+    profileForm.post('/admin/fb-groups/profiles', {
+        preserveScroll: true,
+        onSuccess: () => { profileForm.reset(); flashToast() },
+    })
 }
 
 // ── Token ───────────────────────────────────────────────────────────────────
@@ -179,10 +229,11 @@ const enabledCount = computed(() => props.groups.filter(g => g.enabled).length)
                     <span class="text-xs text-[var(--color-muted)] ml-1">(lần cuối {{ fmt(runner.last_seen_at) }})</span>
                 </li>
                 <li v-if="runner.account">Nick: <span class="font-semibold">{{ runner.account }}</span></li>
+                <li v-if="actingProfile">Đang mở: <span class="font-semibold">{{ actingProfile.label }}</span></li>
                 <li v-if="runner.state && runner.state !== 'ok'">
                     Trạng thái bot báo: <span class="font-semibold text-red-500">{{ stateText[runner.state] || runner.state }}</span>
                 </li>
-                <li>Hôm nay: <span class="font-semibold">{{ today.used }}/{{ cadence.max_per_day }}</span> bài · đang chờ: <span class="font-semibold">{{ today.pending }}</span></li>
+                <li>Hôm nay: <span class="font-semibold">{{ today.used }}/{{ cadence.max_per_day }}</span> bài (mọi page) · đang chờ: <span class="font-semibold">{{ today.pending }}</span></li>
                 <li>Lúc này: <span class="font-semibold">{{ blockingText }}</span></li>
             </ul>
 
@@ -202,9 +253,89 @@ const enabledCount = computed(() => props.groups.filter(g => g.enabled).length)
             </div>
         </section>
 
-        <!-- 2. Token -->
+        <!-- 2. Page đăng bài -->
         <section class="bg-[var(--color-surface)] rounded-2xl border border-[var(--color-line)] p-5 mb-5">
-            <h2 class="font-extrabold text-[var(--color-ink)] mb-1">2. Token cho bot</h2>
+            <h2 class="font-extrabold text-[var(--color-ink)] mb-1">2. Page đăng bài</h2>
+            <p class="text-sm text-[var(--color-muted)] mb-3">
+                Bot đăng lần lượt: page trên cùng đăng đủ số bài/ngày của nó rồi mới tới page dưới. Page bị Facebook chặn thì chỉ page đó nghỉ,
+                page sau đăng tiếp. Thêm Trang mà nick chính đang quản trị — bot tự bấm "Chuyển ngay" để đăng bằng Trang. Trang phải tự
+                tham gia từng nhóm (nhóm phải cho Trang tham gia); thêm page xong bot tự lấy danh sách nhóm của page.
+            </p>
+            <p v-if="!profilesSupported" class="text-xs text-amber-600 mb-3">
+                Bot đang chạy bản {{ runner.version || 'cũ' }} — từ bản {{ profilesMinVersion }} bot mới chuyển page được, bản cũ chỉ đăng bằng nick chính.
+                Cập nhật bot (<span class="font-mono">git pull</span> trên điện thoại rồi chạy lại bot).
+            </p>
+
+            <div class="overflow-x-auto rounded-xl border border-[var(--color-line)] mb-4">
+                <table class="w-full text-sm">
+                    <thead class="bg-[var(--color-peach-soft)]">
+                        <tr class="text-left text-xs text-[var(--color-muted)]">
+                            <th class="px-4 py-2.5 font-semibold">Thứ tự</th>
+                            <th class="px-4 py-2.5 font-semibold">Page</th>
+                            <th class="px-4 py-2.5 font-semibold">Hôm nay / tối đa</th>
+                            <th class="px-4 py-2.5 font-semibold">Nhóm</th>
+                            <th class="px-4 py-2.5 font-semibold">Trạng thái</th>
+                            <th class="px-4 py-2.5 font-semibold"></th>
+                        </tr>
+                    </thead>
+                    <tbody class="divide-y divide-[var(--color-line)]">
+                        <tr v-for="(p, i) in profiles" :key="p.id" :class="p.enabled ? '' : 'opacity-70'">
+                            <td class="px-4 py-2.5 whitespace-nowrap">
+                                <span class="font-semibold mr-1">{{ i + 1 }}</span>
+                                <button @click="moveProfile(p, 'up')" :disabled="i === 0" class="px-1.5 text-[var(--color-accent)] disabled:opacity-30" title="Lên trên">↑</button>
+                                <button @click="moveProfile(p, 'down')" :disabled="i === profiles.length - 1" class="px-1.5 text-[var(--color-accent)] disabled:opacity-30" title="Xuống dưới">↓</button>
+                            </td>
+                            <td class="px-4 py-2.5">
+                                <a v-if="p.url" :href="p.url" target="_blank" rel="noopener" class="font-semibold text-[var(--color-ink)] hover:underline">{{ p.label }}</a>
+                                <span v-else class="font-semibold text-[var(--color-ink)]">{{ p.label }}</span>
+                                <span v-if="p.is_primary" class="ml-1 text-[10px] uppercase text-[var(--color-muted)]">nick chính</span>
+                                <span v-if="p.acting" class="ml-1 text-[10px] font-semibold px-1.5 py-0.5 rounded bg-green-100 text-green-700">đang mở</span>
+                                <p v-if="p.fb_id" class="text-[11px] text-[var(--color-muted)] font-mono">uid {{ p.fb_id }}</p>
+                            </td>
+                            <td class="px-4 py-2.5 whitespace-nowrap">
+                                <span class="font-semibold">{{ p.used_today }}</span> /
+                                <input type="number" min="1" max="200" :value="p.max_per_day" @change="setProfileCap(p, $event)"
+                                    class="w-16 border border-[var(--color-line)] rounded-lg px-2 py-1 text-sm" />
+                            </td>
+                            <td class="px-4 py-2.5 text-xs whitespace-nowrap">
+                                <span class="font-semibold text-sm">{{ p.groups_count }}</span>
+                                <span class="text-[var(--color-muted)]"> · lấy lúc {{ fmt(p.last_synced_at) }}</span>
+                            </td>
+                            <td class="px-4 py-2.5 text-xs">
+                                <span :class="profileState(p)[1]">{{ profileState(p)[0] }}</span>
+                                <p v-if="p.blocked_reason" class="text-red-500 mt-0.5 max-w-xs">{{ p.blocked_reason }}</p>
+                            </td>
+                            <td class="px-4 py-2.5 text-right whitespace-nowrap space-x-3">
+                                <button v-if="p.blocked_at" @click="unblockProfile(p)" class="text-xs font-semibold text-[var(--color-accent)] hover:underline">Mở lại</button>
+                                <button @click="updateProfile(p, { enabled: !p.enabled })" class="text-xs font-semibold text-[var(--color-accent)] hover:underline">{{ p.enabled ? 'Tắt' : 'Bật' }}</button>
+                                <button v-if="!p.is_primary" @click="removeProfile(p)" class="text-xs font-semibold text-red-500 hover:underline">Xoá</button>
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+
+            <form @submit.prevent="addProfile" class="flex flex-col md:flex-row gap-2">
+                <input v-model="profileForm.url" type="text" required placeholder="Link Trang: https://www.facebook.com/profile.php?id=..."
+                    class="flex-1 border border-[var(--color-line)] rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-[var(--color-accent)]" />
+                <input v-model="profileForm.name" type="text" placeholder="Tên (không bắt buộc)"
+                    class="md:w-48 border border-[var(--color-line)] rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-[var(--color-accent)]" />
+                <label class="flex items-center gap-2 text-xs font-semibold text-[var(--color-ink)] whitespace-nowrap">Bài/ngày
+                    <input v-model.number="profileForm.max_per_day" type="number" min="1" max="200" required
+                        class="w-16 border border-[var(--color-line)] rounded-xl px-2 py-2 text-sm" />
+                </label>
+                <button type="submit" :disabled="profileForm.processing"
+                    class="bg-[var(--color-peach-soft)] hover:bg-[var(--color-peach)] text-[var(--color-ink)] font-semibold px-5 py-2 rounded-xl text-sm transition whitespace-nowrap">
+                    + Thêm page
+                </button>
+            </form>
+            <p v-for="(msg, key) in profileForm.errors" :key="key" class="text-red-500 text-xs mt-2">{{ msg }}</p>
+            <p v-if="errors.profile_url" class="text-red-500 text-xs mt-2">{{ errors.profile_url }}</p>
+        </section>
+
+        <!-- 3. Token -->
+        <section class="bg-[var(--color-surface)] rounded-2xl border border-[var(--color-line)] p-5 mb-5">
+            <h2 class="font-extrabold text-[var(--color-ink)] mb-1">3. Token cho bot</h2>
             <p class="text-sm text-[var(--color-muted)] mb-3">
                 Bot dùng token này để nhận bài. Ai có token là khiến được nick Facebook của bạn đăng bài — chỉ dán vào máy chạy bot.
                 <span v-if="tokenTail">Token hiện tại kết thúc bằng <span class="font-mono font-semibold text-[var(--color-ink)]">…{{ tokenTail }}</span>.</span>
@@ -225,16 +356,16 @@ const enabledCount = computed(() => props.groups.filter(g => g.enabled).length)
             </button>
         </section>
 
-        <!-- 3. Nhịp đăng -->
+        <!-- 4. Nhịp đăng -->
         <section class="bg-[var(--color-surface)] rounded-2xl border border-[var(--color-line)] p-5 mb-5">
-            <h2 class="font-extrabold text-[var(--color-ink)] mb-1">3. Nhịp đăng</h2>
+            <h2 class="font-extrabold text-[var(--color-ink)] mb-1">4. Nhịp đăng</h2>
             <p class="text-sm text-[var(--color-muted)] mb-4">
                 Giờ Việt Nam. Khoảng nghỉ ngắn thì cả ngày bài dồn hết vào đầu buổi sáng — muốn rải đều thì nới khoảng nghỉ (vd 45–90 phút).
             </p>
 
             <form @submit.prevent="saveCadence" class="grid grid-cols-2 md:grid-cols-4 gap-3">
-                <label class="text-xs font-semibold text-[var(--color-ink)]">Tối đa bài/ngày
-                    <input v-model.number="cadenceForm.max_per_day" type="number" min="1" max="50" class="mt-1 w-full border border-[var(--color-line)] rounded-xl px-3 py-2 text-sm" />
+                <label class="text-xs font-semibold text-[var(--color-ink)]">Tổng bài/ngày (mọi page)
+                    <input v-model.number="cadenceForm.max_per_day" type="number" min="1" max="200" class="mt-1 w-full border border-[var(--color-line)] rounded-xl px-3 py-2 text-sm" />
                 </label>
                 <label class="text-xs font-semibold text-[var(--color-ink)]">Nghỉ tối thiểu (phút)
                     <input v-model.number="cadenceForm.gap_min" type="number" min="1" class="mt-1 w-full border border-[var(--color-line)] rounded-xl px-3 py-2 text-sm" />
@@ -264,11 +395,11 @@ const enabledCount = computed(() => props.groups.filter(g => g.enabled).length)
             <p v-for="(msg, key) in cadenceForm.errors" :key="key" class="text-red-500 text-xs mt-2">{{ msg }}</p>
         </section>
 
-        <!-- 4. Nhóm -->
+        <!-- 5. Nhóm -->
         <section class="bg-[var(--color-surface)] rounded-2xl border border-[var(--color-line)] p-5">
-            <h2 class="font-extrabold text-[var(--color-ink)] mb-1">4. Nhóm ({{ enabledCount }} đang bật / {{ groups.length }})</h2>
+            <h2 class="font-extrabold text-[var(--color-ink)] mb-1">5. Nhóm ({{ enabledCount }} đang bật / {{ groups.length }})</h2>
             <p class="text-sm text-[var(--color-muted)] mb-3">
-                Bấm "Lấy nhóm đã tham gia" để bot mở trang "Nhóm của bạn" trên Facebook và gửi danh sách về. Nhóm mới vào đều
+                Bấm "Lấy nhóm đã tham gia" để bot lần lượt chuyển sang từng page, mở trang "Nhóm của bạn" trên Facebook và gửi danh sách về. Nhóm mới vào đều
                 <span class="font-semibold">tắt</span> — tự bật nhóm nào được đăng. Nên đọc nội quy nhóm trước: nhiều nhóm cấm link hoặc cấm thành viên mới đăng bài.
             </p>
 
@@ -311,6 +442,7 @@ const enabledCount = computed(() => props.groups.filter(g => g.enabled).length)
                         <tr class="text-left text-xs text-[var(--color-muted)]">
                             <th class="px-4 py-2.5 font-semibold">Đăng</th>
                             <th class="px-4 py-2.5 font-semibold">Nhóm</th>
+                            <th class="px-4 py-2.5 font-semibold">Page trong nhóm</th>
                             <th class="px-4 py-2.5 font-semibold">Đã đăng</th>
                             <th class="px-4 py-2.5 font-semibold">Duyệt</th>
                             <th class="px-4 py-2.5 font-semibold">Lần gần nhất</th>
@@ -328,6 +460,10 @@ const enabledCount = computed(() => props.groups.filter(g => g.enabled).length)
                                 <span v-if="g.source === 'manual'" class="ml-1 text-[10px] uppercase text-[var(--color-muted)]">thêm tay</span>
                                 <p v-if="g.disabled_reason" class="text-xs text-red-500 mt-0.5">Bot tự tắt: {{ g.disabled_reason }}</p>
                             </td>
+                            <td class="px-4 py-2.5 text-xs">
+                                <span v-if="g.profile_ids.length" class="text-[var(--color-muted)]">{{ g.profile_ids.map(id => profileLabels[id]).join(', ') }}</span>
+                                <span v-else class="text-red-500">chưa page nào</span>
+                            </td>
                             <td class="px-4 py-2.5 text-[var(--color-muted)]">{{ g.posted_count }}</td>
                             <td class="px-4 py-2.5 text-xs whitespace-nowrap" :title="g.last_checked_at ? `Bot kiểm tra lúc ${fmt(g.last_checked_at)}` : ''">
                                 <template v-if="reviewParts(g).length">
@@ -338,6 +474,7 @@ const enabledCount = computed(() => props.groups.filter(g => g.enabled).length)
                             <td class="px-4 py-2.5 text-xs text-[var(--color-muted)]">{{ fmt(g.last_posted_at) }}</td>
                             <td class="px-4 py-2.5 text-xs whitespace-nowrap">
                                 <span v-if="!g.enabled" class="text-[var(--color-muted)]">—</span>
+                                <span v-else-if="g.no_profile" class="text-red-500">chưa page nào (đang bật) vào nhóm</span>
                                 <span v-else-if="g.queued" class="text-amber-600">có bài đang chờ</span>
                                 <span v-else-if="g.ready_at" class="text-[var(--color-muted)]">{{ fmt(g.ready_at) }}</span>
                                 <span v-else class="font-semibold text-green-600">được ngay</span>
@@ -347,7 +484,7 @@ const enabledCount = computed(() => props.groups.filter(g => g.enabled).length)
                             </td>
                         </tr>
                         <tr v-if="!shownGroups.length">
-                            <td colspan="7" class="px-4 py-8 text-center text-[var(--color-muted)]">Chưa có nhóm nào.</td>
+                            <td colspan="8" class="px-4 py-8 text-center text-[var(--color-muted)]">Chưa có nhóm nào.</td>
                         </tr>
                     </tbody>
                 </table>

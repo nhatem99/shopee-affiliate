@@ -6,6 +6,7 @@ use App\Exceptions\AffiliateScanException;
 use App\Models\FacebookGroup;
 use App\Models\FacebookGroupDeal;
 use App\Models\FacebookGroupPost;
+use App\Models\FacebookProfile;
 use App\Models\Setting;
 use App\Models\ShortLink;
 use App\Services\FacebookGroupPostScheduler;
@@ -63,13 +64,17 @@ class FacebookGroupRunnerApiTest extends TestCase
         static $n = 0;
         $n++;
 
-        return FacebookGroup::create(array_merge([
+        $group = FacebookGroup::create(array_merge([
             'fb_group_key' => "group{$n}",
             'name' => "Nhóm {$n}",
             'url' => FacebookGroup::urlFor("group{$n}"),
             'enabled' => true,
             'source' => 'sync',
         ], $attributes));
+        // Nhóm bot lấy về là nhóm nick chính đã vào.
+        $group->profiles()->attach(FacebookProfile::primary());
+
+        return $group;
     }
 
     private function deal(array $attributes = []): FacebookGroupDeal
@@ -491,11 +496,12 @@ class FacebookGroupRunnerApiTest extends TestCase
         $this->assertTrue(app(FacebookGroupRunnerSettings::class)->paused());
     }
 
-    public function test_runner_reporting_blocked_state_pauses(): void
+    public function test_runner_reporting_blocked_state_blocks_the_open_profile(): void
     {
-        $this->poll(self::KEY, 'blocked')->assertJson(['type' => 'idle', 'reason' => 'paused']);
+        $this->poll(self::KEY, 'blocked')->assertJson(['type' => 'idle', 'reason' => 'all_blocked']);
 
-        $this->assertSame('Facebook báo tạm chặn đăng bài', app(FacebookGroupRunnerSettings::class)->pausedReason());
+        $this->assertFalse(app(FacebookGroupRunnerSettings::class)->paused());
+        $this->assertStringStartsWith('Facebook báo tạm chặn đăng bài', FacebookProfile::primary()->blocked_reason);
     }
 
     public function test_old_pending_posts_expire(): void

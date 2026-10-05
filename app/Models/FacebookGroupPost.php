@@ -9,7 +9,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 /**
  * Một lượt đăng một deal vào một nhóm — đơn vị việc bot trên máy nhà nhận về làm.
  */
-#[Fillable(['facebook_group_deal_id', 'facebook_group_id', 'status', 'queued_at', 'claim_key', 'claimed_at', 'finished_at', 'caption', 'buy_url', 'link_kind', 'short_link_id', 'error', 'review_state', 'reviewed_at', 'post_url'])]
+#[Fillable(['facebook_group_deal_id', 'facebook_group_id', 'facebook_profile_id', 'status', 'queued_at', 'claim_key', 'claimed_at', 'finished_at', 'caption', 'buy_url', 'link_kind', 'short_link_id', 'error', 'review_state', 'reviewed_at', 'post_url'])]
 class FacebookGroupPost extends Model
 {
     public const PENDING = 'pending';
@@ -36,6 +36,12 @@ class FacebookGroupPost extends Model
     /** Nick bị đăng xuất hoặc bắt xác minh. */
     public const CHECKPOINT = 'checkpoint';
 
+    /**
+     * Bot không chuyển được sang page được giao — chưa mở nhóm, chưa có gì lên Facebook. Chỉ là
+     * kết quả bot báo về: server đưa bài về hàng chờ cho page khác và cho page đó nghỉ.
+     */
+    public const SWITCH_FAILED = 'switch_failed';
+
     public const CANCELLED = 'cancelled';
 
     public const EXPIRED = 'expired';
@@ -43,7 +49,7 @@ class FacebookGroupPost extends Model
     /** Kết quả bot được phép báo về. */
     public const RESULTS = [
         self::POSTED, self::PENDING_APPROVAL, self::FAILED, self::AMBIGUOUS,
-        self::NOT_ALLOWED, self::BLOCKED, self::CHECKPOINT,
+        self::NOT_ALLOWED, self::BLOCKED, self::CHECKPOINT, self::SWITCH_FAILED,
     ];
 
     /** Tính vào trần bài mỗi ngày: mọi lượt có thể đã đưa bài lên Facebook. */
@@ -88,6 +94,12 @@ class FacebookGroupPost extends Model
     public function group(): BelongsTo
     {
         return $this->belongsTo(FacebookGroup::class, 'facebook_group_id');
+    }
+
+    /** Page (hoặc nick chính) bot dùng để đăng bài này — gán lúc bot nhận bài. */
+    public function profile(): BelongsTo
+    {
+        return $this->belongsTo(FacebookProfile::class, 'facebook_profile_id');
     }
 
     public function shortLink(): BelongsTo

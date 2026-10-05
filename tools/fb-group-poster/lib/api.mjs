@@ -58,15 +58,24 @@ export class Api {
     if (status !== 422) throw new ApiError(`Server trả HTTP ${status}: ${data.message || ''}`);
   }
 
-  async poll(claimKey, state, account) {
-    const [status, data] = await this.post('/runner/fb/poll', { claim_key: claimKey, state, version: VERSION, account });
+  // who: { accountId, actorId } từ browser.identity() — server nhận ra page nào đang mở.
+  async poll(claimKey, state, account, who = {}) {
+    const [status, data] = await this.post('/runner/fb/poll', {
+      claim_key: claimKey,
+      state,
+      version: VERSION,
+      account,
+      account_id: who.accountId ?? null,
+      actor_id: who.actorId ?? null,
+    });
     if (status !== 200) throw new ApiError(`Hỏi việc lỗi HTTP ${status}: ${data.message || ''}`);
     return data;
   }
 
   // Báo kết quả, thử lại tới khi server nhận. 409 = lượt này server đã chốt/không khớp.
-  async report(postId, claimKey, status, error) {
-    const payload = { claim_key: claimKey, status, error: error ? String(error).slice(0, 1000) : null };
+  // actorId: uid page đã đăng bài — server điền uid cho page thêm bằng link tên rút gọn.
+  async report(postId, claimKey, status, error, actorId = null) {
+    const payload = { claim_key: claimKey, status, error: error ? String(error).slice(0, 1000) : null, actor_id: actorId };
     let last = null;
     for (let attempt = 0; attempt < 6; attempt++) {
       try {
@@ -104,14 +113,22 @@ export class Api {
   }
 
   // Báo những gì thấy ở các tab "Nội dung của bạn" của nhóm. Lỗi thì thôi — server giao lại sau.
-  async reportReview(groupId, tabs) {
-    const [status, data] = await this.post(`/runner/fb/groups/${groupId}/review`, { tabs });
+  async reportReview(groupId, tabs, profileId = null) {
+    const [status, data] = await this.post(`/runner/fb/groups/${groupId}/review`, { tabs, profile_id: profileId });
     if (status !== 200) throw new ApiError(`Báo kết quả kiểm tra nhóm lỗi HTTP ${status}: ${data.message || ''}`);
     return data;
   }
 
-  async uploadGroups(groups, account) {
-    const [status, data] = await this.post('/runner/fb/groups', { groups, account });
+  // Nhóm của một page: profileId khi server giao lấy nhóm theo page; lấy tay thì gửi uid để server
+  // tự nhận ra page đang mở.
+  async uploadGroups(groups, account, { profileId = null, accountId = null, actorId = null } = {}) {
+    const [status, data] = await this.post('/runner/fb/groups', {
+      groups,
+      account,
+      profile_id: profileId,
+      account_id: accountId,
+      actor_id: actorId,
+    });
     if (status !== 200) throw new ApiError(`Gửi danh sách nhóm lỗi HTTP ${status}: ${JSON.stringify(data)}`);
     return data;
   }

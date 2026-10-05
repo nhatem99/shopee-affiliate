@@ -5,6 +5,7 @@ namespace Tests\Feature;
 use App\Models\FacebookGroup;
 use App\Models\FacebookGroupDeal;
 use App\Models\FacebookGroupPost;
+use App\Models\FacebookProfile;
 use App\Services\FacebookGroupReviewChecker;
 use App\Services\FacebookGroupRunnerSettings;
 use Carbon\Carbon;
@@ -57,13 +58,17 @@ class FacebookGroupReviewTest extends TestCase
         static $n = 0;
         $n++;
 
-        return FacebookGroup::create(array_merge([
+        $group = FacebookGroup::create(array_merge([
             'fb_group_key' => "nhom{$n}",
             'name' => "Nhóm {$n}",
             'url' => FacebookGroup::urlFor("nhom{$n}"),
             'enabled' => true,
             'source' => 'sync',
         ], $attributes));
+        // Nhóm bot lấy về là nhóm nick chính đã vào.
+        $group->profiles()->attach(FacebookProfile::primary());
+
+        return $group;
     }
 
     private function posted(FacebookGroup $group, string $caption, int $minutesAgo = 90, array $attributes = []): FacebookGroupPost

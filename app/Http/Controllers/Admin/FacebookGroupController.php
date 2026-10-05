@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Admin;
 use App\Http\Controllers\Controller;
 use App\Models\FacebookGroup;
 use App\Models\FacebookGroupPost;
+use App\Models\FacebookProfile;
 use App\Services\FacebookGroupPostScheduler;
 use App\Services\FacebookGroupReviewChecker;
 use App\Services\FacebookGroupRunnerSettings;
@@ -49,10 +50,16 @@ class FacebookGroupController extends Controller
                 'posts as review_rejected_count' => fn ($q) => $q->whereIn('review_state', FacebookGroupReviewChecker::FINAL),
                 'posts as review_missing_count' => fn ($q) => $q->where('review_state', FacebookGroupPost::REVIEW_MISSING),
             ])
+            ->with('profiles:id')
             ->orderByDesc('enabled')
             ->orderBy('name')
             ->get(['id', 'fb_group_key', 'name', 'url', 'enabled', 'source', 'disabled_reason', 'last_seen_at', 'last_attempt_at', 'last_posted_at', 'last_checked_at']);
         $readiness = $this->scheduler->groupReadiness($groups);
+
+        $countsToday = $this->scheduler->countTodayByProfile();
+        $postingIds = $this->scheduler->postingProfiles($runner['version'])->pluck('id');
+        $profiles = FacebookProfile::ordered()->withCount('groups')->get();
+        $acting = $runner['account_id'] || $runner['actor_id'] ? $this->scheduler->resolveActor($runner['account_id'], $runner['actor_id']) : null;
 
         return Inertia::render('Admin/FacebookGroups', [
             'runner' => $runner + [
@@ -75,14 +82,36 @@ class FacebookGroupController extends Controller
                 'requested_at' => $this->settings->reviewRequestedAt()?->toIso8601String(),
             ],
             'baseUrl' => url('/'),
-            'groups' => $groups->map(fn (FacebookGroup $group) => $group->toArray() + $readiness[$group->id]),
+            'profiles' => $profiles->map(fn (FacebookProfile $profile) => [
+                'id' => $profile->id,
+                'label' => $profile->label(),
+                'name' => $profile->name,
+                'url' => $profile->url ?? ($profile->fb_id ? FacebookProfile::profileUrl($profile->fb_id) : null),
+                'fb_id' => $profile->fb_id,
+                'is_primary' => $profile->is_primary,
+                'enabled' => $profile->enabled,
+                'max_per_day' => $profile->max_per_day,
+                'used_today' => $countsToday[$profile->id] ?? 0,
+                'groups_count' => $profile->groups_count,
+                'blocked_at' => $profile->blocked_at?->toIso8601String(),
+                'blocked_reason' => $profile->blocked_reason,
+                'last_synced_at' => $profile->last_synced_at?->toIso8601String(),
+                // Page bot nhận bài kế tiếp (page đầu còn chỗ) — chưa chắc còn bài cho nó.
+                'next' => $postingIds->first() === $profile->id,
+                'acting' => $acting?->is($profile) ?? false,
+            ]),
+            'profilesSupported' => FacebookGroupPostScheduler::runnerSupportsProfiles($runner['version']),
+            'profilesMinVersion' => FacebookGroupPostScheduler::PROFILES_MIN_VERSION,
+            'groups' => $groups->map(fn (FacebookGroup $group) => collect($group->toArray())->except('profiles')->all() + $readiness[$group->id] + [
+                'profile_ids' => $group->profiles->pluck('id'),
+            ]),
         ]);
     }
 
     public function updateSettings(Request $request): RedirectResponse
     {
         $data = $request->validate([
-            'max_per_day' => ['required', 'integer', 'min:1', 'max:50'],
+            'max_per_day' => ['required', 'integer', 'min:1', 'max:200'],
             'gap_min' => ['required', 'integer', 'min:1', 'max:1440'],
             'gap_max' => ['required', 'integer', 'gte:gap_min', 'max:1440'],
             'cooldown_hours' => ['required', 'integer', 'min:1', 'max:720'],
@@ -145,7 +174,10 @@ class FacebookGroupController extends Controller
         return back()->with('success', 'Đã gửi yêu cầu — lúc rảnh bot sẽ lần lượt mở "Nội dung của bạn" của từng nhóm có bài trong 3 ngày qua.');
     }
 
-    /** Thêm tay một nhóm — thêm tay nghĩa là muốn đăng, nên bật luôn. */
+    /**
+     * Thêm tay một nhóm — thêm tay nghĩa là muốn đăng, nên bật luôn. Không biết page nào đã vào
+     * nhóm nên gắn mọi page: page chưa vào thì lúc đăng bot báo "không cho đăng", server tự gỡ.
+     */
     public function store(Request $request): RedirectResponse
     {
         $data = $request->validate([
@@ -168,6 +200,7 @@ class FacebookGroupController extends Controller
             'enabled' => true,
             'disabled_reason' => null,
         ])->save();
+        $group->profiles()->syncWithoutDetaching(FacebookProfile::pluck('id'));
 
         return back()->with('success', 'Đã thêm nhóm.');
     }

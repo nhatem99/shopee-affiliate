@@ -40,7 +40,8 @@ class FacebookGroupRunnerSettings
 
     /**
      * Mặc định "thận trọng": một nick cá nhân đăng cùng một link vào nhiều nhóm là đúng kiểu
-     * Facebook bắt spam — mất nick đắt hơn nhiều so với đăng chậm.
+     * Facebook bắt spam — mất nick đắt hơn nhiều so với đăng chậm. max_per_day là trần chung của
+     * mọi page cộng lại; trần riêng từng page nằm ở facebook_profiles.max_per_day.
      */
     public const DEFAULT_CADENCE = [
         'max_per_day' => 10,
@@ -158,7 +159,7 @@ class FacebookGroupRunnerSettings
      * Mỗi lượt bot hỏi việc là một nhịp "còn sống" — trang admin dựa vào đây để biết bot có
      * đang chạy trên máy nhà không.
      *
-     * @param  array{state?: ?string, version?: ?string, account?: ?string}  $info
+     * @param  array{state?: ?string, version?: ?string, account?: ?string, account_id?: ?string, actor_id?: ?string}  $info
      */
     public function recordRunner(array $info): void
     {
@@ -167,18 +168,21 @@ class FacebookGroupRunnerSettings
             'state' => $info['state'] ?? 'ok',
             'version' => $info['version'] ?? null,
             'account' => $info['account'] ?? null,
+            // uid nick (c_user) và uid page đang mở (i_user, trùng nick nếu không ở page nào).
+            'account_id' => $info['account_id'] ?? null,
+            'actor_id' => $info['actor_id'] ?? null,
         ]));
     }
 
     /**
-     * @return array{last_seen_at: ?string, state: ?string, version: ?string, account: ?string}
+     * @return array{last_seen_at: ?string, state: ?string, version: ?string, account: ?string, account_id: ?string, actor_id: ?string}
      */
     public function runnerStatus(): array
     {
         $stored = json_decode((string) Setting::get(self::STATUS_KEY, '{}'), true);
 
         return array_merge(
-            ['last_seen_at' => null, 'state' => null, 'version' => null, 'account' => null],
+            ['last_seen_at' => null, 'state' => null, 'version' => null, 'account' => null, 'account_id' => null, 'actor_id' => null],
             is_array($stored) ? $stored : [],
         );
     }
@@ -191,6 +195,11 @@ class FacebookGroupRunnerSettings
     public function syncRequested(): bool
     {
         return (string) Setting::get(self::SYNC_REQUESTED_KEY, '') !== '';
+    }
+
+    public function clearSyncRequest(): void
+    {
+        Setting::set(self::SYNC_REQUESTED_KEY, '');
     }
 
     public function markSynced(): void

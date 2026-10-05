@@ -10,7 +10,7 @@ const toast = useToast()
 const page = usePage()
 
 const props = defineProps({
-    // [{ id, name, url, last_posted_at, ready, ready_at, queued }] — xem groupReadiness() phía server.
+    // [{ id, name, url, last_posted_at, ready, ready_at, queued, no_profile }] — xem groupReadiness() phía server.
     groups: Array,
     cooldownHours: Number,
     deals: Array,
@@ -55,6 +55,8 @@ const blockingText = computed(() => {
         case 'paused': return 'bot đang tạm dừng'
         case 'outside_window': return `ngoài khung giờ — đăng tiếp lúc ${fmt(b.until)}`
         case 'daily_cap': return `đã đủ bài hôm nay — đăng tiếp lúc ${fmt(b.until)}`
+        case 'no_profile': return 'chưa bật page nào để đăng'
+        case 'all_blocked': return 'mọi page đang nghỉ vì Facebook chặn'
         case 'gap': return `đang nghỉ giữa hai bài — bài kế tiếp sau ${fmt(b.until)}`
         default: return b.reason
     }
@@ -347,7 +349,7 @@ const imageErrors = computed(() => Object.entries(form.errors).filter(([key]) =>
 const readyGroups = computed(() => props.groups.filter(g => g.ready))
 const waitingGroups = computed(() => props.groups.filter(g => !g.ready).sort((a, b) =>
     (a.queued - b.queued) || (Date.parse(a.ready_at) || 0) - (Date.parse(b.ready_at) || 0)))
-const nextReadyAt = computed(() => waitingGroups.value.find(g => !g.queued)?.ready_at)
+const nextReadyAt = computed(() => waitingGroups.value.find(g => !g.queued && g.ready_at)?.ready_at)
 const showWaiting = ref(false)
 
 // Trang tự tải lại mỗi 30 giây: nhóm vừa hết chờ hiện ra để tích, nhóm vừa có bài (tab khác xếp)
@@ -612,14 +614,14 @@ function retry(post) {
 
                 <template v-if="waitingGroups.length">
                     <button type="button" @click="showWaiting = !showWaiting" class="mt-2 text-xs font-semibold text-[var(--color-muted)] hover:text-[var(--color-ink)]">
-                        {{ showWaiting ? '▾' : '▸' }} {{ waitingGroups.length }} nhóm chưa tới giờ đăng (không chọn được)
+                        {{ showWaiting ? '▾' : '▸' }} {{ waitingGroups.length }} nhóm chưa đăng được lúc này (không chọn được)
                     </button>
                     <div v-if="showWaiting" class="grid md:grid-cols-2 gap-1.5 max-h-64 overflow-y-auto mt-1.5">
                         <div v-for="g in waitingGroups" :key="g.id" class="flex items-center gap-2 text-sm px-2 py-1.5 rounded-lg opacity-50 cursor-not-allowed">
                             <input type="checkbox" disabled class="w-4 h-4" />
                             <span class="truncate">{{ g.name || g.url }}</span>
                             <span class="ml-auto text-[10px] text-[var(--color-muted)] whitespace-nowrap">
-                                {{ g.queued ? 'đã có bài chờ đăng' : `đăng được lúc ${fmt(g.ready_at)}` }}
+                                {{ g.no_profile ? 'chưa page nào vào nhóm' : g.queued ? 'đã có bài chờ đăng' : `đăng được lúc ${fmt(g.ready_at)}` }}
                             </span>
                         </div>
                     </div>
@@ -676,6 +678,7 @@ function retry(post) {
                     <li v-for="post in deal.posts" :key="post.id" class="flex flex-wrap items-center gap-2 text-sm">
                         <span class="text-[11px] font-semibold px-2 py-0.5 rounded-full whitespace-nowrap" :class="badge(post).cls">{{ badge(post).label }}</span>
                         <a :href="post.group_url" target="_blank" rel="noopener" class="hover:underline truncate max-w-[16rem]">{{ post.group_name || post.group_url }}</a>
+                        <span v-if="post.profile_name" class="text-[11px] text-[var(--color-muted)]">· {{ post.profile_name }}</span>
                         <span v-if="post.finished_at" class="text-[11px] text-[var(--color-muted)]">{{ fmt(post.finished_at) }}</span>
                         <span v-if="post.reviewed_at" class="text-[11px] text-[var(--color-muted)]">· kiểm tra {{ fmt(post.reviewed_at) }}</span>
                         <a v-if="post.post_url" :href="post.post_url" target="_blank" rel="noopener" class="text-[11px] font-semibold text-[var(--color-accent)] hover:underline">Xem bài</a>

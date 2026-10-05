@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\FacebookGroup;
 use App\Models\FacebookGroupPost;
+use App\Models\FacebookProfile;
 use App\Services\FacebookGroupPostScheduler;
 use App\Services\FacebookGroupReviewChecker;
 use App\Services\FacebookPostImages;
@@ -22,6 +23,9 @@ use Symfony\Component\HttpFoundation\BinaryFileResponse;
  */
 class FacebookRunnerController extends Controller
 {
+    /** uid Facebook (nick hoặc page) — chỉ chữ số. */
+    private const FB_ID = '/^\d{1,30}$/';
+
     public function __construct(private FacebookGroupPostScheduler $scheduler) {}
 
     public function poll(Request $request): JsonResponse
@@ -31,6 +35,8 @@ class FacebookRunnerController extends Controller
             'state' => ['nullable', Rule::in(['ok', 'logged_out', 'checkpoint', 'blocked'])],
             'version' => ['nullable', 'string', 'max:32'],
             'account' => ['nullable', 'string', 'max:120'],
+            'account_id' => ['nullable', 'string', 'regex:'.self::FB_ID],
+            'actor_id' => ['nullable', 'string', 'regex:'.self::FB_ID],
         ]);
 
         // Link /go/ trong bài dựng ngay trong request này — url() mặc định lấy host bot đã gọi
@@ -42,6 +48,8 @@ class FacebookRunnerController extends Controller
             'state' => $data['state'] ?? 'ok',
             'version' => $data['version'] ?? null,
             'account' => $data['account'] ?? null,
+            'account_id' => $data['account_id'] ?? null,
+            'actor_id' => $data['actor_id'] ?? null,
         ]));
     }
 
@@ -53,9 +61,11 @@ class FacebookRunnerController extends Controller
             'claim_key' => ['required', 'string', 'max:64'],
             'status' => ['required', Rule::in(FacebookGroupPost::RESULTS)],
             'error' => ['nullable', 'string', 'max:1000'],
+            // Page bot đã đăng bằng — server điền uid cho page thêm bằng link tên rút gọn.
+            'actor_id' => ['nullable', 'string', 'regex:'.self::FB_ID],
         ]);
 
-        if (! $this->scheduler->report($post, $data['claim_key'], $data['status'], $data['error'] ?? null)) {
+        if (! $this->scheduler->report($post, $data['claim_key'], $data['status'], $data['error'] ?? null, $data['actor_id'] ?? null)) {
             return response()->json(['message' => 'Lượt nhận bài không khớp — bỏ qua kết quả này.'], 409);
         }
 
@@ -78,9 +88,13 @@ class FacebookRunnerController extends Controller
             'tabs.*.items' => ['present', 'array', 'max:100'],
             'tabs.*.items.*.text' => ['nullable', 'string', 'max:20000'],
             'tabs.*.items.*.url' => ['nullable', 'string', 'max:1000'],
+            // Page bot đã chuyển sang để xem — chỉ xét bài của page đó. Bot cũ không gửi: xét hết.
+            'profile_id' => ['nullable', 'integer'],
         ]);
 
-        return response()->json($reviews->apply($group, $data['tabs']));
+        $profile = isset($data['profile_id']) ? FacebookProfile::findOrFail($data['profile_id']) : null;
+
+        return response()->json($reviews->apply($group, $data['tabs'], $profile));
     }
 
     /** Ảnh admin tự tải lên cho bài — bot tải về đính kèm (đường dẫn có trong lượt nhận bài). */
@@ -99,8 +113,19 @@ class FacebookRunnerController extends Controller
             'groups.*.url' => ['required', 'string', 'max:500'],
             'groups.*.name' => ['nullable', 'string', 'max:255'],
             'account' => ['nullable', 'string', 'max:120'],
+            // Bot từ 1.3.0: nhóm này của page nào. Không có thì đoán theo page đang mở (bot cũ: nick chính).
+            'profile_id' => ['nullable', 'integer'],
+            'account_id' => ['nullable', 'string', 'regex:'.self::FB_ID],
+            'actor_id' => ['nullable', 'string', 'regex:'.self::FB_ID],
         ]);
 
-        return response()->json($this->scheduler->syncGroups($data['groups'], $data['account'] ?? null));
+        $profile = isset($data['profile_id'])
+            ? FacebookProfile::findOrFail($data['profile_id'])
+            : $this->scheduler->resolveActor($data['account_id'] ?? null, $data['actor_id'] ?? null);
+        if (! $profile) {
+            return response()->json(['message' => 'Bot đang mở một page chưa thêm ở /admin/fb-groups — thêm page đó trước rồi lấy nhóm lại.'], 422);
+        }
+
+        return response()->json($this->scheduler->syncGroups($data['groups'], $data['account'] ?? null, $profile));
     }
 }

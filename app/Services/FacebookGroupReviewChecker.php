@@ -4,7 +4,9 @@ namespace App\Services;
 
 use App\Models\FacebookGroup;
 use App\Models\FacebookGroupPost;
+use App\Models\FacebookProfile;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Database\Eloquent\Collection;
 use Normalizer;
 
 /**
@@ -17,6 +19,9 @@ use Normalizer;
  * Mỗi bài được kiểm tra sau khi đăng ~1 giờ, bài còn chờ duyệt/không thấy thì 6 giờ kiểm tra lại,
  * bài đã lên thì kiểm tra thêm một lần sau một ngày (bị gỡ không), tối đa 3 ngày. Bị từ chối/gỡ
  * là chốt, không kiểm tra nữa.
+ *
+ * "Nội dung của bạn" là bài của page đang mở, nên mỗi lượt kiểm tra một nhóm bằng một page: bot
+ * chuyển sang page đã đăng bài rồi mới mở các tab.
  */
 class FacebookGroupReviewChecker
 {
@@ -94,10 +99,11 @@ class FacebookGroupReviewChecker
             return null;
         }
 
-        $group = $this->nextGroup();
-        if (! $group) {
+        $target = $this->nextTarget(FacebookGroupPostScheduler::runnerSupportsProfiles($runnerVersion));
+        if (! $target) {
             return null;
         }
+        [$group, $profile] = $target;
 
         $group->forceFill(['last_checked_at' => now()])->save();
         $this->settings->setNextReviewAt(now()->addSeconds(random_int(self::GAP_MIN_MINUTES * 60, self::GAP_MAX_MINUTES * 60)));
@@ -108,6 +114,7 @@ class FacebookGroupReviewChecker
             'group_url' => $group->url,
             'group_name' => $group->name,
             'tabs' => collect(self::TABS)->map(fn (string $path) => rtrim($group->url, '/').'/'.$path.'/')->all(),
+            'profile' => $profile?->forRunner(),
         ];
     }
 
@@ -116,9 +123,10 @@ class FacebookGroupReviewChecker
      * chỉ khi cả tab "đang chờ" lẫn "đã đăng" mở được mà không thấy bài mới ghi "không thấy".
      *
      * @param  array<string, array{ok: bool, items?: list<array{text?: ?string, url?: ?string}>}>  $tabs
+     * @param  ?FacebookProfile  $profile  page bot đã mở để xem; null (bot cũ) = mọi bài trong nhóm
      * @return array{checked: int, found: int}
      */
-    public function apply(FacebookGroup $group, array $tabs): array
+    public function apply(FacebookGroup $group, array $tabs, ?FacebookProfile $profile = null): array
     {
         $seen = [];
         foreach (self::MATCH_ORDER as $state) {
@@ -131,7 +139,10 @@ class FacebookGroupReviewChecker
         }
         $canTellMissing = isset($seen[FacebookGroupPost::REVIEW_PENDING], $seen[FacebookGroupPost::REVIEW_PUBLISHED]);
 
-        $posts = $this->watched()->where('facebook_group_id', $group->id)->get();
+        $posts = $this->watched()
+            ->where('facebook_group_id', $group->id)
+            ->when($profile, fn (Builder $query) => $this->ofProfile($query, $profile))
+            ->get();
         $found = 0;
         foreach ($posts as $post) {
             [$state, $url] = $this->locate((string) $post->caption, $seen);
@@ -199,9 +210,39 @@ class FacebookGroupReviewChecker
         return [null, null];
     }
 
-    private function nextGroup(): ?FacebookGroup
+    /**
+     * Nhóm tới lượt kiểm tra và page để xem (page của bài tới hạn đầu tiên trong nhóm). Bot cũ xem
+     * bằng nick đang mở, nên chỉ được giao bài của nick chính.
+     *
+     * @return array{0: FacebookGroup, 1: ?FacebookProfile}|null
+     */
+    private function nextTarget(bool $profilesSupported): ?array
     {
-        $posts = $this->watched()->get(['id', 'facebook_group_id', 'finished_at', 'review_state', 'reviewed_at']);
+        $primary = FacebookProfile::where('is_primary', true)->first();
+        $posts = $this->watched()
+            ->when(! $profilesSupported && $primary, fn (Builder $query) => $this->ofProfile($query, $primary))
+            ->get(['id', 'facebook_group_id', 'facebook_profile_id', 'finished_at', 'review_state', 'reviewed_at']);
+        $group = $this->nextGroup($posts);
+        if (! $group) {
+            return null;
+        }
+
+        $inGroup = $posts->where('facebook_group_id', $group->id);
+        $post = $inGroup->first(fn (FacebookGroupPost $post) => $this->isDue($post)) ?? $inGroup->first();
+        $profile = $post->facebook_profile_id ? FacebookProfile::find($post->facebook_profile_id) : null;
+
+        return [$group, $profile ?? $primary];
+    }
+
+    /** Bài của một page — bài trước khi có page (không gắn page) tính là của nick chính. */
+    private function ofProfile(Builder $query, FacebookProfile $profile): Builder
+    {
+        return $query->where(fn (Builder $q) => $q->where('facebook_profile_id', $profile->id)
+            ->when($profile->is_primary, fn (Builder $q) => $q->orWhereNull('facebook_profile_id')));
+    }
+
+    private function nextGroup(Collection $posts): ?FacebookGroup
+    {
         if ($posts->isEmpty()) {
             return null;
         }
