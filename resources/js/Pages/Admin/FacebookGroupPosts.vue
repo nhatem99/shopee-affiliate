@@ -1,5 +1,5 @@
 <script setup>
-import { ref, reactive, computed, onMounted, onBeforeUnmount } from 'vue'
+import { ref, reactive, computed, watch, onMounted, onBeforeUnmount } from 'vue'
 import { router, useForm, usePage, Head, Link } from '@inertiajs/vue3'
 import axios from 'axios'
 import AdminLayout from '@/Layouts/AdminLayout.vue'
@@ -10,7 +10,9 @@ const toast = useToast()
 const page = usePage()
 
 const props = defineProps({
+    // [{ id, name, url, last_posted_at, ready, ready_at, queued }] — xem groupReadiness() phía server.
     groups: Array,
+    cooldownHours: Number,
     deals: Array,
     blocking: Object,
     today: Object,
@@ -39,7 +41,7 @@ function vnd(n) {
 
 let timer = null
 onMounted(() => {
-    timer = setInterval(() => router.reload({ only: ['deals', 'blocking', 'today', 'runner'] }), 30000)
+    timer = setInterval(() => router.reload({ only: ['deals', 'blocking', 'today', 'runner', 'groups'] }), 30000)
 })
 onBeforeUnmount(() => {
     clearInterval(timer)
@@ -340,8 +342,23 @@ function deleteTemplate(template) {
 const imageErrors = computed(() => Object.entries(form.errors).filter(([key]) => key === 'images' || key.startsWith('images.')).map(([, msg]) => msg))
 
 // ── Chọn nhóm + xếp hàng ────────────────────────────────────────────────────
+// Chỉ cho tích nhóm đăng được ngay. Nhóm còn trong giãn cách "mỗi nhóm 1 bài / N giờ" hoặc đã có
+// bài chờ thì để riêng, khoá lại — xếp vào là bài nằm chờ cả buổi. Sớm hết chờ đứng trước.
+const readyGroups = computed(() => props.groups.filter(g => g.ready))
+const waitingGroups = computed(() => props.groups.filter(g => !g.ready).sort((a, b) =>
+    (a.queued - b.queued) || (Date.parse(a.ready_at) || 0) - (Date.parse(b.ready_at) || 0)))
+const nextReadyAt = computed(() => waitingGroups.value.find(g => !g.queued)?.ready_at)
+const showWaiting = ref(false)
+
+// Trang tự tải lại mỗi 30 giây: nhóm vừa hết chờ hiện ra để tích, nhóm vừa có bài (tab khác xếp)
+// thì tự bỏ tích.
+watch(readyGroups, (groups) => {
+    const ids = new Set(groups.map(g => g.id))
+    if (form.group_ids.some(id => !ids.has(id))) form.group_ids = form.group_ids.filter(id => ids.has(id))
+})
+
 function toggleAll() {
-    form.group_ids = form.group_ids.length === props.groups.length ? [] : props.groups.map(g => g.id)
+    form.group_ids = form.group_ids.length === readyGroups.value.length ? [] : readyGroups.value.map(g => g.id)
 }
 
 const canQueue = computed(() => !form.processing && !uploading.value && form.group_ids.length > 0
@@ -553,21 +570,41 @@ function retry(post) {
 
             <div class="mb-4">
                 <div class="flex items-center justify-between mb-2">
-                    <p class="text-xs font-semibold text-[var(--color-ink)]">Đăng vào nhóm ({{ form.group_ids.length }}/{{ groups.length }})</p>
-                    <button v-if="groups.length" type="button" @click="toggleAll" class="text-xs font-semibold text-[var(--color-accent)] hover:underline">
-                        {{ form.group_ids.length === groups.length ? 'Bỏ chọn hết' : 'Chọn hết' }}
+                    <p class="text-xs font-semibold text-[var(--color-ink)]">
+                        Đăng vào nhóm ({{ form.group_ids.length }}/{{ readyGroups.length }} nhóm đăng được lúc này)
+                    </p>
+                    <button v-if="readyGroups.length" type="button" @click="toggleAll" class="text-xs font-semibold text-[var(--color-accent)] hover:underline">
+                        {{ form.group_ids.length === readyGroups.length ? 'Bỏ chọn hết' : 'Chọn hết' }}
                     </button>
                 </div>
                 <p v-if="!groups.length" class="text-sm text-amber-600">
                     Chưa bật nhóm nào — vào <Link href="/admin/fb-groups" class="font-semibold underline">Nhóm & bot</Link> để lấy nhóm và bật nhóm được đăng.
                 </p>
+                <p v-else-if="!readyGroups.length" class="text-sm text-amber-600">
+                    Lúc này chưa nhóm nào đăng được — mỗi nhóm {{ cooldownHours }} giờ mới nhận 1 bài<template v-if="nextReadyAt">, nhóm sớm nhất đăng được lúc {{ fmt(nextReadyAt) }}</template>.
+                </p>
                 <div v-else class="grid md:grid-cols-2 gap-1.5 max-h-64 overflow-y-auto">
-                    <label v-for="g in groups" :key="g.id" class="flex items-center gap-2 text-sm px-2 py-1.5 rounded-lg hover:bg-[var(--color-peach-soft)]">
+                    <label v-for="g in readyGroups" :key="g.id" class="flex items-center gap-2 text-sm px-2 py-1.5 rounded-lg hover:bg-[var(--color-peach-soft)]">
                         <input type="checkbox" :value="g.id" v-model="form.group_ids" class="w-4 h-4 accent-[var(--color-accent)]" />
                         <span class="truncate">{{ g.name || g.url }}</span>
                         <span v-if="g.last_posted_at" class="ml-auto text-[10px] text-[var(--color-muted)] whitespace-nowrap">đăng {{ fmt(g.last_posted_at) }}</span>
                     </label>
                 </div>
+
+                <template v-if="waitingGroups.length">
+                    <button type="button" @click="showWaiting = !showWaiting" class="mt-2 text-xs font-semibold text-[var(--color-muted)] hover:text-[var(--color-ink)]">
+                        {{ showWaiting ? '▾' : '▸' }} {{ waitingGroups.length }} nhóm chưa tới giờ đăng (không chọn được)
+                    </button>
+                    <div v-if="showWaiting" class="grid md:grid-cols-2 gap-1.5 max-h-64 overflow-y-auto mt-1.5">
+                        <div v-for="g in waitingGroups" :key="g.id" class="flex items-center gap-2 text-sm px-2 py-1.5 rounded-lg opacity-50 cursor-not-allowed">
+                            <input type="checkbox" disabled class="w-4 h-4" />
+                            <span class="truncate">{{ g.name || g.url }}</span>
+                            <span class="ml-auto text-[10px] text-[var(--color-muted)] whitespace-nowrap">
+                                {{ g.queued ? 'đã có bài chờ đăng' : `đăng được lúc ${fmt(g.ready_at)}` }}
+                            </span>
+                        </div>
+                    </div>
+                </template>
                 <p v-if="form.errors.group_ids" class="text-red-500 text-xs mt-1">{{ form.errors.group_ids }}</p>
                 <p v-for="(msg, key) in form.errors" :key="key" v-show="key.startsWith('group_ids.') || key.startsWith('fallback') || key === 'shopee_url'" class="text-red-500 text-xs mt-1">{{ msg }}</p>
             </div>

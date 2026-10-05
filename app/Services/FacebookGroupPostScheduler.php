@@ -137,6 +137,39 @@ class FacebookGroupPostScheduler
         return null;
     }
 
+    /**
+     * Nhóm nào lúc này xếp thêm bài được — trang chọn nhóm chỉ cho tích những nhóm 'ready'.
+     * Vướng một trong hai thì bài xếp thêm phải nằm chờ cả buổi (dễ hết hạn trước khi tới lượt):
+     *  • 'ready_at' — chưa hết giãn cách "mỗi nhóm 1 bài / N giờ" (tính như claimNext);
+     *  • 'queued'   — đã có bài chờ hoặc đang đăng, bài sau phải chờ bài đó lên rồi thêm N giờ.
+     *
+     * @param  iterable<FacebookGroup>  $groups  có last_attempt_at
+     * @return array<int, array{ready: bool, ready_at: ?string, queued: bool}>
+     */
+    public function groupReadiness(iterable $groups): array
+    {
+        $cooldownHours = $this->settings->cadence()['cooldown_hours'];
+        $queued = FacebookGroupPost::whereIn('status', [FacebookGroupPost::PENDING, FacebookGroupPost::CLAIMED])
+            ->distinct()
+            ->pluck('facebook_group_id')
+            ->flip();
+
+        $readiness = [];
+        foreach ($groups as $group) {
+            $readyAt = $group->last_attempt_at?->copy()->addHours($cooldownHours);
+            $readyAt = $readyAt?->isFuture() ? $readyAt : null;
+            $isQueued = $queued->has($group->id);
+
+            $readiness[$group->id] = [
+                'ready' => $readyAt === null && ! $isQueued,
+                'ready_at' => $readyAt?->toIso8601String(),
+                'queued' => $isQueued,
+            ];
+        }
+
+        return $readiness;
+    }
+
     /** "1.1.0-node", "1.1.0" → được; "1.0.0-node", không gửi phiên bản → chưa. */
     public static function runnerSupportsUploads(?string $version): bool
     {

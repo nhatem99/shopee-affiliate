@@ -288,6 +288,7 @@ const enabledCount = computed(() => props.groups.filter(g => g.enabled).length)
                             <th class="px-4 py-2.5 font-semibold">Nhóm</th>
                             <th class="px-4 py-2.5 font-semibold">Đã đăng</th>
                             <th class="px-4 py-2.5 font-semibold">Lần gần nhất</th>
+                            <th class="px-4 py-2.5 font-semibold">Đăng tiếp</th>
                             <th class="px-4 py-2.5 font-semibold"></th>
                         </tr>
                     </thead>
@@ -303,12 +304,18 @@ const enabledCount = computed(() => props.groups.filter(g => g.enabled).length)
                             </td>
                             <td class="px-4 py-2.5 text-[var(--color-muted)]">{{ g.posted_count }}</td>
                             <td class="px-4 py-2.5 text-xs text-[var(--color-muted)]">{{ fmt(g.last_posted_at) }}</td>
+                            <td class="px-4 py-2.5 text-xs whitespace-nowrap">
+                                <span v-if="!g.enabled" class="text-[var(--color-muted)]">—</span>
+                                <span v-else-if="g.queued" class="text-amber-600">có bài đang chờ</span>
+                                <span v-else-if="g.ready_at" class="text-[var(--color-muted)]">{{ fmt(g.ready_at) }}</span>
+                                <span v-else class="font-semibold text-green-600">được ngay</span>
+                            </td>
                             <td class="px-4 py-2.5 text-right">
                                 <button v-if="g.source === 'manual'" @click="remove(g)" class="text-xs font-semibold text-red-500 hover:underline">Xoá</button>
                             </td>
                         </tr>
                         <tr v-if="!shownGroups.length">
-                            <td colspan="5" class="px-4 py-8 text-center text-[var(--color-muted)]">Chưa có nhóm nào.</td>
+                            <td colspan="6" class="px-4 py-8 text-center text-[var(--color-muted)]">Chưa có nhóm nào.</td>
                         </tr>
                     </tbody>
                 </table>

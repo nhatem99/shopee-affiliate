@@ -403,6 +403,40 @@ class AdminFacebookGroupsTest extends TestCase
         $this->assertNotNull($deal->posts()->first()->queued_at);
     }
 
+    public function test_groups_still_in_cooldown_or_with_a_queued_post_cannot_be_picked(): void
+    {
+        app(FacebookGroupRunnerSettings::class)->saveCadence(['cooldown_hours' => 6] + FacebookGroupRunnerSettings::DEFAULT_CADENCE);
+        $ready = $this->group(['name' => 'A sẵn sàng', 'last_attempt_at' => now()->subHours(7)]);
+        $cooling = $this->group(['name' => 'B mới đăng', 'last_attempt_at' => now()->subHours(2)]);
+        $queued = $this->group(['name' => 'C có bài chờ']);
+        $deal = FacebookGroupDeal::create(['shopee_url' => 'https://shopee.vn/x-i.1.2', 'caption' => '{link}']);
+        $deal->posts()->create(['facebook_group_id' => $queued->id, 'status' => 'pending', 'queued_at' => now()]);
+
+        $this->admin()->get('/admin/fb-posts')->assertInertia(fn (Assert $page) => $page
+            ->where('cooldownHours', 6)
+            ->where('groups.0.ready', true)
+            ->where('groups.0.ready_at', null)
+            ->where('groups.1.ready', false)
+            ->where('groups.1.ready_at', $cooling->last_attempt_at->addHours(6)->toIso8601String())
+            ->where('groups.1.queued', false)
+            ->where('groups.2.ready', false)
+            ->where('groups.2.queued', true));
+
+        $this->admin()->get('/admin/fb-groups')->assertInertia(fn (Assert $page) => $page
+            ->where('groups.0.ready', true)
+            ->where('groups.1.ready', false)
+            ->where('groups.2.queued', true));
+
+        foreach ([$cooling, $queued] as $group) {
+            $this->admin()->post('/admin/fb-posts', $this->storePayload(['group_ids' => [$ready->id, $group->id]]))
+                ->assertSessionHasErrors('group_ids');
+        }
+        $this->assertSame(1, FacebookGroupPost::count());
+
+        $this->admin()->post('/admin/fb-posts', $this->storePayload(['group_ids' => [$ready->id]]))->assertSessionHasNoErrors();
+        $this->assertSame(2, FacebookGroupPost::count());
+    }
+
     public function test_store_requires_link_placeholder_and_own_fallback_link(): void
     {
         $group = $this->group();

@@ -53,8 +53,17 @@ class FacebookGroupPostController extends Controller
         $runnerVersion = $this->settings->runnerStatus()['version'];
         $runnerSupportsUploads = FacebookGroupPostScheduler::runnerSupportsUploads($runnerVersion);
 
+        $groups = FacebookGroup::enabled()->orderBy('name')->get(['id', 'name', 'url', 'last_posted_at', 'last_attempt_at']);
+        $readiness = $this->scheduler->groupReadiness($groups);
+
         return Inertia::render('Admin/FacebookGroupPosts', [
-            'groups' => FacebookGroup::enabled()->orderBy('name')->get(['id', 'name', 'url', 'last_posted_at']),
+            'groups' => $groups->map(fn (FacebookGroup $group) => [
+                'id' => $group->id,
+                'name' => $group->name,
+                'url' => $group->url,
+                'last_posted_at' => $group->last_posted_at,
+            ] + $readiness[$group->id]),
+            'cooldownHours' => $this->settings->cadence()['cooldown_hours'],
             'deals' => $deals->map(fn (FacebookGroupDeal $deal) => [
                 'id' => $deal->id,
                 'created_at' => $deal->created_at,
@@ -220,6 +229,12 @@ class FacebookGroupPostController extends Controller
         }
 
         $groupIds = array_values(array_unique(array_map('intval', $data['group_ids'])));
+
+        // Trang chọn nhóm đã khoá nhóm chưa tới giờ — chặn thêm ở đây phòng trang mở đã lâu.
+        $readiness = $this->scheduler->groupReadiness(FacebookGroup::whereKey($groupIds)->get(['id', 'last_attempt_at']));
+        if (collect($readiness)->contains('ready', false)) {
+            return back()->withErrors(['group_ids' => 'Có nhóm chưa tới giờ đăng hoặc đã có bài đang chờ — tải lại trang rồi chọn lại.']);
+        }
 
         DB::transaction(function () use ($data, $custom, $product, $withProductImage, $uploads, $groupIds, $request) {
             $deal = FacebookGroupDeal::create([

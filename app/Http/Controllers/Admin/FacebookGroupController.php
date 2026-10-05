@@ -37,6 +37,15 @@ class FacebookGroupController extends Controller
         $lastSeen = $runner['last_seen_at'] ? Carbon::parse($runner['last_seen_at']) : null;
         $token = $this->settings->token();
 
+        $groups = FacebookGroup::query()
+            ->withCount(['posts as posted_count' => fn ($q) => $q->whereIn('status', [
+                FacebookGroupPost::POSTED, FacebookGroupPost::PENDING_APPROVAL,
+            ])])
+            ->orderByDesc('enabled')
+            ->orderBy('name')
+            ->get(['id', 'fb_group_key', 'name', 'url', 'enabled', 'source', 'disabled_reason', 'last_seen_at', 'last_attempt_at', 'last_posted_at']);
+        $readiness = $this->scheduler->groupReadiness($groups);
+
         return Inertia::render('Admin/FacebookGroups', [
             'runner' => $runner + [
                 'online' => $lastSeen !== null && $lastSeen->gt(now()->subMinutes(self::ONLINE_WITHIN_MINUTES)),
@@ -53,13 +62,7 @@ class FacebookGroupController extends Controller
             'syncRequested' => $this->settings->syncRequested(),
             'lastSyncedAt' => $this->settings->lastSyncedAt(),
             'baseUrl' => url('/'),
-            'groups' => FacebookGroup::query()
-                ->withCount(['posts as posted_count' => fn ($q) => $q->whereIn('status', [
-                    FacebookGroupPost::POSTED, FacebookGroupPost::PENDING_APPROVAL,
-                ])])
-                ->orderByDesc('enabled')
-                ->orderBy('name')
-                ->get(['id', 'fb_group_key', 'name', 'url', 'enabled', 'source', 'disabled_reason', 'last_seen_at', 'last_posted_at']),
+            'groups' => $groups->map(fn (FacebookGroup $group) => $group->toArray() + $readiness[$group->id]),
         ]);
     }
 
