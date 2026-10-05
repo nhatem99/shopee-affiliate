@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\FacebookGroup;
 use App\Models\FacebookGroupPost;
 use App\Services\FacebookGroupPostScheduler;
+use App\Services\FacebookGroupReviewChecker;
 use App\Services\FacebookGroupRunnerSettings;
 use Carbon\Carbon;
 use Illuminate\Http\JsonResponse;
@@ -38,12 +39,19 @@ class FacebookGroupController extends Controller
         $token = $this->settings->token();
 
         $groups = FacebookGroup::query()
-            ->withCount(['posts as posted_count' => fn ($q) => $q->whereIn('status', [
-                FacebookGroupPost::POSTED, FacebookGroupPost::PENDING_APPROVAL,
-            ])])
+            ->withCount([
+                'posts as posted_count' => fn ($q) => $q->whereIn('status', [
+                    FacebookGroupPost::POSTED, FacebookGroupPost::PENDING_APPROVAL,
+                ]),
+                // Kết quả bot kiểm tra "Nội dung của bạn" — xem FacebookGroupReviewChecker.
+                'posts as review_published_count' => fn ($q) => $q->where('review_state', FacebookGroupPost::REVIEW_PUBLISHED),
+                'posts as review_pending_count' => fn ($q) => $q->where('review_state', FacebookGroupPost::REVIEW_PENDING),
+                'posts as review_rejected_count' => fn ($q) => $q->whereIn('review_state', FacebookGroupReviewChecker::FINAL),
+                'posts as review_missing_count' => fn ($q) => $q->where('review_state', FacebookGroupPost::REVIEW_MISSING),
+            ])
             ->orderByDesc('enabled')
             ->orderBy('name')
-            ->get(['id', 'fb_group_key', 'name', 'url', 'enabled', 'source', 'disabled_reason', 'last_seen_at', 'last_attempt_at', 'last_posted_at']);
+            ->get(['id', 'fb_group_key', 'name', 'url', 'enabled', 'source', 'disabled_reason', 'last_seen_at', 'last_attempt_at', 'last_posted_at', 'last_checked_at']);
         $readiness = $this->scheduler->groupReadiness($groups);
 
         return Inertia::render('Admin/FacebookGroups', [
@@ -61,6 +69,11 @@ class FacebookGroupController extends Controller
             ],
             'syncRequested' => $this->settings->syncRequested(),
             'lastSyncedAt' => $this->settings->lastSyncedAt(),
+            'review' => [
+                'supported' => FacebookGroupReviewChecker::runnerSupports($runner['version']),
+                'min_version' => FacebookGroupReviewChecker::MIN_VERSION,
+                'requested_at' => $this->settings->reviewRequestedAt()?->toIso8601String(),
+            ],
             'baseUrl' => url('/'),
             'groups' => $groups->map(fn (FacebookGroup $group) => $group->toArray() + $readiness[$group->id]),
         ]);
@@ -122,6 +135,14 @@ class FacebookGroupController extends Controller
         $this->settings->requestSync();
 
         return back()->with('success', 'Đã gửi yêu cầu — bot lấy danh sách nhóm ở lượt hỏi tới (tối đa vài phút).');
+    }
+
+    /** Kiểm tra ngay bài đã đăng trong 3 ngày qua, không chờ tới lượt (bot vẫn làm lần lượt từng nhóm). */
+    public function requestReview(): RedirectResponse
+    {
+        $this->settings->requestReview();
+
+        return back()->with('success', 'Đã gửi yêu cầu — lúc rảnh bot sẽ lần lượt mở "Nội dung của bạn" của từng nhóm có bài trong 3 ngày qua.');
     }
 
     /** Thêm tay một nhóm — thêm tay nghĩa là muốn đăng, nên bật luôn. */

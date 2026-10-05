@@ -7,7 +7,7 @@ use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
-#[Fillable(['fb_group_key', 'name', 'url', 'enabled', 'source', 'disabled_reason', 'last_seen_at', 'last_attempt_at', 'last_posted_at'])]
+#[Fillable(['fb_group_key', 'name', 'url', 'enabled', 'source', 'disabled_reason', 'last_seen_at', 'last_attempt_at', 'last_posted_at', 'last_checked_at'])]
 class FacebookGroup extends Model
 {
     /**
@@ -27,6 +27,7 @@ class FacebookGroup extends Model
             'last_seen_at' => 'datetime',
             'last_attempt_at' => 'datetime',
             'last_posted_at' => 'datetime',
+            'last_checked_at' => 'datetime',
         ];
     }
 

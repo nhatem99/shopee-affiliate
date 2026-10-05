@@ -52,12 +52,14 @@ class FacebookGroupPostScheduler
         private FacebookDealCaption $captions,
         private ZaloAdminNotifier $notifier,
         private FacebookPostImages $images,
+        private FacebookGroupReviewChecker $reviews,
     ) {}
 
     /**
-     * Bot hỏi việc. Trả về một trong ba dạng:
+     * Bot hỏi việc. Trả về một trong bốn dạng:
      *  • ['type' => 'post', ...]        — đăng bài này;
      *  • ['type' => 'sync_groups']      — lấy lại danh sách nhóm đã tham gia;
+     *  • ['type' => 'review_group', ...] — lúc rảnh: xem bài đã đăng có được duyệt không;
      *  • ['type' => 'idle', 'reason', 'retry_after'] — chưa có gì, ngủ rồi hỏi lại.
      *
      * @param  array{state?: ?string, version?: ?string, account?: ?string}  $runner
@@ -91,13 +93,17 @@ class FacebookGroupPostScheduler
             return ['type' => 'sync_groups'];
         }
 
+        // Đăng bài trước; kiểm tra duyệt bài chỉ chen vào lúc rảnh, và vẫn trong khung giờ đăng.
+        $version = $runner['version'] ?? null;
         if ($blocking = $this->blockingReason()) {
-            return $this->idle($blocking['reason'], $blocking['retry_after']);
+            $review = $blocking['reason'] !== 'outside_window' ? $this->reviews->nextJob($version) : null;
+
+            return $review ?? $this->idle($blocking['reason'], $blocking['retry_after']);
         }
 
-        $post = $this->claimNext($claimKey, self::runnerSupportsUploads($runner['version'] ?? null));
+        $post = $this->claimNext($claimKey, self::runnerSupportsUploads($version));
         if (! $post) {
-            return $this->idle('empty', 120);
+            return $this->reviews->nextJob($version) ?? $this->idle('empty', 120);
         }
 
         return $this->prepare($post);
@@ -173,9 +179,14 @@ class FacebookGroupPostScheduler
     /** "1.1.0-node", "1.1.0" → được; "1.0.0-node", không gửi phiên bản → chưa. */
     public static function runnerSupportsUploads(?string $version): bool
     {
+        return self::runnerAtLeast($version, self::UPLOADS_MIN_VERSION);
+    }
+
+    public static function runnerAtLeast(?string $version, string $min): bool
+    {
         return $version !== null
             && preg_match('/^\d+(?:\.\d+)*/', $version, $match) === 1
-            && version_compare($match[0], self::UPLOADS_MIN_VERSION, '>=');
+            && version_compare($match[0], $min, '>=');
     }
 
     /** Số lượt đã (có thể) đưa bài lên Facebook từ 0h hôm nay, giờ VN. */

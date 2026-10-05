@@ -403,6 +403,25 @@ const statusClass = (s) => ({
 
 const RETRYABLE = ['failed', 'ambiguous', 'not_allowed', 'blocked', 'checkpoint', 'expired', 'cancelled']
 
+// Bot kiểm tra lại "Nội dung của bạn" trong nhóm sau khi đăng (FacebookGroupReviewChecker) — có
+// kết quả thì hiện kết quả đó thay cho điều bot thấy lúc bấm Đăng.
+const reviewLabel = {
+    published: 'Đã lên nhóm',
+    pending: 'Chờ admin nhóm duyệt',
+    declined: 'Bị từ chối',
+    removed: 'Bị admin gỡ',
+    missing: 'Không thấy trên nhóm',
+}
+const reviewClass = (s) => ({
+    published: 'bg-green-100 text-green-700',
+    pending: 'bg-amber-100 text-amber-700',
+    missing: 'bg-gray-100 text-gray-500',
+}[s] || 'bg-red-100 text-red-600')
+
+const badge = (post) => post.review_state
+    ? { label: reviewLabel[post.review_state] || post.review_state, cls: reviewClass(post.review_state) }
+    : { label: statusLabel[post.status] || post.status, cls: statusClass(post.status) }
+
 function cancel(post) {
     router.post(`/admin/fb-posts/${post.id}/cancel`, {}, { preserveScroll: true, onSuccess: flashToast })
 }
@@ -629,7 +648,10 @@ function retry(post) {
 
         <!-- Bài đã xếp -->
         <section class="bg-[var(--color-surface)] rounded-2xl border border-[var(--color-line)] p-5">
-            <h2 class="font-extrabold text-[var(--color-ink)] mb-3">Bài đã xếp</h2>
+            <h2 class="font-extrabold text-[var(--color-ink)] mb-1">Bài đã xếp</h2>
+            <p class="text-xs text-[var(--color-muted)] mb-3">
+                Khoảng 1 giờ sau khi đăng, lúc rảnh bot mở "Nội dung của bạn" trong nhóm xem bài đã lên, còn chờ duyệt hay bị từ chối/gỡ.
+            </p>
             <p v-if="errors.post" class="text-red-500 text-xs mb-3">{{ errors.post }}</p>
 
             <div v-for="deal in deals" :key="deal.id" class="border border-[var(--color-line)] rounded-xl p-4 mb-3">
@@ -652,9 +674,11 @@ function retry(post) {
                 </div>
                 <ul class="space-y-1.5">
                     <li v-for="post in deal.posts" :key="post.id" class="flex flex-wrap items-center gap-2 text-sm">
-                        <span class="text-[11px] font-semibold px-2 py-0.5 rounded-full whitespace-nowrap" :class="statusClass(post.status)">{{ statusLabel[post.status] || post.status }}</span>
+                        <span class="text-[11px] font-semibold px-2 py-0.5 rounded-full whitespace-nowrap" :class="badge(post).cls">{{ badge(post).label }}</span>
                         <a :href="post.group_url" target="_blank" rel="noopener" class="hover:underline truncate max-w-[16rem]">{{ post.group_name || post.group_url }}</a>
                         <span v-if="post.finished_at" class="text-[11px] text-[var(--color-muted)]">{{ fmt(post.finished_at) }}</span>
+                        <span v-if="post.reviewed_at" class="text-[11px] text-[var(--color-muted)]">· kiểm tra {{ fmt(post.reviewed_at) }}</span>
+                        <a v-if="post.post_url" :href="post.post_url" target="_blank" rel="noopener" class="text-[11px] font-semibold text-[var(--color-accent)] hover:underline">Xem bài</a>
                         <span v-if="post.link_kind === 'fallback'" class="text-[11px] text-amber-600">dùng link lúc soạn</span>
                         <button v-if="post.status === 'pending'" @click="cancel(post)" class="ml-auto text-xs font-semibold text-red-500 hover:underline">Huỷ</button>
                         <button v-else-if="RETRYABLE.includes(post.status)" @click="retry(post)" class="ml-auto text-xs font-semibold text-[var(--color-accent)] hover:underline">Đăng lại</button>

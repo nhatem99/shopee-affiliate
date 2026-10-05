@@ -103,6 +103,13 @@ export class Api {
     return body;
   }
 
+  // Báo những gì thấy ở các tab "Nội dung của bạn" của nhóm. Lỗi thì thôi — server giao lại sau.
+  async reportReview(groupId, tabs) {
+    const [status, data] = await this.post(`/runner/fb/groups/${groupId}/review`, { tabs });
+    if (status !== 200) throw new ApiError(`Báo kết quả kiểm tra nhóm lỗi HTTP ${status}: ${data.message || ''}`);
+    return data;
+  }
+
   async uploadGroups(groups, account) {
     const [status, data] = await this.post('/runner/fb/groups', { groups, account });
     if (status !== 200) throw new ApiError(`Gửi danh sách nhóm lỗi HTTP ${status}: ${JSON.stringify(data)}`);

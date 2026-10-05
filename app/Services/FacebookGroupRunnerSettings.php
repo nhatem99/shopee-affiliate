@@ -34,6 +34,10 @@ class FacebookGroupRunnerSettings
 
     private const SYNCED_KEY = 'fb_runner_synced_at';
 
+    private const NEXT_REVIEW_KEY = 'fb_runner_next_review_at';
+
+    private const REVIEW_REQUESTED_KEY = 'fb_runner_review_requested_at';
+
     /**
      * Mặc định "thận trọng": một nick cá nhân đăng cùng một link vào nhiều nhóm là đúng kiểu
      * Facebook bắt spam — mất nick đắt hơn nhiều so với đăng chậm.
@@ -121,6 +125,33 @@ class FacebookGroupRunnerSettings
     public function setNextAllowedAt(?CarbonInterface $at): void
     {
         Setting::set(self::NEXT_ALLOWED_KEY, $at?->toIso8601String() ?? '');
+    }
+
+    /** Lượt kiểm tra duyệt bài kế tiếp được giao từ lúc nào — các lượt cách nhau vài phút. */
+    public function nextReviewAt(): ?CarbonImmutable
+    {
+        $value = Setting::get(self::NEXT_REVIEW_KEY);
+
+        return is_string($value) && $value !== '' ? CarbonImmutable::parse($value) : null;
+    }
+
+    public function setNextReviewAt(?CarbonInterface $at): void
+    {
+        Setting::set(self::NEXT_REVIEW_KEY, $at?->toIso8601String() ?? '');
+    }
+
+    /** Admin bấm "Kiểm tra duyệt bài ngay": nhóm nào chưa kiểm tra từ lúc đó thì kiểm tra luôn. */
+    public function reviewRequestedAt(): ?CarbonImmutable
+    {
+        $value = Setting::get(self::REVIEW_REQUESTED_KEY);
+
+        return is_string($value) && $value !== '' ? CarbonImmutable::parse($value) : null;
+    }
+
+    public function requestReview(): void
+    {
+        Setting::set(self::REVIEW_REQUESTED_KEY, now()->toIso8601String());
+        $this->setNextReviewAt(null);
     }
 
     /**

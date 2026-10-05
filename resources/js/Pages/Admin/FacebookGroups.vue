@@ -18,6 +18,8 @@ const props = defineProps({
     today: Object,
     syncRequested: Boolean,
     lastSyncedAt: String,
+    // { supported, min_version, requested_at } — kiểm tra duyệt bài cần bot đủ mới.
+    review: Object,
     baseUrl: String,
     groups: Array,
 })
@@ -36,7 +38,7 @@ function fmt(iso) {
 // Trang tự tải lại trạng thái mỗi 30 giây — bot hỏi việc 1-2 phút/lần, nhìn trang là biết nó còn chạy.
 let timer = null
 onMounted(() => {
-    timer = setInterval(() => router.reload({ only: ['runner', 'paused', 'pausedReason', 'blocking', 'today', 'syncRequested', 'lastSyncedAt', 'groups'] }), 30000)
+    timer = setInterval(() => router.reload({ only: ['runner', 'paused', 'pausedReason', 'blocking', 'today', 'syncRequested', 'lastSyncedAt', 'review', 'groups'] }), 30000)
 })
 onBeforeUnmount(() => clearInterval(timer))
 
@@ -108,6 +110,20 @@ function saveCadence() {
 // ── Nhóm ────────────────────────────────────────────────────────────────────
 function requestSync() {
     router.post('/admin/fb-groups/sync', {}, { preserveScroll: true, onSuccess: flashToast })
+}
+
+function requestReview() {
+    router.post('/admin/fb-groups/review', {}, { preserveScroll: true, onSuccess: flashToast })
+}
+
+// Cột "Duyệt": bot xem "Nội dung của bạn" trong nhóm thấy bài mình ở đâu.
+function reviewParts(g) {
+    return [
+        [g.review_published_count, 'lên nhóm', 'font-semibold text-green-600'],
+        [g.review_pending_count, 'chờ duyệt', 'text-amber-600'],
+        [g.review_rejected_count, 'từ chối/gỡ', 'font-semibold text-red-500'],
+        [g.review_missing_count, 'không thấy', 'text-[var(--color-muted)]'],
+    ].filter(([n]) => n > 0)
 }
 
 const addForm = useForm({ url: '', name: '' })
@@ -262,7 +278,16 @@ const enabledCount = computed(() => props.groups.filter(g => g.enabled).length)
                     {{ syncRequested ? 'Đang chờ bot lấy nhóm…' : 'Lấy nhóm đã tham gia' }}
                 </button>
                 <span class="text-xs text-[var(--color-muted)]">Lần lấy gần nhất: {{ fmt(lastSyncedAt) }}</span>
+                <button @click="requestReview" :disabled="!review.supported"
+                    class="bg-[var(--color-peach-soft)] hover:bg-[var(--color-peach)] text-[var(--color-ink)] font-semibold px-5 py-2.5 rounded-xl text-sm transition disabled:opacity-50">
+                    Kiểm tra duyệt bài ngay
+                </button>
+                <span v-if="review.requested_at" class="text-xs text-[var(--color-muted)]">Yêu cầu lúc {{ fmt(review.requested_at) }}</span>
             </div>
+            <p v-if="!review.supported" class="text-xs text-amber-600 -mt-2 mb-4">
+                Bot đang chạy bản {{ runner.version || 'cũ' }} — từ bản {{ review.min_version }} bot mới tự kiểm tra bài có được duyệt không.
+                Cập nhật bot (<span class="font-mono">git pull</span> trên điện thoại rồi chạy lại bot).
+            </p>
 
             <form @submit.prevent="addGroup" class="flex flex-col md:flex-row gap-2 mb-4">
                 <input v-model="addForm.url" type="text" required placeholder="Link nhóm: https://www.facebook.com/groups/..."
@@ -287,6 +312,7 @@ const enabledCount = computed(() => props.groups.filter(g => g.enabled).length)
                             <th class="px-4 py-2.5 font-semibold">Đăng</th>
                             <th class="px-4 py-2.5 font-semibold">Nhóm</th>
                             <th class="px-4 py-2.5 font-semibold">Đã đăng</th>
+                            <th class="px-4 py-2.5 font-semibold">Duyệt</th>
                             <th class="px-4 py-2.5 font-semibold">Lần gần nhất</th>
                             <th class="px-4 py-2.5 font-semibold">Đăng tiếp</th>
                             <th class="px-4 py-2.5 font-semibold"></th>
@@ -303,6 +329,12 @@ const enabledCount = computed(() => props.groups.filter(g => g.enabled).length)
                                 <p v-if="g.disabled_reason" class="text-xs text-red-500 mt-0.5">Bot tự tắt: {{ g.disabled_reason }}</p>
                             </td>
                             <td class="px-4 py-2.5 text-[var(--color-muted)]">{{ g.posted_count }}</td>
+                            <td class="px-4 py-2.5 text-xs whitespace-nowrap" :title="g.last_checked_at ? `Bot kiểm tra lúc ${fmt(g.last_checked_at)}` : ''">
+                                <template v-if="reviewParts(g).length">
+                                    <span v-for="([n, label, cls], i) in reviewParts(g)" :key="label" :class="cls">{{ i ? ' · ' : '' }}{{ n }} {{ label }}</span>
+                                </template>
+                                <span v-else class="text-[var(--color-muted)]">chưa kiểm tra</span>
+                            </td>
                             <td class="px-4 py-2.5 text-xs text-[var(--color-muted)]">{{ fmt(g.last_posted_at) }}</td>
                             <td class="px-4 py-2.5 text-xs whitespace-nowrap">
                                 <span v-if="!g.enabled" class="text-[var(--color-muted)]">—</span>
@@ -315,7 +347,7 @@ const enabledCount = computed(() => props.groups.filter(g => g.enabled).length)
                             </td>
                         </tr>
                         <tr v-if="!shownGroups.length">
-                            <td colspan="6" class="px-4 py-8 text-center text-[var(--color-muted)]">Chưa có nhóm nào.</td>
+                            <td colspan="7" class="px-4 py-8 text-center text-[var(--color-muted)]">Chưa có nhóm nào.</td>
                         </tr>
                     </tbody>
                 </table>

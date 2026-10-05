@@ -2,8 +2,10 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\FacebookGroup;
 use App\Models\FacebookGroupPost;
 use App\Services\FacebookGroupPostScheduler;
+use App\Services\FacebookGroupReviewChecker;
 use App\Services\FacebookPostImages;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -58,6 +60,27 @@ class FacebookRunnerController extends Controller
         }
 
         return response()->json(['ok' => true]);
+    }
+
+    /**
+     * Bot báo những gì thấy ở các tab "Nội dung của bạn" của một nhóm (việc "review_group").
+     * Mỗi bài: chữ hiện trên trang (đã cắt) và link bài nếu có. Bot không thấy bài nào dạng
+     * thẻ thì gửi cả khối chữ của trang thành một mục không link.
+     */
+    public function review(Request $request, FacebookGroupReviewChecker $reviews, int $id): JsonResponse
+    {
+        $group = FacebookGroup::findOrFail($id);
+
+        $data = $request->validate([
+            'tabs' => ['required', 'array:'.implode(',', array_keys(FacebookGroupReviewChecker::TABS))],
+            'tabs.*.ok' => ['required', 'boolean'],
+            'tabs.*.error' => ['nullable', 'string', 'max:500'],
+            'tabs.*.items' => ['present', 'array', 'max:100'],
+            'tabs.*.items.*.text' => ['nullable', 'string', 'max:20000'],
+            'tabs.*.items.*.url' => ['nullable', 'string', 'max:1000'],
+        ]);
+
+        return response()->json($reviews->apply($group, $data['tabs']));
     }
 
     /** Ảnh admin tự tải lên cho bài — bot tải về đính kèm (đường dẫn có trong lượt nhận bài). */

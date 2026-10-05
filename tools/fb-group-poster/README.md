@@ -1,7 +1,8 @@
 # Bot đăng deal vào nhóm Facebook — bản chạy trên điện thoại
 
 Bản Node của bot ở `deploy/fb-group-runner` (bản Python cho Mac). Hai bản nói chuyện với server
-giống hệt nhau, chỉ **chạy một bản một lúc**.
+giống nhau, chỉ **chạy một bản một lúc** — riêng việc kiểm tra bài có được duyệt không (bên dưới)
+chỉ bản Node từ 1.2.0 làm.
 
 Bot chạy trên **điện thoại Android (Termux)**, dùng wifi nhà. Không chạy trên VPS: Facebook nhận
 ra IP trung tâm dữ liệu và bắt xác minh/khoá nick.
@@ -88,6 +89,22 @@ Bài soạn ở /admin/fb-posts có thể kèm tới 5 ảnh (ảnh sản phẩm
 "bài tự soạn" không link. Ảnh tự tải lên chỉ bot từ bản 1.1.0 đăng được — bot cũ hơn được server
 cho qua những bài đó (trang admin báo "đang chờ"), nên nhớ `git pull` rồi chạy lại bot.
 
+## 3b. Thử đọc "Nội dung của bạn" của một nhóm
+
+Từ bản 1.2.0, lúc rảnh bot tự mở "Nội dung của bạn" trong nhóm (Đang chờ / Đã đăng / Bị từ chối / Đã
+gỡ) để biết bài đã đăng có được admin nhóm duyệt không. Thử tay trên một nhóm — chỉ đọc, không gọi
+server:
+
+```bash
+node poster.mjs review --group https://www.facebook.com/groups/<id-nhom-test>
+node poster.mjs review --group https://www.facebook.com/groups/<id-nhom-test> --text "đoạn đầu bài đã đăng"
+```
+
+Mỗi tab in ra: mở được không, các bài thấy được (kèm link nếu có). Có `--text` thì in thêm bài đó
+nằm ở tab nào. Tab nào báo "KHÔNG mở được" mà trên Facebook vẫn có tab đó: mở tab bằng tay, chép
+đường dẫn trên thanh địa chỉ gửi cho người sửa code (đường dẫn các tab nằm ở
+`FacebookGroupReviewChecker::TABS` phía server và `lib/review.mjs`).
+
 ## 4. Chạy
 
 Chạy tay (Ctrl+C để dừng):
@@ -110,6 +127,9 @@ Trong cài đặt Android của Xiaomi, với **Termux**, **Termux:X11**, **Term
 
 - **Lấy danh sách nhóm:** bấm **Lấy nhóm đã tham gia** ở `/admin/fb-groups` (hoặc `node poster.mjs sync`).
 - **Bật nhóm:** nhóm lấy về đều đang tắt — tự tích nhóm được đăng, đọc nội quy nhóm trước.
+- **Bài có được duyệt không:** bot tự kiểm tra khoảng 1 giờ sau khi đăng, lúc rảnh và trong khung
+  giờ đăng; kết quả hiện ở `/admin/fb-posts` (từng bài) và cột **Duyệt** ở `/admin/fb-groups` (từng
+  nhóm). Muốn kiểm tra ngay: nút **Kiểm tra duyệt bài ngay** ở `/admin/fb-groups`.
 - **Theo dõi:** `/admin/fb-posts`. Nhật ký: `~/.local/share/tietkiemvi-fb-runner/logs/`. Ảnh chụp
   màn hình khi lỗi: `~/.local/share/tietkiemvi-fb-runner/screenshots/`.
 

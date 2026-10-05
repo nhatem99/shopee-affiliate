@@ -7,6 +7,8 @@
 //   node poster.mjs check                 kiểm tra kết nối server + trình duyệt + đã đăng nhập chưa
 //   node poster.mjs dry-run --group URL   thử trên một nhóm: điền hết nhưng KHÔNG bấm Đăng
 //                                         (thêm --image <ảnh> tối đa 5 lần để thử kèm ảnh)
+//   node poster.mjs review --group URL    xem "Nội dung của bạn" của một nhóm bot đọc được gì
+//                                         (thêm --text "đoạn đầu bài" để xem bài đó nằm ở tab nào)
 import fs from 'node:fs';
 import path from 'node:path';
 import readline from 'node:readline/promises';
@@ -17,7 +19,8 @@ import { accountId, launch } from './lib/browser.mjs';
 import * as configModule from './lib/config.mjs';
 import { ScrapeError, scrapeJoinedGroups } from './lib/groups.mjs';
 import { MAX_IMAGES, downloadAsJpeg, fetchAsJpeg, isUpload } from './lib/images.mjs';
-import { postToGroup } from './lib/post.mjs';
+import { GROUP_URL, postToGroup } from './lib/post.mjs';
+import { fingerprint, scanTabs, tabUrls } from './lib/review.mjs';
 import { State } from './lib/state.mjs';
 
 let logFile = null;
@@ -128,6 +131,39 @@ async function cmdDryRun(cfg, group, caption, images) {
   return result.status === 'dry_run' ? 0 : 1;
 }
 
+// ── review ───────────────────────────────────────────────────────────────────
+
+const TAB_NAMES = { pending: 'Đang chờ', published: 'Đã đăng', declined: 'Bị từ chối', removed: 'Đã gỡ' };
+
+// Chạy tay, không gọi server: in ra những gì bot đọc được ở từng tab — để thử khi Facebook đổi
+// giao diện hoặc đường dẫn các tab.
+async function cmdReview(cfg, group, text) {
+  const snippet = text ? [...fingerprint(text)].slice(0, 30).join('') : null;
+  const browser = await launch(cfg);
+  let opened = 0;
+  try {
+    const tabs = await scanTabs(browser.page, tabUrls(group));
+    for (const [state, tab] of Object.entries(tabs)) {
+      const name = TAB_NAMES[state] || state;
+      if (!tab.ok) {
+        log(`[${name}] KHÔNG mở được: ${tab.error}`);
+        continue;
+      }
+      opened++;
+      const posts = tab.items.filter((item) => !item.page);
+      log(`[${name}] mở được — ${posts.length} bài dạng thẻ${posts.length ? '' : ' (server sẽ dò trong cả khối chữ của trang)'}`);
+      for (const item of posts) log(`    • ${item.text.split(/\s+/).join(' ').slice(0, 100)}${item.url ? `  ${item.url}` : ''}`);
+      if (snippet) {
+        const hit = tab.items.some((item) => fingerprint(item.text).includes(snippet));
+        log(hit ? '    → THẤY bài có đoạn đầu này ở tab này' : '    → không thấy bài có đoạn đầu này');
+      }
+    }
+  } finally {
+    await browser.close();
+  }
+  return opened ? 0 : 1;
+}
+
 // ── sync ─────────────────────────────────────────────────────────────────────
 
 async function syncGroups(api, browser) {
@@ -236,6 +272,26 @@ async function doPost(api, state, cfg, browser, job) {
   state.newClaimKey();
 }
 
+// Facebook bắt xác minh/chặn lúc kiểm tra duyệt bài — báo ở lượt hỏi việc kế tiếp để server tạm
+// dừng và báo admin (lượt đăng bài thì báo qua kết quả bài).
+let pendingState = null;
+
+async function doReview(api, browser, job) {
+  log(`Kiểm tra bài đã đăng ở nhóm ${job.group_name || job.group_url}`);
+  const tabs = await scanTabs(browser.page, job.tabs || {});
+  const issue = Object.values(tabs).find((tab) => tab.issue);
+  if (issue) {
+    pendingState = issue.issue;
+    log(`Facebook báo: ${issue.error}`);
+  }
+  for (const [state, tab] of Object.entries(tabs)) {
+    if (!tab.ok) log(`  Tab ${TAB_NAMES[state] || state} không mở được: ${tab.error}`);
+  }
+  const payload = Object.fromEntries(Object.entries(tabs).map(([state, tab]) => [state, { ok: tab.ok, error: tab.error, items: tab.items }]));
+  const summary = await api.reportReview(job.group_id, payload);
+  log(`Kết quả kiểm tra: thấy ${summary.found}/${summary.checked} bài trong "Nội dung của bạn".`);
+}
+
 // Vì sao server chưa giao bài (reason trong FacebookGroupPostScheduler::poll/blockingReason).
 const IDLE_REASONS = {
   empty: 'Chưa có bài nào trong hàng đợi — soạn bài ở /admin/fb-posts.',
@@ -260,11 +316,17 @@ async function tick(api, state, cfg, browser) {
   await flushUnreported(api, state);
 
   const uid = await accountId(browser.context);
-  const job = await api.poll(state.claimKey, uid ? 'ok' : 'logged_out', accountLabel(uid));
+  const job = await api.poll(state.claimKey, pendingState ?? (uid ? 'ok' : 'logged_out'), accountLabel(uid));
+  pendingState = null;
 
   if (job.type === 'post') {
     lastIdle = null;
     await doPost(api, state, cfg, browser, job);
+    return rand(20, 40);
+  }
+  if (job.type === 'review_group') {
+    lastIdle = null;
+    await doReview(api, browser, job);
     return rand(20, 40);
   }
   if (job.type === 'sync_groups') {
@@ -363,15 +425,16 @@ async function main() {
       group: { type: 'string' },
       caption: { type: 'string', default: 'Bài thử (không đăng)\nDòng 2\nhttps://shopee.vn' },
       image: { type: 'string', multiple: true, default: [] },
+      text: { type: 'string' },
     },
   });
 
-  if (!['login', 'run', 'sync', 'check', 'dry-run'].includes(command)) {
-    console.error('Dùng: node poster.mjs <login|run|sync|check|dry-run --group URL>');
+  if (!['login', 'run', 'sync', 'check', 'dry-run', 'review'].includes(command)) {
+    console.error('Dùng: node poster.mjs <login|run|sync|check|dry-run --group URL|review --group URL>');
     return 1;
   }
-  if (command === 'dry-run' && !values.group) {
-    console.error('dry-run cần --group https://www.facebook.com/groups/...');
+  if (['dry-run', 'review'].includes(command) && !GROUP_URL.test(values.group || '')) {
+    console.error(`${command} cần --group https://www.facebook.com/groups/...`);
     return 1;
   }
 
@@ -389,6 +452,7 @@ async function main() {
   if (command === 'login') return cmdLogin(cfg);
   if (command === 'check') return cmdCheck(cfg);
   if (command === 'dry-run') return cmdDryRun(cfg, values.group, values.caption, values.image);
+  if (command === 'review') return cmdReview(cfg, values.group, values.text);
   if (command === 'sync') return cmdSync(cfg);
   return cmdRun(cfg);
 }

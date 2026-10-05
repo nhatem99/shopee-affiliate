@@ -7,6 +7,7 @@ import test from 'node:test';
 import { groupKey } from '../lib/groups.mjs';
 import { allowed, isUpload } from '../lib/images.mjs';
 import { GROUP_URL } from '../lib/post.mjs';
+import { TAB_URL, fingerprint, tabUrls } from '../lib/review.mjs';
 import { State } from '../lib/state.mjs';
 import * as ui from '../lib/ui.mjs';
 
@@ -71,4 +72,26 @@ test('ui nhận đúng chữ tiếng Việt và tiếng Anh', () => {
   assert.ok(!ui.POST_BUTTON.test('Đăng nhập'));
   assert.ok(ui.BLOCKED.test('Bạn tạm thời bị chặn'));
   assert.ok(ui.APPROVAL.test('Bài viết đang chờ phê duyệt'));
+});
+
+test('tabUrls dựng đúng 4 tab "Nội dung của bạn" và TAB_URL chỉ cho trang con của nhóm', () => {
+  const tabs = tabUrls('https://www.facebook.com/groups/sansale.vn/');
+  assert.equal(tabs.pending, 'https://www.facebook.com/groups/sansale.vn/my_pending_content/');
+  assert.equal(tabs.removed, 'https://www.facebook.com/groups/sansale.vn/my_removed_content/');
+  for (const url of Object.values(tabs)) assert.ok(TAB_URL.test(url));
+  assert.ok(!TAB_URL.test('https://www.facebook.com/me'));
+  assert.ok(!TAB_URL.test('https://www.facebook.com/groups/abc/posts/123'));
+  assert.ok(!TAB_URL.test('https://evil.com/groups/abc/my_pending_content/'));
+  assert.ok(!TAB_URL.test('https://www.facebook.com/groups/abc/../../settings/'));
+});
+
+test('fingerprint giống phía server: bỏ emoji, dấu cách, chữ hoa, khác dạng Unicode', () => {
+  assert.equal(fingerprint('🔥 GIẢM giá\n  sập-sàn!!'), 'giảmgiásậpsàn');
+  assert.equal(fingerprint('Giảm giá Sập Sàn'.normalize('NFD')), 'giảmgiásậpsàn');
+});
+
+test('ui nhận ra trang con không xem được', () => {
+  assert.ok(ui.UNAVAILABLE.test('Nội dung này hiện không hiển thị'));
+  assert.ok(ui.UNAVAILABLE.test("This content isn't available right now"));
+  assert.ok(!ui.UNAVAILABLE.test('Không có bài viết nào để hiển thị'));
 });
