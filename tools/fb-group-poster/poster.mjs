@@ -199,6 +199,14 @@ async function cmdSwitch(cfg, to) {
     log(`Cookie đổi: ${changed.length ? changed.join(', ') : '(không)'}`);
     if (!result.ok) {
       log(`KHÔNG chuyển được: ${result.error}`);
+      const shot = path.join(cfg.dataDir, 'screenshots', `switch-${stamp().replace(/\D/g, '')}.png`);
+      try {
+        fs.mkdirSync(path.dirname(shot), { recursive: true });
+        await browser.page.screenshot({ path: shot });
+        log(`Ảnh chụp màn hình: ${shot}`);
+      } catch {
+        /* trình duyệt đã đóng */
+      }
       return 1;
     }
     log(`Đã chuyển — đang dùng uid ${result.actorId}.`);

@@ -52,17 +52,30 @@ export async function switchTo(browser, profile, { log = () => {} } = {}) {
   if (issue) return fail(issue[1], issue[0]);
 
   const button = await findSwitchButton(page);
-  if (!button) return fail(`Không thấy nút "Chuyển ngay" trên trang ${profile.url} — nick có còn quản trị page này không?`);
+  if (!button) return fail(`Không thấy nút "Chuyển ngay" trên trang ${profile.url} — nick có còn quản trị page này không? ${await describe(page)}`);
+  log(`Bấm nút "${await label(button)}".`);
   await button.click();
 
-  // Facebook tải lại trang sau khi chuyển — chờ cookie i_user xuất hiện.
+  // Facebook tải lại trang sau khi chuyển — chờ cookie i_user xuất hiện. Hiện hộp hỏi lại thì bấm
+  // xác nhận (tối đa 2 lần: bấm hụt lúc hộp đang mở dần thì còn một lần nữa).
   const deadline = Date.now() + 30_000;
+  let confirmed = 0;
   while (Date.now() < deadline) {
     await sleep(1000);
     ({ actorId } = await identity(context));
     if (actorId !== accountId) break;
+    if (confirmed < 2) {
+      const confirm = await confirmButton(page);
+      if (confirm) {
+        log(`Facebook hỏi xác nhận — bấm "${await label(confirm)}".`);
+        await confirm.click().catch(() => {});
+        confirmed++;
+      }
+    }
   }
-  if (actorId === accountId) return fail('Đã bấm "Chuyển ngay" nhưng sau 30 giây Facebook vẫn để nick chính');
+  if (actorId === accountId) {
+    return fail(`Đã bấm "Chuyển ngay"${confirmed ? ' và xác nhận' : ''} nhưng sau 30 giây Facebook vẫn để nick chính. ${await describe(page)}`);
+  }
   if (profile.fb_id && actorId !== profile.fb_id) return fail(`Chuyển nhầm sang uid ${actorId} (cần uid ${profile.fb_id})`);
 
   await pause(2, 4);
@@ -78,6 +91,61 @@ async function open(page, url) {
   }
   await pause(2.5, 4.5);
   return problem(page);
+}
+
+// Nút xác nhận trong hộp thoại đang mở, không có thì null. Trang đang tải lại thì coi như chưa có.
+async function confirmButton(page) {
+  try {
+    const button = page.locator('[role="dialog"]').getByRole('button', { name: ui.SWITCH_CONFIRM }).first();
+    return (await button.isVisible()) ? button : null;
+  } catch {
+    return null;
+  }
+}
+
+async function label(locator) {
+  try {
+    const text = (await locator.getAttribute('aria-label', { timeout: 2_000 })) || (await locator.innerText({ timeout: 2_000 }));
+    return text.replace(/\s+/g, ' ').trim().slice(0, 60);
+  } catch {
+    return '?';
+  }
+}
+
+// Chuyển hỏng: trang đang hiện gì (hộp thoại, các nút có chữ chuyển/switch) — đi kèm lỗi lên server
+// và in ra ở lệnh "switch", để sửa bộ chọn nút mà không phải đoán.
+export async function describe(page) {
+  try {
+    const { dialogs, buttons } = await page.evaluate(() => {
+      const visible = (el) => {
+        const box = el.getBoundingClientRect();
+        return box.width > 0 && box.height > 0;
+      };
+      const clean = (text) => (text || '').replace(/\s+/g, ' ').trim();
+      return {
+        dialogs: Array.from(document.querySelectorAll('[role="dialog"]'))
+          .filter(visible)
+          .map((dialog) => clean(dialog.innerText).slice(0, 160))
+          .filter(Boolean)
+          .slice(0, 2),
+        buttons: [
+          ...new Set(
+            Array.from(document.querySelectorAll('[role="button"], button'))
+              .filter(visible)
+              .map((button) => clean(button.getAttribute('aria-label') || button.innerText).slice(0, 60))
+              .filter((text) => /chuyển|switch/i.test(text)),
+          ),
+        ].slice(0, 8),
+      };
+    });
+    return [
+      `Trang: ${page.url().slice(0, 100)}`,
+      dialogs.length ? `Hộp thoại: ${dialogs.map((text) => `"${text}"`).join(' | ')}` : 'Không có hộp thoại',
+      buttons.length ? `Nút chuyển/switch: ${buttons.map((text) => `"${text}"`).join(', ')}` : 'Không có nút chuyển/switch',
+    ].join('. ');
+  } catch (error) {
+    return `(Không đọc được trang: ${String(error.message).slice(0, 80)})`;
+  }
 }
 
 async function findSwitchButton(page) {

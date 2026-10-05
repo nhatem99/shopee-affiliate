@@ -8,6 +8,9 @@ export const PHOTO_BUTTON = /^\s*(Ảnh\/video|Photo\/video)\s*$/i;
 export const JOIN_BUTTON = /^\s*(Tham gia nhóm|Join group)\s*$/i;
 // Trên trang của một Trang mình quản trị (đang dùng nick chính): nút chuyển sang dùng Trang đó.
 export const SWITCH_BUTTON = /^\s*(Chuyển ngay|Chuyển|Switch now|Switch)\s*$/i;
+// Bấm nút trên xong Facebook có thể hỏi lại trong hộp thoại ("Chuyển sang <Trang>?") — nút xác nhận.
+// Chỉ tìm trong hộp thoại nên nới hơn SWITCH_BUTTON được.
+export const SWITCH_CONFIRM = /^\s*(Chuyển( ngay| trang cá nhân| sang .{1,80})?|Switch( now| profiles?| to .{1,80})?)\s*$/i;
 
 // Sau khi bấm Đăng ở nhóm bắt duyệt bài.
 export const APPROVAL = /(chờ (quản trị viên )?(phê )?duyệt|đã gửi để phê duyệt|pending (admin )?approval|sent for approval|submitted for (admin )?approval)/i;

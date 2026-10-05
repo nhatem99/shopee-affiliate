@@ -123,6 +123,15 @@ test('SWITCH_BUTTON chỉ khớp đúng chữ trên nút', () => {
   assert.ok(!ui.SWITCH_BUTTON.test('Chuyển sang trang khác'));
 });
 
+test('SWITCH_CONFIRM nhận nút xác nhận trong hộp thoại, không nhận nút khác', () => {
+  for (const text of ['Chuyển', 'Chuyển ngay', 'Chuyển sang Shop Test', 'Chuyển trang cá nhân', 'Switch', 'Switch profiles', 'Switch to Shop Test']) {
+    assert.ok(ui.SWITCH_CONFIRM.test(text), text);
+  }
+  for (const text of ['Hủy', 'Cancel', 'Chuyển tiền', 'Không chuyển']) {
+    assert.ok(!ui.SWITCH_CONFIRM.test(text), text);
+  }
+});
+
 test('identity: i_user là page đang dùng, không có thì là nick chính', async () => {
   const context = (cookies) => ({ cookies: async () => cookies.map(([name, value]) => ({ name, value })) });
   assert.deepEqual(await identity(context([['c_user', '100'], ['xs', 'x']])), { accountId: '100', actorId: '100' });
