@@ -70,7 +70,9 @@ class VoucherCatalogTest extends TestCase
             'appliesText' => 'SP áp dụng',
             'shopName' => 'Shopee',
             'voucherImage' => 'https://down-vn.img.susercontent.com/file/abc.webp',
-            'endTime' => 1790787540000,
+            // Tính từ hôm nay, không ghi số cố định: hạn cố định trôi qua là pruneExpired()
+            // xoá mã ngay sau đồng bộ và cả file test đỏ theo lịch.
+            'endTime' => now()->addDays(24)->getTimestampMs(),
             'category' => 'cashback',
             'usagePercent' => 0,
             'usageText' => 'Hết hạn sau: còn 24 ngày nữa',
