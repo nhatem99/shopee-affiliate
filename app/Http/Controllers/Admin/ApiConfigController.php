@@ -9,6 +9,7 @@ use App\Services\FacebookCommentProbeService;
 use App\Services\FacebookPageService;
 use App\Services\GanmaService;
 use App\Services\KieuShopeeService;
+use App\Services\KieuSmartLinkService;
 use App\Services\LaymaVoucherService;
 use App\Services\RestockScheduleService;
 use App\Services\ShopeeApiService;
@@ -62,7 +63,7 @@ class ApiConfigController extends Controller
             // updateOrCreate bỏ qua cột và DB lấy default true — hai nguồn mã cùng bật, mà
             // makeExclusive() cũng không chạy vì $config->is_active còn null trong bộ nhớ.
             'is_active' => ['required', 'boolean'],
-            'platform' => ['required', 'in:shopee,lazada,tiktok,accesstrade,facebook,kieushopee,ganma,laymavoucher'],
+            'platform' => ['required', 'in:shopee,lazada,tiktok,accesstrade,facebook,kieushopee,ganma,laymavoucher,kieusmartlink'],
             'meta' => ['nullable', 'array'],
             'meta.target_post_id' => ['nullable', 'string', 'max:255'],
             // Nhóm bài viết nhận comment. Nhiều bài để comment của các sản phẩm khác nhau rải
@@ -119,6 +120,12 @@ class ApiConfigController extends Controller
             if (in_array($config->platform, [KieuShopeeService::SOURCE, LaymaVoucherService::SOURCE], true)) {
                 $service = $config->platform === LaymaVoucherService::SOURCE ? LaymaVoucherService::class : KieuShopeeService::class;
                 $result = app($service)->testConnection();
+
+                return response()->json($result, $result['ok'] ? 200 : 422);
+            }
+
+            if ($config->platform === KieuSmartLinkService::SOURCE) {
+                $result = app(KieuSmartLinkService::class)->testConnection();
 
                 return response()->json($result, $result['ok'] ? 200 : 422);
             }

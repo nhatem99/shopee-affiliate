@@ -246,4 +246,15 @@ return [
         'action_payload' => env('LAYMAVOUCHER_ACTION_PAYLOAD', '["$K1"]'),
     ],
 
+    // Tool "Rút gọn link" của kieushopee.com — trả link affiliate rút gọn chính thức của Shopee
+    // (đích /opaanlp/, "voucher tự áp"), không phải link có mã như hai khối trên. Xem
+    // KieuSmartLinkService. Endpoint là trang tool; request chuyển link gửi tới {endpoint}/convert.
+    'kieusmartlink' => [
+        'endpoint' => env('KIEUSMARTLINK_ENDPOINT', 'https://kieushopee.com/smart-links'),
+
+        // Ô "Sub ID 1 (Nền tảng)" trên trang tool — họ điền sẵn "Facebook". Chỉ là nhãn trong báo
+        // cáo của họ (utm_content), AffiliateLinkRewriterService thay bằng nhãn của mình.
+        'sub_id1' => env('KIEUSMARTLINK_SUB_ID1', 'Facebook'),
+    ],
+
 ];

@@ -14,6 +14,8 @@ use Illuminate\Support\Facades\Log;
  *  • ganma        — mã YouTube, bất đồng bộ (~20 giây), CHỈ nhận link ngắn từ app Shopee.
  *  • laymavoucher — dự phòng cho kieushopee, cùng nền tảng afp.ad nên gọi y hệt
  *                   (xem LaymaVoucherService).
+ *  • kieusmartlink — link affiliate rút gọn chính thức của Shopee từ kieushopee.com/smart-links,
+ *                    đích /opaanlp/ "voucher tự áp" (xem KieuSmartLinkService).
  *
  * Gom vào một chỗ vì cả ShopeeVoucherController (lúc lấy mã) lẫn ShortLinkController (lúc ghi
  * `source` vào short-link và tracking) đều phải trả lời cùng một câu hỏi — hai nơi tự suy ra
@@ -34,9 +36,10 @@ class VoucherSourceResolver
      * Để ganma trước thì một lần lệch dữ liệu sẽ đẩy toàn bộ khách sang nguồn chỉ nhận link
      * ngắn từ app — tức phần lớn khách dán link thường sẽ bị từ chối thẳng.
      *
-     * laymavoucher đứng cuối: nó là nguồn dự phòng, lệch dữ liệu thì thà về nguồn chính.
+     * laymavoucher và kieusmartlink đứng cuối: nguồn dự phòng/thử nghiệm, lệch dữ liệu thì thà
+     * về nguồn chính.
      */
-    public const SOURCES = [KieuShopeeService::SOURCE, GanmaService::SOURCE, LaymaVoucherService::SOURCE];
+    public const SOURCES = [KieuShopeeService::SOURCE, GanmaService::SOURCE, LaymaVoucherService::SOURCE, KieuSmartLinkService::SOURCE];
 
     /** Setting bật/tắt lớp ghi đè theo khung giờ — xem activeSource(). */
     public const AUTO_SWITCH_KEY = 'fbig_window_auto_switch';

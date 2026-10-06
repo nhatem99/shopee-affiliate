@@ -19,6 +19,7 @@ use Illuminate\Support\Facades\Log;
  * Ngoại lệ duy nhất là laymavoucher: admin bật nó chính là để né lúc kieushopee chết, lúc đó
  * không lượt quét nào đi qua kieushopee nữa — vẫn kiểm tra kieushopee thì trang bị đóng đúng
  * lúc nguồn dự phòng đang chạy ngon. Nên khi đang để laymavoucher thì kiểm tra laymavoucher.
+ * kieusmartlink cũng vậy: đang để nó thì kiểm tra nó.
  * Cùng lý do đó, để ganma mà đã tắt "mã YTB gọi kèm kieushopee" thì bỏ qua hẳn — xem
  * skipWhileYtbOnly().
  * Bật/tắt bảo trì dùng đúng Setting `maintenance_mode` mà MaintenanceMode middleware
@@ -51,19 +52,22 @@ class SourceHealthService
     public function __construct(
         private KieuShopeeService $kieuShopee,
         private LaymaVoucherService $layma,
+        private KieuSmartLinkService $smartLink,
         private VoucherSourceResolver $sources,
     ) {}
 
     /**
      * Nguồn được đem ra kiểm tra — xem ghi chú đầu lớp. Theo lựa chọn của admin (configured),
      * không theo activeSource(): lớp ghi đè khung giờ chỉ chuyển ganma sang kieushopee, không
-     * bao giờ đụng tới laymavoucher.
+     * bao giờ đụng tới laymavoucher hay kieusmartlink.
      */
-    private function sourceUnderCheck(): KieuShopeeService
+    private function sourceUnderCheck(): KieuShopeeService|KieuSmartLinkService
     {
-        return $this->sources->configuredSource() === LaymaVoucherService::SOURCE
-            ? $this->layma
-            : $this->kieuShopee;
+        return match ($this->sources->configuredSource()) {
+            LaymaVoucherService::SOURCE => $this->layma,
+            KieuSmartLinkService::SOURCE => $this->smartLink,
+            default => $this->kieuShopee,
+        };
     }
 
     public static function enabled(): bool

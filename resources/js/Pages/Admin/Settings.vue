@@ -607,7 +607,7 @@ function saveCashbackDisplayRate() {
                                 Lỗi <b>2 lượt liên tiếp</b> (≈10 phút) thì tự bật chế độ bảo trì, nguồn sống lại thì tự tắt.
                                 Để ganma thì vẫn kiểm tra kieushopee — kể cả khi ganma ra mã được, kieushopee chết vẫn đóng trang
                                 (trừ khi đã tắt <b>Mã YTB gọi kèm kieushopee</b> — lúc đó không kiểm tra gì).
-                                Riêng khi đang để <b>laymavoucher</b> (nguồn dự phòng) thì kiểm tra laymavoucher thay cho kieushopee.
+                                Riêng khi đang để <b>laymavoucher</b> (nguồn dự phòng) hoặc <b>kieusmartlink</b> thì kiểm tra chính nguồn đó thay cho kieushopee.
                                 Bạn tự tay gạt công tắc bảo trì ở trên thì hệ thống <b>không tắt hộ nữa</b>;
                                 tắt công tắc này thì trang đang bảo trì tự động sẽ được mở lại ngay.
                             </p>

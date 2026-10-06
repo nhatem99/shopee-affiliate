@@ -41,9 +41,10 @@ const pendingProbe = ref(null)
 const probeWithLink = ref(true)
 
 // Các nguồn lấy mã (kieushopee = mã FB/IG, ganma = mã YouTube, laymavoucher = dự phòng cho
-// kieushopee). Chúng không dùng App ID/Secret và loại trừ nhau — bật một cái thì server tự tắt
-// các cái còn lại, xem ApiConfigController::store().
-const VOUCHER_SOURCES = ['kieushopee', 'ganma', 'laymavoucher']
+// kieushopee, kieusmartlink = link affiliate "voucher tự áp" của kieushopee.com/smart-links).
+// Chúng không dùng App ID/Secret và loại trừ nhau — bật một cái thì server tự tắt các cái còn
+// lại, xem ApiConfigController::store().
+const VOUCHER_SOURCES = ['kieushopee', 'ganma', 'laymavoucher', 'kieusmartlink']
 
 // Nguồn chạy trên nền tảng tool afp.ad (Next.js Server Action): cùng bộ tham số next-action /
 // 1_toolId / field "0", cùng cách lấy giá trị mới — xem KieuShopeeService, LaymaVoucherService.
@@ -402,6 +403,26 @@ async function testConfig(config) {
                                 link shopee.vn đầy đủ luôn bị từ chối. Bấm kiểm tra sẽ mất ~20 giây vì nó chạy trọn
                                 một lượt lấy mã thật.
                             </p>
+                        </div>
+                    </template>
+
+                    <template v-if="editing.platform === 'kieusmartlink'">
+                        <div class="rounded-xl bg-[var(--color-peach-soft)] border border-[var(--color-accent)]/25 px-3 py-2.5">
+                            <p class="text-xs text-[var(--color-accent-deep)] leading-relaxed">
+                                Tool <b>Rút gọn link</b> của {{ siteHost(editing.endpoint) }}: trả link affiliate rút gọn
+                                chính thức của Shopee (s.shopee.vn/...) dẫn tới trang <b>voucher tự áp</b> (/opaanlp/),
+                                <b>không</b> phải link có mã như kieushopee. Affiliate vẫn được đổi về của mình khi khách bấm mua.
+                                <br />Bật nguồn này lên là <b>tự động tắt nguồn đang bật</b>. Đang để nguồn này thì lượt kiểm tra
+                                "Tự bảo trì" (trang Cài đặt) gọi nguồn này thay cho kieushopee.
+                                <br />Endpoint là trang tool; hệ thống tự lấy CSRF token ở đó rồi gửi tới <span class="font-mono">/convert</span>.
+                            </p>
+                        </div>
+
+                        <div>
+                            <label class="block text-sm font-semibold text-[var(--color-ink)] mb-1">Link Shopee để kiểm tra</label>
+                            <input v-model="editing.meta.test_url" type="url" spellcheck="false"
+                                class="w-full border border-[var(--color-line)] rounded-xl px-4 py-2.5 text-sm text-[var(--color-ink)] focus:outline-none focus:border-[var(--color-accent)] transition" />
+                            <p class="text-xs text-[var(--color-muted)] mt-1">Nút "Kiểm tra kết nối" gọi thử bằng link này. Đổi nếu sản phẩm cũ đã bị gỡ khỏi Shopee.</p>
                         </div>
                     </template>
 

@@ -16,6 +16,9 @@ use Illuminate\Support\Facades\Log;
  *
  *  • laymavoucher: y hệt kieushopee, chỉ đổi sang nguồn dự phòng cùng nền tảng afp.ad.
  *
+ *  • kieusmartlink: y hệt kieushopee về luồng, nhưng link nhận về là link affiliate rút gọn
+ *    chính thức của Shopee (xem KieuSmartLinkService).
+ *
  *  • ganma — "chế độ mã YTB": gọi CẢ HAI nguồn. Link đưa cho khách — và sau đó đặt vào caption
  *    reel / comment Facebook — là link của kieushopee, đổi affiliate về của mình y như chế độ
  *    mặc định; link YouTube của ganma đi kèm trong ref, và lúc khách bấm mua nó được xâu vào
@@ -37,6 +40,7 @@ class VoucherFetchService
         private KieuShopeeService $kieuShopee,
         private GanmaService $ganma,
         private LaymaVoucherService $layma,
+        private KieuSmartLinkService $smartLink,
     ) {}
 
     /**
@@ -49,7 +53,11 @@ class VoucherFetchService
 
         if ($active !== GanmaService::SOURCE) {
             $canonicalUrl = $this->resolver->resolveCanonicalUrl($url);
-            $service = $active === LaymaVoucherService::SOURCE ? $this->layma : $this->kieuShopee;
+            $service = match ($active) {
+                LaymaVoucherService::SOURCE => $this->layma,
+                KieuSmartLinkService::SOURCE => $this->smartLink,
+                default => $this->kieuShopee,
+            };
 
             return new VoucherFetchResult(
                 $service::SOURCE,
@@ -110,6 +118,7 @@ class VoucherFetchService
         return match ($source) {
             GanmaService::SOURCE => $this->ganma->fetchProductAndVoucherLink($sourceUrl),
             LaymaVoucherService::SOURCE => $this->layma->fetchProductAndVoucherLink($sourceUrl),
+            KieuSmartLinkService::SOURCE => $this->smartLink->fetchProductAndVoucherLink($sourceUrl),
             default => $this->kieuShopee->fetchProductAndVoucherLink($sourceUrl),
         };
     }
