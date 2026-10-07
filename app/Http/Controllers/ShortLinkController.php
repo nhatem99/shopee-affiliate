@@ -194,7 +194,7 @@ class ShortLinkController extends Controller
     }
 
     /**
-     * Chế độ mã YTB, bước 1: khách tự mở link YouTube của ganma (nguyên bản, không sửa gì) để
+     * Chế độ mã YTB, bước 1: khách tự mở link YouTube của ganma (chỉ đổi affiliate, xem dưới) để
      * Shopee ghi nhận mã YTB trên chính máy khách. Sau đó khách quay lại làm bước 2 (Facebook /
      * Mua ngay) với link kieushopee như thường — đo thật: kích hoạt xong rồi mở link kieushopee
      * thì vẫn còn mã YTB.
@@ -204,6 +204,11 @@ class ShortLinkController extends Controller
      * lượt điều hướng không đủ — phải là hai lượt riêng, YTB trước rồi kieushopee sau).
      *
      * Link YTB nằm sẵn trong ref từ lúc lấy mã — không gọi lại ganma ở đây (20-45 giây/lượt).
+     *
+     * Link ganma mang affiliate_id CỦA HỌ: khách bấm bước 1 rồi mua luôn (không quay lại bước 2)
+     * thì đơn về ganma. Nên server đi theo an_redir tới shopee.vn/product/...?credential_token=...
+     * rồi đổi mmp_pid về của mình — y như nhánh ganma một bước, đã đo là vẫn hiện mã YTB vì mã
+     * nằm trong credential_token của URL đích. Khách vẫn tự mở URL đó trên máy mình.
      */
     public function activateYoutube(Request $request, string $ref): RedirectResponse
     {
@@ -221,12 +226,28 @@ class ShortLinkController extends Controller
             abort(404);
         }
 
+        // Bot xem trước (Facebook/Zalo) ghé link này mỗi lần link được đăng — giữ link gốc: khỏi
+        // tốn lượt gọi Shopee, và an_redir trả 403 cho bot Facebook nên không lộ og:url sạch.
+        if (TrackingService::isBot($request->userAgent())) {
+            return redirect()->away($voucherRef->ytb_url, 302);
+        }
+
+        $targetUrl = $this->rewriter->rewriteToOwnAffiliate($voucherRef->ytb_url, $request->user()?->sub_id);
+
+        // Đổi hụt (Shopee lỗi/timeout, đi lạc domain) thì vẫn đưa link ganma gốc — mất một lượt
+        // hoa hồng còn hơn khách mất mã YTB.
+        try {
+            $this->urlValidator->validateAffiliateRedirectUrl($targetUrl);
+        } catch (AffiliateScanException $e) {
+            $targetUrl = $voucherRef->ytb_url;
+        }
+
         $this->tracking->log('ytb_activate', $request, [
-            'url' => $voucherRef->ytb_url,
+            'url' => $targetUrl,
             'source' => GanmaService::SOURCE,
         ]);
 
-        return redirect()->away($voucherRef->ytb_url, 302);
+        return redirect()->away($targetUrl, 302);
     }
 
     /**

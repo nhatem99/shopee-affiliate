@@ -391,21 +391,54 @@ class VoucherShortenTest extends TestCase
 
     private const YTB_LINK = 'https://s.shopee.vn/an_redir?affiliate_id=17104820001&origin_link=https%3A%2F%2Fshopee.vn%2Fproduct%2F1%2F2&sub_id=YT3-token';
 
+    /** an_redir của ganma 302 tới trang sản phẩm mang mã YTB (credential_token) và affiliate của họ. */
+    private const YTB_LANDING = 'https://shopee.vn/product/1/2?credential_token=ytb-code&mmp_pid=an_17104820001&utm_source=an_17104820001&utm_content=YT3-token';
+
+    private const IPHONE_UA = 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_5 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.5 Mobile/15E148 Safari/604.1';
+
     /**
-     * Bước 1 là một lượt điều hướng RIÊNG của khách tới link YTB nguyên bản (affiliate_id/sub_id
-     * của ganma giữ nguyên) — không sửa gì, không xâu vào link đích. Bước 2 (/voucher/shorten)
-     * vẫn ra link kieushopee như thường, không dính gì tới link YTB.
+     * Bước 1 là một lượt điều hướng RIÊNG của khách tới trang đích của link YTB — giữ nguyên
+     * credential_token (mã YTB) nhưng affiliate đổi về của mình, để khách mua luôn ở bước này thì
+     * đơn vẫn về mình. Bước 2 (/voucher/shorten) vẫn ra link kieushopee như thường.
      */
-    public function test_step_one_redirects_the_customer_to_the_untouched_ytb_link(): void
+    public function test_step_one_redirects_to_the_ytb_landing_with_own_affiliate(): void
+    {
+        Http::fake(['s.shopee.vn/*' => Http::response('', 302, ['Location' => self::YTB_LANDING])]);
+
+        $ref = app(VoucherRefService::class)->issue(self::VOUCHER_URL, KieuShopeeService::SOURCE, ytbUrl: self::YTB_LINK);
+
+        $location = $this->withHeader('User-Agent', self::IPHONE_UA)->get('/ytb/'.$ref)->assertRedirect()->headers->get('Location');
+
+        $this->assertStringStartsWith('https://shopee.vn/product/1/2?', $location);
+        parse_str((string) parse_url($location, PHP_URL_QUERY), $query);
+        $this->assertSame('ytb-code', $query['credential_token']);
+        $this->assertSame(config('services.shopee_affiliate.mmp_pid'), $query['mmp_pid']);
+        $this->assertSame(config('services.shopee_affiliate.utm_content_yt'), $query['utm_content']);
+
+        $code = $this->shorten($ref)->assertOk()->json('code');
+        $this->assertStringStartsWith('https://shopee.vn/product-i.1.2?', ShortLink::where('code', $code)->firstOrFail()->target_url);
+    }
+
+    /** Không đổi được affiliate (Shopee không trả redirect) thì vẫn đưa link ganma gốc — giữ mã YTB cho khách. */
+    public function test_step_one_falls_back_to_the_raw_ytb_link_when_rewrite_fails(): void
+    {
+        Http::fake(['s.shopee.vn/*' => Http::response('', 500)]);
+
+        $ref = app(VoucherRefService::class)->issue(self::VOUCHER_URL, KieuShopeeService::SOURCE, ytbUrl: self::YTB_LINK);
+
+        $this->withHeader('User-Agent', self::IPHONE_UA)->get('/ytb/'.$ref)->assertRedirect(self::YTB_LINK);
+    }
+
+    /** Bot xem trước link không kéo theo lượt gọi Shopee nào. */
+    public function test_step_one_sends_bots_to_the_raw_ytb_link_without_calling_shopee(): void
     {
         Http::fake();
 
         $ref = app(VoucherRefService::class)->issue(self::VOUCHER_URL, KieuShopeeService::SOURCE, ytbUrl: self::YTB_LINK);
 
-        $this->get('/ytb/'.$ref)->assertRedirect(self::YTB_LINK);
+        $this->withHeader('User-Agent', 'facebookexternalhit/1.1')->get('/ytb/'.$ref)->assertRedirect(self::YTB_LINK);
 
-        $code = $this->shorten($ref)->assertOk()->json('code');
-        $this->assertStringStartsWith('https://shopee.vn/product-i.1.2?', ShortLink::where('code', $code)->firstOrFail()->target_url);
+        Http::assertNothingSent();
     }
 
     public function test_step_one_is_not_found_when_ref_has_no_ytb_link(): void
