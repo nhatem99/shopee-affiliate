@@ -257,4 +257,11 @@ return [
         'sub_id1' => env('KIEUSMARTLINK_SUB_ID1', 'Facebook'),
     ],
 
+    // API dữ liệu sản phẩm Shopee của data.addlivetag.com (xem ShopeeProductLookupService). Từ
+    // 01-10-2026 bắt buộc API Key ở header X-API-Key, thiếu là 401 — tạo ở addlivetag.com → API Key.
+    // Key chỉ đặt trong .env: repo public, ghi vào đây là ai cũng dùng được hạn mức của mình.
+    'addlivetag' => [
+        'key' => env('ADDLIVETAG_API_KEY'),
+    ],
+
 ];

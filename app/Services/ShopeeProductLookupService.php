@@ -11,15 +11,24 @@ use Illuminate\Support\Facades\Log;
  * Gọi thẳng shopee.vn/api/v4/item/get từ server luôn bị anti-bot chặn (error 90309999) —
  * dịch vụ này đã xử lý sẵn phần đó. Không chính thống, tự giới hạn phi thương mại
  * trong response (legalNotice.nonCommercialOnly) — dùng có ý thức về rủi ro, không có SLA.
+ *
+ * Từ 01-10-2026 mọi request phải kèm API Key (headers()), thiếu là 401 — nơi nào gọi BASE_URL,
+ * kể cả trong Http::pool, đều phải gắn headers().
  */
 class ShopeeProductLookupService
 {
     public const BASE_URL = 'https://data.addlivetag.com/product-data/product-data.php';
 
+    /** @return array{X-API-Key: string} */
+    public static function headers(): array
+    {
+        return ['X-API-Key' => (string) config('services.addlivetag.key')];
+    }
+
     public function getByItemId(string $itemId): ?array
     {
         try {
-            return $this->parseResponse(Http::timeout(10)->get(self::BASE_URL, ['item_id' => $itemId]));
+            return $this->parseResponse(Http::withHeaders(self::headers())->timeout(10)->get(self::BASE_URL, ['item_id' => $itemId]));
         } catch (\Exception $e) {
             Log::warning('ShopeeProductLookupService error: '.$e->getMessage());
 

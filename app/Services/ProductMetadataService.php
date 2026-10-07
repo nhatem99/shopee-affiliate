@@ -54,7 +54,7 @@ class ProductMetadataService
         if ($platform === 'shopee') {
             $ids = $this->urlValidator->extractShopeeIds($url);
             if ($ids) {
-                $pool->as('meta_shopee')->timeout(10)
+                $pool->as('meta_shopee')->withHeaders(ShopeeProductLookupService::headers())->timeout(10)
                     ->get(ShopeeProductLookupService::BASE_URL, ['item_id' => $ids['item_id']]);
             }
         }

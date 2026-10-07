@@ -71,7 +71,7 @@ class ShopeeLinkResolverService
                 'shopid' => $shopId,
             ]);
 
-            $pool->as('proxy')->timeout(10)->get(ShopeeProductLookupService::BASE_URL, ['item_id' => $itemId]);
+            $pool->as('proxy')->withHeaders(ShopeeProductLookupService::headers())->timeout(10)->get(ShopeeProductLookupService::BASE_URL, ['item_id' => $itemId]);
         });
 
         if ($data = $this->parseDirectResponse($responses['direct'] ?? null)) {
