@@ -22,7 +22,11 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
-    @vite(['resources/css/app.css', 'resources/js/app.js'])
+    {{-- Kèm chunk của trang đang mở (app.js tải trang theo nhu cầu) để trình duyệt tải song song với
+         app.js thay vì đợi app.js chạy rồi mới đi lấy. is_file: tên component sai thì thôi preload,
+         đừng để Vite ném lỗi "not in manifest" thành trang 500. --}}
+    @php($pageEntry = 'resources/js/Pages/'.$page['component'].'.vue')
+    @vite(array_values(array_filter(['resources/css/app.css', 'resources/js/app.js', is_file(base_path($pageEntry)) ? $pageEntry : null])))
     @inertiaHead
 </head>
 <body>

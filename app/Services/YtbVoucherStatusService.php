@@ -13,9 +13,10 @@ use Illuminate\Support\Facades\Cache;
  * cái mã khách sắp nhận. Không phải ganma thì cũng không gọi sang ganma.
  *
  * Cache kiểu stale-while-revalidate (Cache::flexible) thay vì một lệnh theo lịch:
- *  • Trang chủ không bao giờ đứng chờ ganma, trừ đúng lượt đầu khi cache còn trống (≤ 4 giây,
- *    xem GanmaService::VOUCHER_STATUS_TIMEOUT). Quá FRESH_SECONDS thì trả bản đang có rồi làm
- *    mới ngầm sau khi trả trang.
+ *  • Trang chủ không bao giờ đứng chờ ganma (tới 4 giây, xem GanmaService::VOUCHER_STATUS_TIMEOUT).
+ *    Quá FRESH_SECONDS thì trả bản đang có rồi làm mới ngầm sau khi trả trang. Cache còn trống
+ *    (lượt đầu, hoặc KEEP_SECONDS không ai vào) thì lượt đó không có khối này, đọc ganma sau khi
+ *    trả trang, khách kế tiếp mới thấy — ẩn một lượt rẻ hơn một trang chủ đứng hình mấy giây.
  *  • Không ai vào trang thì không gọi gì. Lệnh chạy mỗi phút sẽ đập sang ganma 1.440 lượt/ngày
  *    và đẻ thêm chừng đó dòng ở /admin/scheduler (bảng lượt chạy không tự dọn).
  *
@@ -53,7 +54,15 @@ class YtbVoucherStatusService
             return null;
         }
 
-        $snapshot = Cache::flexible(self::CACHE_KEY, [self::FRESH_SECONDS, self::KEEP_SECONDS], fn () => $this->snapshot());
+        if (! Cache::has(self::CACHE_KEY)) {
+            // Khoá: mấy khách vào cùng lúc khi cache trống thì chỉ một người gọi sang ganma.
+            // always: response lỗi (404, 422...) thì Laravel mặc định bỏ việc defer.
+            defer(fn () => Cache::lock(self::CACHE_KEY.':warm', 10)->get(fn () => $this->cached()), self::CACHE_KEY, always: true);
+
+            return null;
+        }
+
+        $snapshot = $this->cached();
 
         $fetchedAt = $snapshot['fetched_at'] ?? null;
 
@@ -68,6 +77,12 @@ class YtbVoucherStatusService
             'used_percent' => $voucher['percent_left'] === null ? null : 100 - $voucher['percent_left'],
             'sold_out' => $voucher['sold_out'],
         ], $snapshot['vouchers']);
+    }
+
+    /** @return array{vouchers: list<array>, fetched_at: ?int} */
+    private function cached(): array
+    {
+        return Cache::flexible(self::CACHE_KEY, [self::FRESH_SECONDS, self::KEEP_SECONDS], fn () => $this->snapshot());
     }
 
     /**

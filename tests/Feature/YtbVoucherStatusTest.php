@@ -8,6 +8,7 @@ use App\Services\KieuShopeeService;
 use App\Services\VoucherSourceResolver;
 use App\Services\YtbVoucherStatusService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Defer\DeferredCallbackCollection;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Http;
 use Tests\TestCase;
@@ -63,10 +64,37 @@ class YtbVoucherStatusTest extends TestCase
         return app(YtbVoucherStatusService::class)->forDisplay();
     }
 
+    /** Lượt đầu lúc cache trống không có khối này (xem test_cache_trong_thi_khong_bat_khach_cho_ganma). */
+    private function warm(): void
+    {
+        $this->assertNull($this->forDisplay());
+    }
+
+    /**
+     * Cache trống: trang chủ không đứng chờ ganma. Lượt đó không có khối, ganma được đọc SAU khi
+     * trả trang, khách kế tiếp mới thấy.
+     */
+    public function test_cache_trong_thi_khong_bat_khach_cho_ganma(): void
+    {
+        $this->withDefer();
+        $this->useSource(GanmaService::SOURCE);
+        Http::fake([self::VOUCHERS_URL => Http::response($this->ganmaBody())]);
+
+        $this->assertNull($this->forDisplay());
+        Http::assertNothingSent();
+
+        // Việc dời lại chạy sau response.
+        app(DeferredCallbackCollection::class)->invoke();
+        Http::assertSentCount(1);
+
+        $this->assertCount(2, $this->forDisplay());
+    }
+
     public function test_trang_chu_hien_ma_ytb_va_phan_tram_da_dung(): void
     {
         $this->useSource(GanmaService::SOURCE);
         Http::fake([self::VOUCHERS_URL => Http::response($this->ganmaBody())]);
+        $this->get('/');
 
         $this->get('/')
             ->assertOk()
@@ -119,6 +147,7 @@ class YtbVoucherStatusTest extends TestCase
             ->push($this->ganmaBody())
             ->whenEmpty(Http::response('Bad Gateway', 502));
 
+        $this->warm();
         $this->assertCount(2, $this->forDisplay());
 
         // Quá hạn "còn tươi" → làm mới ngầm, ganma lỗi → vẫn trả bản cũ.
@@ -135,6 +164,7 @@ class YtbVoucherStatusTest extends TestCase
         $this->useSource(GanmaService::SOURCE);
         Http::fake([self::VOUCHERS_URL => Http::response($this->ganmaBody(['disabled' => true]))]);
 
+        $this->warm();
         $this->assertNull($this->forDisplay());
     }
 
@@ -144,6 +174,7 @@ class YtbVoucherStatusTest extends TestCase
         $this->useSource(GanmaService::SOURCE);
         Http::fake([self::VOUCHERS_URL => Http::response(['vouchers' => [['title' => 'Giảm 22%', 'sold_out' => false]]])]);
 
+        $this->warm();
         $this->assertSame([['title' => 'Giảm 22%', 'subtitle' => '', 'used_percent' => null, 'sold_out' => false]], $this->forDisplay());
     }
 }

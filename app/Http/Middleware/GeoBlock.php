@@ -36,7 +36,9 @@ class GeoBlock
             return $next($request);
         }
 
-        $countryCode = $this->geoIp->countryCode($request->ip());
+        // Chỉ đọc kết quả đã tra: IP mới thì cho qua lượt này và tra ngầm sau khi trả trang, khỏi
+        // bắt khách chờ ip-api.com — xem GeoIpService::cachedCountryCode().
+        $countryCode = $this->geoIp->cachedCountryCode($request->ip());
 
         if ($countryCode !== null && ! in_array($countryCode, self::ALLOWED_COUNTRIES, true)) {
             abort(403);
