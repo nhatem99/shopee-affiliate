@@ -204,21 +204,18 @@ function onVoucherUrlInput(e) {
 
 /**
  * Cuộn cho khối kết quả hiện ra ngay dưới vùng dính (header + khung dán link + dải nhắc).
- * Không dùng scrollIntoView + scroll-mt cố định: vùng dính cao ~300px trên điện thoại và
- * đổi chiều cao khi thu gọn, con số cứng luôn lệch. Ưu tiên nút mua/Mở Facebook: nếu đầu
- * kết quả vừa khít mà nút vẫn tụt dưới mép màn hình (hoặc dưới BottomNav) thì cuộn thêm.
+ * Không dùng scrollIntoView + scroll-mt cố định: chiều cao vùng dính đổi theo nút tìm mã
+ * (ẩn khi link đã tìm xong), dải đăng nhập và dòng báo lỗi, con số cứng luôn lệch. Ưu tiên
+ * nút mua/Mở Facebook: nếu đầu kết quả vừa khít mà nút vẫn tụt dưới mép màn hình (hoặc dưới
+ * BottomNav) thì cuộn thêm.
  *
- * Ép khung thu gọn (stuck) TRƯỚC, đợi transition 200ms chạy xong rồi mới đo và cuộn. Nếu
- * cuộn ngay thì khung thu gọn giữa chừng lúc trang đang trượt: nội dung bên dưới trồi lên
- * trong khi màn hình đi xuống — nhìn giật, và mọi vị trí đo lúc đầu đều sai một khoảng bằng
- * phần vừa co lại. Đằng nào cuộn tới kết quả cũng qua ngưỡng dính, nên ép sớm không đổi gì.
+ * Đợi Vue cập nhật DOM (nextTick) rồi sang khung hình kế mới đo: lúc hàm này được gọi, khối
+ * kết quả và việc ẩn nút tìm mã có thể chưa lên trang.
  */
 const BOTTOM_NAV_HEIGHT = 80
-const STICKY_TRANSITION_MS = 200
 
 function scrollToResult() {
-    stuck.value = true
-    setTimeout(() => {
+    nextTick(() => requestAnimationFrame(() => {
         const result = voucherResultEl.value
         if (!result) return
         const topGap = HEADER_HEIGHT + (stickyEl.value?.offsetHeight ?? 0) + 12
@@ -232,7 +229,7 @@ function scrollToResult() {
         }
 
         window.scrollTo({ top: Math.max(0, top), behavior: 'smooth' })
-    }, STICKY_TRANSITION_MS + 50)
+    }))
 }
 
 function focusVoucherTool() {
@@ -260,7 +257,7 @@ function resolveVoucher() {
     // cách nhau 2-3 giây, và mỗi lượt trượt cache của nguồn ganma là một job ~20 giây.
     // Chỉ chặn khi CÙNG link: dán link KHÁC trong lúc đang chờ là ý khách đã đổi, cho đi luôn
     // (router.post tự huỷ lượt cũ) — khoá cứng là khách đứng nhìn ô im lặng suốt 20-45 giây.
-    // Nói cho khách biết vì sao không có gì xảy ra: nút "Đang tìm mã..." bị ẩn khi khung đã dính.
+    // Nói cho khách biết vì sao không có gì xảy ra, thay vì im lặng bỏ qua.
     if (resolving.value && url === resolvingUrl && Date.now() - resolvingSince < RESOLVE_STALE_MS) {
         toast.info('Đang tìm mã cho link này rồi, đợi thêm chút nhé...')
 
@@ -273,8 +270,7 @@ function resolveVoucher() {
     voucherError.value = null
     // Bỏ mốc "đã tìm xong" ngay lúc bắt đầu, không đợi kết quả: dán lại ĐÚNG link cũ (mã hết
     // lượt, khách thử lại) mà giữ mốc thì alreadyResolved vẫn true suốt lúc chờ → nút "Tìm mã
-    // ngay" bị ẩn (khung đã dính), không thấy vòng quay, không thấy gì đổi — khách tưởng nút
-    // Dán chết. Quét lỗi thì mốc vẫn trống, nút mở lại cho khách thử tiếp.
+    // ngay" bị ẩn, không thấy vòng quay, không thấy gì đổi — khách tưởng nút Dán chết. Quét lỗi thì mốc vẫn trống, nút mở lại cho khách thử tiếp.
     resolvedUrl.value = null
     // Xoá link đã lấy của lần quét trước: nút kết quả dùng chung key 'result', còn các dòng
     // lịch sử đánh key theo chỉ số nên bị dịch đi khi có mục mới chèn lên đầu — không xoá là
@@ -667,9 +663,9 @@ const faqs = computed(() => [
 const openFaq = ref(null)
 
 // Khung dán link dính lên đầu trang khi cuộn (sticky) để khách lúc nào cũng dán được link.
-// Lúc đã dính thì thu gọn tiêu đề lại, nếu không khung chiếm gần hết màn hình điện thoại.
-// Đo bằng vị trí thật của khung chứ không bằng scrollY: phía trên nó còn banner khung giờ
-// back mã, lấy mốc scrollY cố định sẽ thu gọn sớm và làm nội dung giật một nhịp.
+// `stuck` chỉ dùng để bật nền đặc + bóng đổ lúc đã dính, KHÔNG được đổi kích thước khung
+// (xem chú thích ở template). Đo bằng vị trí thật của khung chứ không bằng scrollY: phía trên
+// nó còn banner khung giờ back mã và tiêu đề, mốc scrollY cố định sẽ lệch.
 const HEADER_HEIGHT = 64 // AppLayout: header sticky h-16
 const stickyEl = ref(null)
 const stuck = ref(false)
@@ -721,38 +717,33 @@ onUnmounted(() => {
                      lúc nào nguồn cấp mã nạp lại lượt, trước cả ô dán link. -->
                 <RestockSchedule class="mb-4" />
 
+                <!-- Tiêu đề nằm NGOÀI vùng dính để vùng dính giữ nguyên kích thước khi cuộn. -->
+                <div v-if="canUseVoucherTool" class="px-1 mb-1">
+                    <h1 class="text-xl md:text-2xl font-extrabold text-[var(--color-ink)] mb-1">
+                        Dán link sản phẩm Shopee để lấy mã giảm giá
+                    </h1>
+                    <p class="text-sm text-[var(--color-muted)]">Nhận ngay link đã áp sẵn mã giảm giá — không cần nhập mã, miễn phí.</p>
+                </div>
+
                 <!-- top-16 = chiều cao header sticky của AppLayout (h-16). Nền đặc chỉ bật khi
                      đã dính, để lúc chưa cuộn khung vẫn phẳng với nền trang. Cố tình KHÔNG dùng
                      backdrop-blur ở đây: khung này cao/rộng hơn hẳn header, nên nếu blur thì
                      trình duyệt phải làm mờ lại toàn bộ nội dung phía sau mỗi khung hình lúc
                      cuộn — chính là nguyên nhân bị khựng khi cuộn qua khu vực này trên máy yếu.
                      Nền đặc (không alpha) rẻ hơn nhiều mà vẫn che kín nội dung phía dưới.
-                     -mx-4 px-4 kéo nền ra sát mép để nội dung cuộn phía dưới không lòi ra hai bên. -->
+                     -mx-4 px-4 kéo nền ra sát mép để nội dung cuộn phía dưới không lòi ra hai bên.
+
+                     KHÔNG đổi kích thước bất cứ thứ gì trong khung theo `stuck` (padding, cỡ ô
+                     nhập, ẩn/hiện tiêu đề...). Trước đây lúc dính khung tự thu gọn: mỗi lần qua
+                     ngưỡng là cả trang phía dưới tính lại bố cục và trồi lên/tụt xuống trong
+                     200ms, đo được ~28 lần nhảy bố cục chỉ trong một lượt cuộn — đó là cảm giác
+                     khựng khi cuộn trên điện thoại. Chỉ nền và bóng đổ được đổi theo `stuck`. -->
                 <div
                     ref="stickyEl"
                     class="sticky top-16 z-30 -mx-4 px-4 pt-2 pb-3 transition-shadow duration-200 [contain:layout_paint]"
                     :class="stuck ? 'bg-[var(--color-bg)] shadow-[0_10px_24px_rgba(0,0,0,.12)]' : ''"
                 >
-                    <div v-if="canUseVoucherTool" class="rounded-3xl bg-gradient-to-br from-[var(--color-peach)] via-[var(--color-peach-soft)] to-[var(--color-green-soft)] border border-[var(--color-line)] transition-all duration-200" :class="stuck ? 'p-4' : 'p-6 md:p-8'">
-                        <!-- Giữ h1 trong DOM (chỉ thu chiều cao) để không mất thẻ h1 của trang.
-                             Thu gọn bằng grid-template-rows (1fr -> 0fr) chứ không dùng max-height:
-                             max-height phải đoán một giá trị lớn hơn chiều cao thật (vd max-h-40 =
-                             160px trong khi nội dung chỉ ~70px), nên phần lớn thời gian transition
-                             chiều cao hiển thị không đổi (vẫn bị nội dung ghim ở 70px), rồi mới đột
-                             ngột sụp xuống 0 ở cuối — nhìn giống bị khựng/giật thay vì thu gọn mượt.
-                             Grid-rows nội suy đúng theo tỉ lệ thật nên mượt bất kể chiều cao nội dung. -->
-                        <div
-                            class="grid transition-[grid-template-rows,opacity,margin-bottom] duration-200 ease-out"
-                            :class="stuck ? 'grid-rows-[0fr] opacity-0 mb-0' : 'grid-rows-[1fr] opacity-100 mb-4'"
-                        >
-                            <div class="overflow-hidden min-h-0">
-                                <h1 class="text-xl md:text-2xl font-extrabold text-[var(--color-ink)] mb-1">
-                                    Dán link sản phẩm Shopee để lấy mã giảm giá
-                                </h1>
-                                <p class="text-sm text-[var(--color-muted)]">Nhận ngay link đã áp sẵn mã giảm giá — không cần nhập mã, miễn phí.</p>
-                            </div>
-                        </div>
-
+                    <div v-if="canUseVoucherTool" class="rounded-3xl p-4 md:p-6 bg-gradient-to-br from-[var(--color-peach)] via-[var(--color-peach-soft)] to-[var(--color-green-soft)] border border-[var(--color-line)]">
                         <div class="flex flex-col md:flex-row gap-3">
                             <div class="relative flex-1">
                                 <span class="absolute left-4 top-1/2 -translate-y-1/2 text-[var(--color-muted)]">🔗</span>
@@ -765,8 +756,7 @@ onUnmounted(() => {
                                     @paste="onVoucherUrlPaste"
                                     @input="onVoucherUrlInput"
                                     placeholder="Dán link Shopee (shopee.vn hoặc s.shopee.vn)..."
-                                    class="w-full pl-10 pr-20 border border-[var(--color-line)] rounded-xl text-sm bg-[var(--color-surface)] focus:outline-none focus:border-[var(--color-accent)] focus:ring-2 focus:ring-[var(--color-peach)] transition-all duration-200"
-                                    :class="stuck ? 'py-3' : 'py-4'"
+                                    class="w-full pl-10 pr-20 py-3.5 border border-[var(--color-line)] rounded-xl text-sm bg-[var(--color-surface)] focus:outline-none focus:border-[var(--color-accent)] focus:ring-2 focus:ring-[var(--color-peach)] transition duration-200"
                                 />
                                 <button
                                     @click="pasteVoucherUrl"
@@ -778,21 +768,22 @@ onUnmounted(() => {
                                  khoá lại khi ĐANG quét và cả khi link trong ô ĐÃ quét xong, để khách
                                  không bấm thêm một lượt vô ích (mỗi lượt trượt cache là một vòng gọi
                                  nguồn mã, riêng ganma mất ~20 giây). Sửa lại link thì nút tự mở.
-                                 Khi khung đã dính mà link đã tìm xong thì ẩn hẳn: nút disabled
-                                 chiếm ~70px của màn hình điện thoại vốn đã chật, che mất tên
-                                 sản phẩm phía dưới. Cuộn lên đầu hoặc sửa link là nút hiện lại. -->
+                                 Link đã tìm xong thì ẩn hẳn: nút disabled chiếm ~60px của màn
+                                 hình điện thoại vốn đã chật, che mất tên sản phẩm phía dưới.
+                                 Ẩn theo alreadyResolved chứ KHÔNG theo `stuck`: ẩn/hiện theo
+                                 lúc dính là khung đổi chiều cao ngay giữa lúc cuộn. Sửa link là
+                                 nút hiện lại. -->
                             <button
-                                v-show="!(stuck && alreadyResolved)"
+                                v-show="!alreadyResolved"
                                 @click="resolveVoucher"
-                                :disabled="resolving || !voucherUrl.trim() || alreadyResolved"
-                                class="btn-fire rounded-xl flex items-center justify-center gap-2 whitespace-nowrap transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
-                                :class="stuck ? 'px-6 py-3' : 'px-8 py-4'"
+                                :disabled="resolving || !voucherUrl.trim()"
+                                class="btn-fire rounded-xl px-7 py-3.5 flex items-center justify-center gap-2 whitespace-nowrap disabled:opacity-50 disabled:cursor-not-allowed"
                             >
                                 <svg v-if="resolving" class="w-4 h-4 animate-spin" viewBox="0 0 24 24" fill="none">
                                     <circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" stroke-dasharray="30 70" />
                                 </svg>
-                                <span v-else>{{ alreadyResolved ? '✓' : '🔍' }}</span>
-                                {{ resolving ? 'Đang tìm mã...' : (alreadyResolved ? 'Đã tìm xong' : 'Tìm mã ngay') }}
+                                <span v-else>🔍</span>
+                                {{ resolving ? 'Đang tìm mã...' : 'Tìm mã ngay' }}
                             </button>
                         </div>
                         <p v-if="voucherError" class="text-red-500 text-sm mt-2">{{ voucherError }}</p>
