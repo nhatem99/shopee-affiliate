@@ -10,7 +10,8 @@ use Symfony\Component\HttpFoundation\Response;
 
 class GeoBlock
 {
-    // Chỉ cho phép Việt Nam và Nhật Bản — theo yêu cầu. Đổi ở đây nếu cần thêm quốc gia.
+    // Chỉ khách ở Việt Nam và Nhật Bản. Admin đã đăng nhập thì đi qua bất kể IP (xem handle). Đổi ở đây
+    // nếu cần thêm quốc gia.
     private const ALLOWED_COUNTRIES = ['VN', 'JP'];
 
     public function __construct(private GeoIpService $geoIp) {}
@@ -25,6 +26,14 @@ class GeoBlock
         // nên GeoIpService trả null — coi như không xác định được thì KHÔNG chặn (fail-open),
         // tránh chặn nhầm hàng loạt nếu ip-api.com bị lỗi/hết quota.
         if ($request->routeIs('admin.login', 'admin.login.store')) {
+            return $next($request);
+        }
+
+        // Admin đã đăng nhập thì không chặn theo quốc gia: admin hay làm việc từ nước ngoài, mà
+        // /admin/login chỉ mở được cửa vào chứ các trang sau đó vẫn bị 403. Cố ý đặt TRƯỚC lượt
+        // tra IP để admin không tốn thêm một request ra ip-api.com. Tài khoản khách thường không
+        // được miễn — chỉ vai trò admin.
+        if ($request->user()?->isAdmin()) {
             return $next($request);
         }
 
