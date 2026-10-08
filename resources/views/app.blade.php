@@ -14,6 +14,15 @@
                 if (t === 'dark') document.documentElement.classList.add('dark');
             } catch (e) {}
         })();
+        // iPhone/iPad tự phóng to khi chạm ô nhập có chữ < 16px (ô dán link là text-sm).
+        // maximum-scale=1 chặn việc đó; iOS vẫn cho véo 2 ngón để phóng to. Chỉ gắn trên iOS
+        // vì Android tôn trọng maximum-scale và sẽ mất luôn véo phóng to.
+        (function () {
+            var ua = navigator.userAgent;
+            var ios = /iPhone|iPad|iPod/.test(ua) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+            var vp = document.querySelector('meta[name=viewport]');
+            if (ios && vp) vp.setAttribute('content', 'width=device-width, initial-scale=1, maximum-scale=1');
+        })();
     </script>
     <link rel="icon" type="image/svg+xml" href="/favicon.svg">
     <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png">

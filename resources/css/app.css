@@ -53,6 +53,8 @@
 @layer base {
     html {
         color-scheme: light;
+        /* Bỏ phóng to khi chạm 2 lần nhanh vào nút; véo 2 ngón vẫn được. */
+        touch-action: manipulation;
     }
     html.dark {
         color-scheme: dark;
