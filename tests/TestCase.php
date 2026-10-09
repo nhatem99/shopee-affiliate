@@ -9,6 +9,15 @@ use Spatie\Permission\PermissionRegistrar;
 
 abstract class TestCase extends BaseTestCase
 {
+    protected function setUp(): void
+    {
+        parent::setUp();
+
+        // Máy dev có thể đã có file dữ liệu IP thật (geoip:update) — test mà đọc nó thì IP công
+        // khai trong test bị chặn hay không tùy máy chạy. Test cần thì tự gắn GeoIpDatabase giả.
+        config(['services.geoip.database' => storage_path('framework/testing/no-geoip.mmdb')]);
+    }
+
     protected function setUpRoles(): void
     {
         $this->app->make(PermissionRegistrar::class)->forgetCachedPermissions();

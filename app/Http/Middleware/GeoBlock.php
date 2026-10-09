@@ -45,12 +45,11 @@ class GeoBlock
             return $next($request);
         }
 
-        // Chỉ đọc kết quả đã tra: IP mới thì cho qua lượt này và tra ngầm sau khi trả trang, khỏi
-        // bắt khách chờ ip-api.com — xem GeoIpService::cachedCountryCode().
-        $countryCode = $this->geoIp->cachedCountryCode($request->ip());
+        // Tra file dữ liệu IP trên đĩa, không chờ mạng — xem GeoIpService::quickCountryCode().
+        $countryCode = $this->geoIp->quickCountryCode($request->ip());
 
         if ($countryCode !== null && ! in_array($countryCode, self::ALLOWED_COUNTRIES, true)) {
-            abort(403);
+            return response()->view('geo-blocked', [], 403);
         }
 
         return $next($request);

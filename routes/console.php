@@ -72,3 +72,11 @@ Schedule::command('flashsale:sync')
     ->withoutOverlapping()
     ->description('Đồng bộ kho sản phẩm Flash Sale (/flashsale)')
     ->storeOutput();
+
+// Tải bản mới của file dữ liệu IP → quốc gia cho GeoBlock (DB-IP ra bản mới đầu mỗi tháng). Đã có
+// bản tháng này thì lệnh thoát ngay, không gọi mạng — xem GeoIpDatabase::update().
+Schedule::command('geoip:update')
+    ->dailyAt('03:40')
+    ->withoutOverlapping()
+    ->description('Cập nhật file dữ liệu IP → quốc gia (chặn IP nước ngoài)')
+    ->storeOutput();

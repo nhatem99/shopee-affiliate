@@ -7,28 +7,40 @@ use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 
 /**
- * Tra mã quốc gia (ISO alpha-2, VD: VN, JP) từ IP qua ip-api.com — dùng cho middleware
- * chặn theo quốc gia (GeoBlock). Khác với ResolveActivityLocation (chạy nền qua queue, chỉ
- * để hiển thị thống kê): kết quả ở đây quyết định chặn/không chặn.
+ * Tra mã quốc gia (ISO alpha-2, VD: VN, JP) từ IP — dùng cho middleware chặn theo quốc gia
+ * (GeoBlock). Khác với ResolveActivityLocation (chạy nền qua queue, chỉ để hiển thị thống kê):
+ * kết quả ở đây quyết định chặn/không chặn.
  */
 class GeoIpService
 {
+    public function __construct(private GeoIpDatabase $database) {}
+
     /**
-     * Mã quốc gia nếu IP này ĐÃ được tra (còn trong cache); chưa thì trả null ngay và tra sau
-     * khi đã trả trang cho khách (defer) — GeoBlock dùng hàm này để không ai phải chờ ip-api.com.
+     * Mã quốc gia cho GeoBlock — không bao giờ bắt khách chờ mạng.
      *
-     * Trước đây middleware gọi thẳng countryCode() và đứng chờ: request đầu tiên của mỗi IP mới
-     * trong ngày (khách vừa bấm link từ Facebook/Zalo, mạng điện thoại đổi IP liên tục) chậm thêm
-     * cả một vòng sang ip-api.com, tới 2 giây khi bên đó chậm hoặc quá giới hạn 45 lượt/phút lúc
-     * đông khách. Đánh đổi đã chấp nhận: IP nước ngoài lọt đúng request đầu, từ request sau mới
-     * bị chặn.
+     * Tra file dữ liệu IP trên đĩa trước (GeoIpDatabase): có ngay từ lượt đầu, IP nước ngoài bị
+     * chặn trước khi kịp mở /go/{code} sang Shopee. Máy chưa có file (chưa chạy geoip:update)
+     * hoặc file không biết IP này thì về đường ip-api — xem cachedCountryCode().
      */
-    public function cachedCountryCode(string $ip): ?string
+    public function quickCountryCode(string $ip): ?string
     {
         if (! $this->isPublic($ip)) {
             return null;
         }
 
+        return $this->database->countryCode($ip) ?? $this->cachedCountryCode($ip);
+    }
+
+    /**
+     * Mã quốc gia nếu IP này ĐÃ được tra qua ip-api (còn trong cache); chưa thì trả null ngay và
+     * tra sau khi đã trả trang cho khách (defer).
+     *
+     * Không đứng chờ ip-api.com vì lượt đầu của mỗi IP mới (khách vừa bấm link từ Facebook/Zalo,
+     * mạng điện thoại đổi IP liên tục) sẽ chậm thêm tới 2 giây khi bên đó chậm hoặc quá giới hạn
+     * 45 lượt/phút. Đổi lại IP nước ngoài lọt đúng lượt đầu — nên đây chỉ còn là đường dự phòng.
+     */
+    private function cachedCountryCode(string $ip): ?string
+    {
         $code = Cache::get($this->cacheKey($ip));
 
         if ($code === null) {

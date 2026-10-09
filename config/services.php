@@ -14,6 +14,11 @@ return [
     |
     */
 
+    // File dữ liệu IP → quốc gia cho GeoBlock, tải bằng `php artisan geoip:update` (GeoIpDatabase).
+    'geoip' => [
+        'database' => storage_path('app/geoip/dbip-country-lite.mmdb'),
+    ],
+
     'postmark' => [
         'key' => env('POSTMARK_API_KEY'),
     ],

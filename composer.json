@@ -16,6 +16,7 @@
         "laravel/sanctum": "^4.3",
         "laravel/socialite": "^5.30",
         "laravel/tinker": "^3.0",
+        "maxmind-db/reader": "^1.14",
         "spatie/laravel-permission": "^8.0"
     },
     "require-dev": {

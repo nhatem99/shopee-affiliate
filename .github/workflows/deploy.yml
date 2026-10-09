@@ -51,6 +51,10 @@ jobs:
             php8.4 artisan optimize:clear
             php8.4 artisan optimize
 
+            # File dữ liệu IP cho GeoBlock (storage/, ngoài git). Đã có bản tháng này thì thoát
+            # ngay; tải lỗi cũng không chặn deploy — GeoBlock dùng bản cũ, hoặc ip-api nếu chưa có.
+            php8.4 artisan geoip:update || echo "geoip:update lỗi, GeoBlock tạm dùng bản cũ/ip-api"
+
             chown -R www-data:www-data /var/www/tietkiemvi.com
             chmod -R 775 storage bootstrap/cache
 
