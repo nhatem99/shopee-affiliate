@@ -181,7 +181,7 @@ class FacebookGroupReviewChecker
     }
 
     /** Link bài bot gửi về — chỉ nhận link bài trong nhóm trên facebook.com. */
-    private static function postUrl(?string $url): ?string
+    public static function postUrl(?string $url): ?string
     {
         return $url !== null && strlen($url) <= 500
             && preg_match('#^https://(www|m|web)\.facebook\.com/groups/[^/?\#\s]+/(posts|permalink)/\d+#', $url) === 1

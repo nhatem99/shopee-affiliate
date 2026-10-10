@@ -105,6 +105,29 @@ nằm ở tab nào. Tab nào báo "KHÔNG mở được" mà trên Facebook vẫ
 đường dẫn trên thanh địa chỉ gửi cho người sửa code (đường dẫn các tab nằm ở
 `FacebookGroupReviewChecker::TABS` phía server và `lib/review.mjs`).
 
+## 3b'. Link ở bình luận
+
+Từ bản 1.4.0, bài soạn ở /admin/fb-posts có thể tích **"Để link ở bình luận"**: bài lên nhóm không
+có link nào (chỗ `{link}` thành câu kiểu "👇 Link mua có mã ở bình luận"), đăng xong bot tự vào bài
+bình luận link mua — bằng đúng page đã đăng. Bài phải chờ admin nhóm duyệt thì bot bình luận sau khi
+lượt kiểm tra duyệt bài (mục 3b) thấy bài đã lên. Bot cũ hơn 1.4.0 không nhận những bài này.
+
+Bot tìm bài theo thứ tự: link bài bắt được lúc bấm Đăng → "Nội dung của bạn" (Đã đăng) → bảng tin
+nhóm xếp bài mới trước, nhận ra bài bằng đoạn đầu nội dung. Trên trang không có đúng bài của mình
+thì bot không gõ gì. Thấy link đã có trên bài thì không bình luận lại.
+
+Thử tay trên nhóm test (**tắt bot chạy nền trước**, xem mục 3c). Mặc định chỉ điền ô bình luận rồi
+dừng, xem trên Termux:X11 rồi bấm Enter để bỏ:
+
+```bash
+node poster.mjs comment --post https://www.facebook.com/groups/<id-nhom-test>/posts/<id-bai>/
+node poster.mjs comment --group https://www.facebook.com/groups/<id-nhom-test> --find "đoạn đầu bài đã đăng"
+node poster.mjs comment --group https://www.facebook.com/groups/<id-nhom-test> --find "đoạn đầu bài" --text "Bình luận thử" --send
+```
+
+`--send` mới gửi thật (phải có `--find` để bot chắc đúng bài). Không thấy ô bình luận: chữ trên ô và
+nút nằm ở `COMMENT_BOX` / `COMMENT_BUTTON` trong `lib/ui.mjs`.
+
 ## 3c. Đăng bằng nhiều page
 
 Từ bản 1.3.0, ngoài nick chính bot đăng được bằng các Trang (fanpage) mà nick đang quản trị. Thêm
@@ -167,6 +190,7 @@ Tắt bot chạy nền: `pkill -f boot/fb-poster.sh` trước, rồi `pkill -f "
 | Admin báo bot **tạm dừng** vì xác minh / đăng xuất | Mở Termux:X11, xác minh hoặc đăng nhập lại, rồi bấm **Chạy tiếp** ở `/admin/fb-groups`. |
 | Một page **đang nghỉ** vì Facebook tạm chặn đăng bài | Bot đã tự chuyển sang page sau. Để page đó nghỉ 1–2 ngày, giảm số bài/ngày của nó rồi mới bấm **Mở lại**. |
 | Một page **đang nghỉ** vì "Bot không chuyển được sang page này" | Mở Termux:X11 xem trang của page còn nút **Chuyển ngay** không, nick còn quản trị page không. Thử `node poster.mjs switch --to <link page>` (mục 3c), sửa xong bấm **Mở lại**. |
+| Bài báo **"chưa bình luận được link"** | Bot thử 3 lần (cách nhau 20 phút) vẫn hỏng — lý do ghi ngay dưới bài ở `/admin/fb-posts`, ảnh chụp màn hình ở `screenshots/comment-<số bài>-…png`. Bình luận tay vào bài, hoặc thử `node poster.mjs comment` (mục 3b'). |
 | Bài **"Không rõ — xem nhóm"** | Bot đã bấm Đăng nhưng không xác nhận được. Mở nhóm xem; chỉ **Đăng lại** khi chắc chắn bài chưa lên. |
 | `Server từ chối token (403)` | Token đã bị tạo lại — dán token mới vào `config.json`. |
 | `Chromium không mở được cổng 9222` | Xem `~/.local/share/tietkiemvi-fb-runner/chromium.log`; mở app Termux:X11 một lần rồi chạy lại. |

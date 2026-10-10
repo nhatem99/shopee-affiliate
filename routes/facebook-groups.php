@@ -22,6 +22,7 @@ Route::prefix('runner/fb')
     ->group(function () {
         Route::post('/poll', [FacebookRunnerController::class, 'poll'])->name('poll');
         Route::post('/posts/{id}/result', [FacebookRunnerController::class, 'result'])->whereNumber('id')->name('result');
+        Route::post('/posts/{id}/comment', [FacebookRunnerController::class, 'comment'])->whereNumber('id')->name('comment');
         Route::post('/groups', [FacebookRunnerController::class, 'groups'])->name('groups');
         Route::post('/groups/{id}/review', [FacebookRunnerController::class, 'review'])->whereNumber('id')->name('review');
         Route::get('/images/{name}', [FacebookRunnerController::class, 'image'])->where('name', FacebookPostImages::NAME_PATTERN)->name('image');

@@ -66,13 +66,51 @@ export async function postToGroup(page, groupUrl, caption, imagePaths = null, { 
 
   // ── Từ đây trở đi bài có thể đã lên nhóm ──
   if (onSubmitting) onSubmitting();
+  const created = watchCreatedPost(page, groupUrl);
   try {
-    await button.click({ timeout: 10_000 });
-  } catch (error) {
-    return result('ambiguous', `Lỗi lúc bấm Đăng: ${error.message}`);
-  }
+    try {
+      await button.click({ timeout: 10_000 });
+    } catch (error) {
+      return result('ambiguous', `Lỗi lúc bấm Đăng: ${error.message}`);
+    }
 
-  return confirm(page);
+    const verdict = await confirm(page);
+    // Đợi thêm chút cho phản hồi tạo bài về hết — có link bài thì bình luận thẳng vào bài được.
+    if (verdict.status !== 'failed' && !created.url()) await sleep(3000);
+    return { ...verdict, postUrl: created.url() };
+  } finally {
+    created.stop();
+  }
+}
+
+// Link bài vừa đăng nằm trong phản hồi Facebook trả về cho lệnh tạo bài (GraphQL, tên có
+// "StoryCreate"). Chỉ để bình luận link vào bài — không bắt được thì bot tự tìm bài sau.
+function watchCreatedPost(page, groupUrl) {
+  let found = null;
+  const onResponse = async (response) => {
+    if (found || !response.url().includes('/api/graphql')) return;
+    try {
+      const request = response.request();
+      const name = `${request.headers()['x-fb-friendly-name'] || ''} ${request.postData() || ''}`;
+      if (!/StoryCreate/i.test(name)) return;
+      found = postUrlFromResponse(await response.text(), groupUrl);
+    } catch {
+      /* trang đã chuyển, phản hồi không còn đọc được */
+    }
+  };
+  page.on('response', onResponse);
+  return { url: () => found, stop: () => page.off('response', onResponse) };
+}
+
+// Ưu tiên link bài đầy đủ của đúng nhóm này; không có thì ghép từ post_id.
+export function postUrlFromResponse(body, groupUrl) {
+  const text = String(body).replace(/\\\//g, '/');
+  const key = groupUrl.replace(/\/+$/, '').split('/').pop();
+  for (const match of text.matchAll(/https:\/\/www\.facebook\.com\/groups\/([A-Za-z0-9._-]+)\/(?:posts|permalink)\/(\d+)/g)) {
+    if (match[1].toLowerCase() === key.toLowerCase()) return `${groupUrl.replace(/\/+$/, '')}/posts/${match[2]}/`;
+  }
+  const id = /"post_id":"(\d+)"/.exec(text);
+  return id ? `${groupUrl.replace(/\/+$/, '')}/posts/${id[1]}/` : null;
 }
 
 async function findComposer(page) {

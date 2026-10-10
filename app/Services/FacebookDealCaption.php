@@ -52,6 +52,17 @@ class FacebookDealCaption
         return implode("\n", $lines);
     }
 
+    /**
+     * Thay cho {link} khi link để ở bình luận (FacebookGroupCommentQueue) — bài không còn link nào.
+     * Cũng bốc {a|b} như mẫu bài.
+     */
+    public function commentHint(bool $withVoucher = true): string
+    {
+        return $withVoucher
+            ? '{👇|💬} {Link mua có mã giảm giá|Link có mã giảm giá|Mã giảm giá + link mua} {mình để ở bình luận|ở bình luận bên dưới|trong phần bình luận} {nhé|nha|}'
+            : '{👇|💬} {Link mua|Link sản phẩm} {mình để ở bình luận|ở bình luận bên dưới|trong phần bình luận} {nhé|nha|}';
+    }
+
     public function render(string $template, string $linkBlock, ?Randomizer $rng = null): string
     {
         $rng ??= new Randomizer;

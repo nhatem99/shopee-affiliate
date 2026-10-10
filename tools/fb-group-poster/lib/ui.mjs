@@ -12,6 +12,13 @@ export const SWITCH_BUTTON = /^\s*(Chuyển ngay|Chuyển|Switch now|Switch)\s*$
 // Chỉ tìm trong hộp thoại nên nới hơn SWITCH_BUTTON được.
 export const SWITCH_CONFIRM = /^\s*(Chuyển( ngay| trang cá nhân| sang .{1,80})?|Switch( now| profiles?| to .{1,80})?)\s*$/i;
 
+// Ô bình luận dưới bài (aria-label của ô) — KHÔNG gồm ô trả lời bình luận ("Viết câu trả lời…").
+export const COMMENT_BOX = /^\s*(Viết (một )?bình luận|Bình luận (dưới tên|với tư cách)|Write a (public )?comment|Comment as)/i;
+// Nút "Bình luận" dưới bài — bấm để hiện ô bình luận khi ô chưa có sẵn.
+export const COMMENT_BUTTON = /^\s*(Bình luận|Viết bình luận|Comment|Leave a comment)\s*$/i;
+// Facebook không nhận bình luận vừa gửi.
+export const COMMENT_REJECTED = /(không thể đăng bình luận|không đăng được bình luận|bình luận của bạn (chưa|không) được đăng|bị đánh dấu là spam|couldn't post (your |this )?comment|unable to post (your |this )?comment|comment (couldn't|could not) be posted|marked as spam)/i;
+
 // Sau khi bấm Đăng ở nhóm bắt duyệt bài.
 export const APPROVAL = /(chờ (quản trị viên )?(phê )?duyệt|đã gửi để phê duyệt|pending (admin )?approval|sent for approval|submitted for (admin )?approval)/i;
 // Facebook chặn tạm tính năng đăng bài — tín hiệu nguy hiểm nhất, phải dừng hẳn.

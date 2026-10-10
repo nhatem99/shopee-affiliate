@@ -18,7 +18,8 @@ const props = defineProps({
     today: Object,
     groupLinksDirectAffiliate: Boolean,
     maxImages: Number,
-    // { version, supports_uploads, uploads_waiting } — bot cũ không đăng được ảnh tự tải lên.
+    // { version, supports_uploads, uploads_waiting, supports_comments, comments_waiting } — bot cũ
+    // không đăng được ảnh tự tải lên, không biết bình luận link.
     runner: Object,
     // Mẫu bài tự soạn: [{ id, name, caption, images: [{ name, url }] }], mới sửa lên đầu.
     templates: Array,
@@ -89,6 +90,8 @@ const form = useForm({
     caption: '',
     fallback_buy_url: null,
     fallback_ytb_url: null,
+    // Bài không có link, bot đăng xong tự bình luận link mua vào bài (FacebookGroupCommentQueue).
+    link_in_comment: true,
     group_ids: [],
 })
 
@@ -144,9 +147,16 @@ function renderCaption(template, linkBlock) {
 }
 
 const preview = ref('')
+const linkInComment = computed(() => !isCustom.value && form.link_in_comment)
 function rollPreview() {
-    preview.value = editing.value ? renderCaption(form.caption, isCustom.value ? '' : draft.value.link_block) : ''
+    if (!editing.value) {
+        preview.value = ''
+        return
+    }
+    const linkBlock = isCustom.value ? '' : linkInComment.value ? renderCaption(draft.value.comment_hint, '') : draft.value.link_block
+    preview.value = renderCaption(form.caption, linkBlock)
 }
+watch(() => form.link_in_comment, rollPreview)
 
 const hasLinkToken = computed(() => form.caption.includes('{link}'))
 const isDirty = computed(() => form.caption.trim() !== '' || photos.value.length > 0)
@@ -405,6 +415,24 @@ const statusClass = (s) => ({
 
 const RETRYABLE = ['failed', 'ambiguous', 'not_allowed', 'blocked', 'checkpoint', 'expired', 'cancelled']
 
+// Bài "link ở bình luận": bot bình luận link khi bài đã hiện trên nhóm (đăng thẳng, hoặc đã duyệt).
+function commentNote(post) {
+    switch (post.comment_status) {
+        case 'done': return { text: 'đã bình luận link', cls: 'text-green-700' }
+        case 'unknown': return { text: 'đã gửi bình luận nhưng chưa thấy hiện — mở bài xem', cls: 'text-amber-600' }
+        case 'failed': return { text: 'chưa bình luận được link', cls: 'text-red-600' }
+        case 'pending': {
+            if (!['posted', 'pending_approval', 'ambiguous'].includes(post.status)) return null
+            if (['declined', 'removed', 'missing'].includes(post.review_state)) return null
+            const online = post.review_state === 'published' || (post.status === 'posted' && !post.review_state)
+            return online
+                ? { text: 'chờ bình luận link', cls: 'text-amber-600' }
+                : { text: 'bình luận link khi bài được duyệt', cls: 'text-[var(--color-muted)]' }
+        }
+        default: return null
+    }
+}
+
 // Bot kiểm tra lại "Nội dung của bạn" trong nhóm sau khi đăng (FacebookGroupReviewChecker) — có
 // kết quả thì hiện kết quả đó thay cho điều bot thấy lúc bấm Đăng.
 const reviewLabel = {
@@ -447,6 +475,12 @@ function retry(post) {
         <div v-if="runner.uploads_waiting" class="mb-5 rounded-2xl border border-amber-300 bg-[var(--color-peach-soft)] text-sm text-amber-700 p-4">
             <span class="font-semibold">Có bài kèm ảnh tự tải lên đang chờ:</span>
             bot trên điện thoại đang chạy bản {{ runner.version || 'cũ' }}, chưa đăng được ảnh tự tải nên tạm bỏ qua những bài đó.
+            Cập nhật bot (<span class="font-mono">git pull</span> trong thư mục repo trên điện thoại rồi chạy lại bot) là bài được đăng tiếp.
+        </div>
+
+        <div v-if="runner.comments_waiting" class="mb-5 rounded-2xl border border-amber-300 bg-[var(--color-peach-soft)] text-sm text-amber-700 p-4">
+            <span class="font-semibold">Có bài "link ở bình luận" đang chờ:</span>
+            bot trên điện thoại đang chạy bản {{ runner.version || 'cũ' }}, chưa biết bình luận nên tạm bỏ qua những bài đó.
             Cập nhật bot (<span class="font-mono">git pull</span> trong thư mục repo trên điện thoại rồi chạy lại bot) là bài được đăng tiếp.
         </div>
 
@@ -537,8 +571,19 @@ function retry(post) {
                     <textarea v-model="form.caption" @input="rollPreview" rows="10"
                         :placeholder="isCustom ? '{Chào cả nhà|Hello mọi người} 👋\nHôm nay mình chia sẻ…' : ''"
                         class="w-full border border-[var(--color-line)] rounded-xl px-3 py-2 text-sm font-mono focus:outline-none focus:border-[var(--color-accent)]"></textarea>
+                    <label v-if="!isCustom" class="flex items-start gap-2 text-sm mt-2">
+                        <input type="checkbox" v-model="form.link_in_comment" class="w-4 h-4 mt-0.5 accent-[var(--color-accent)]" />
+                        <span>
+                            <span class="font-semibold text-[var(--color-ink)]">Để link ở bình luận</span>
+                            <span class="block text-xs text-[var(--color-muted)]">Bài không có link nào (đỡ bị coi là spam). Bài lên nhóm rồi bot tự vào bình luận link mua; bài phải chờ duyệt thì bình luận sau khi được duyệt.</span>
+                        </span>
+                    </label>
+                    <p v-if="linkInComment && !runner.supports_comments" class="text-amber-600 text-xs mt-1">
+                        Bot trên điện thoại đang chạy bản {{ runner.version || 'cũ' }} — chưa biết bình luận. Bài này sẽ chờ tới khi bạn cập nhật bot.
+                    </p>
                     <p class="text-xs text-[var(--color-muted)] mt-1">
-                        <template v-if="!isCustom"><span class="font-mono">{link}</span> là chỗ đặt link mua — để riêng một dòng. </template>
+                        <template v-if="linkInComment"><span class="font-mono">{link}</span> là chỗ đặt câu "link ở bình luận" — để riêng một dòng. </template>
+                        <template v-else-if="!isCustom"><span class="font-mono">{link}</span> là chỗ đặt link mua — để riêng một dòng. </template>
                         <span class="font-mono">{a|b|c}</span>: mỗi nhóm nhận ngẫu nhiên một lựa chọn, để các nhóm không thấy cùng một câu y hệt.
                     </p>
                     <p v-if="linkTokenError" class="text-red-500 text-xs mt-1">{{ linkTokenError }}</p>
@@ -551,6 +596,10 @@ function retry(post) {
                         <button type="button" @click="rollPreview" class="text-xs font-semibold text-[var(--color-accent)] hover:underline">Xem câu khác</button>
                     </div>
                     <pre class="whitespace-pre-wrap text-sm bg-[var(--color-peach-soft)] rounded-xl p-3 min-h-[12rem]">{{ preview }}</pre>
+                    <template v-if="linkInComment">
+                        <p class="text-xs font-semibold text-[var(--color-ink)] mt-3 mb-1">Bot bình luận vào bài:</p>
+                        <pre class="whitespace-pre-wrap text-sm border border-[var(--color-line)] rounded-xl p-3">{{ draft.link_block }}</pre>
+                    </template>
                     <p v-if="!isCustom" class="text-xs text-[var(--color-muted)] mt-1">Link thật được tạo lại lúc bot đăng, để mã còn lượt.</p>
                 </div>
             </div>
@@ -683,9 +732,11 @@ function retry(post) {
                         <span v-if="post.reviewed_at" class="text-[11px] text-[var(--color-muted)]">· kiểm tra {{ fmt(post.reviewed_at) }}</span>
                         <a v-if="post.post_url" :href="post.post_url" target="_blank" rel="noopener" class="text-[11px] font-semibold text-[var(--color-accent)] hover:underline">Xem bài</a>
                         <span v-if="post.link_kind === 'fallback'" class="text-[11px] text-amber-600">dùng link lúc soạn</span>
+                        <span v-if="commentNote(post)" class="text-[11px] font-semibold" :class="commentNote(post).cls">· {{ commentNote(post).text }}</span>
                         <button v-if="post.status === 'pending'" @click="cancel(post)" class="ml-auto text-xs font-semibold text-red-500 hover:underline">Huỷ</button>
                         <button v-else-if="RETRYABLE.includes(post.status)" @click="retry(post)" class="ml-auto text-xs font-semibold text-[var(--color-accent)] hover:underline">Đăng lại</button>
                         <p v-if="post.error" class="w-full text-xs text-[var(--color-muted)] pl-1">{{ post.error }}</p>
+                        <p v-if="post.comment_error && post.comment_status !== 'done'" class="w-full text-xs text-[var(--color-muted)] pl-1">Bình luận: {{ post.comment_error }}</p>
                     </li>
                 </ul>
             </div>

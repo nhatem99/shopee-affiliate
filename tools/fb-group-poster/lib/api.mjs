@@ -74,8 +74,9 @@ export class Api {
 
   // Báo kết quả, thử lại tới khi server nhận. 409 = lượt này server đã chốt/không khớp.
   // actorId: uid page đã đăng bài — server điền uid cho page thêm bằng link tên rút gọn.
-  async report(postId, claimKey, status, error, actorId = null) {
-    const payload = { claim_key: claimKey, status, error: error ? String(error).slice(0, 1000) : null, actor_id: actorId };
+  // postUrl: link bài bắt được lúc bấm Đăng — server dùng để giao việc bình luận link.
+  async report(postId, claimKey, status, error, actorId = null, postUrl = null) {
+    const payload = { claim_key: claimKey, status, error: error ? String(error).slice(0, 1000) : null, actor_id: actorId, post_url: postUrl };
     let last = null;
     for (let attempt = 0; attempt < 6; attempt++) {
       try {
@@ -90,6 +91,25 @@ export class Api {
       await sleep(Math.min(60, 5 * 2 ** attempt) * 1000);
     }
     throw new ApiError(`Không báo được kết quả bài #${postId}: ${last?.message}`);
+  }
+
+  // Kết quả việc "comment". Trả mã HTTP: 409 = bài không còn chờ bình luận (đã chốt), 422 = server
+  // không nhận dữ liệu — cả hai gửi lại cũng vậy. Lỗi mạng thì thử lại vài lần.
+  async reportComment(postId, status, error, postUrl = null) {
+    const payload = { status, error: error ? String(error).slice(0, 1000) : null, post_url: postUrl };
+    let last = null;
+    for (let attempt = 0; attempt < 3; attempt++) {
+      try {
+        const [code] = await this.post(`/runner/fb/posts/${postId}/comment`, payload);
+        if ([200, 404, 409, 422].includes(code)) return code;
+        last = new ApiError(`HTTP ${code}`);
+      } catch (caught) {
+        if (caught instanceof AuthError) throw caught;
+        last = caught;
+      }
+      await sleep(5000 * (attempt + 1));
+    }
+    throw new ApiError(`Không báo được kết quả bình luận bài #${postId}: ${last?.message}`);
   }
 
   // Ảnh admin tự tải lên cho bài — chỉ server của mình có, phải kèm token. `path` đã được

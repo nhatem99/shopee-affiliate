@@ -11,12 +11,13 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
  * Một bài admin soạn ở /admin/fb-posts — đăng vào nhiều nhóm, mỗi nhóm một FacebookGroupPost.
  * shopee_url null là "bài tự soạn": không link mua, chỉ có chữ admin viết và ảnh tự tải lên.
  */
-#[Fillable(['shopee_url', 'canonical_url', 'source', 'product', 'images', 'with_product_image', 'caption', 'fallback_buy_url', 'fallback_ytb_url', 'created_by'])]
+#[Fillable(['shopee_url', 'canonical_url', 'source', 'product', 'images', 'with_product_image', 'caption', 'link_in_comment', 'fallback_buy_url', 'fallback_ytb_url', 'created_by'])]
 class FacebookGroupDeal extends Model
 {
     /** Khớp mặc định của cột — model vừa tạo chưa đọc lại từ DB vẫn có đúng giá trị. */
     protected $attributes = [
         'with_product_image' => true,
+        'link_in_comment' => false,
     ];
 
     protected function casts(): array
@@ -27,6 +28,8 @@ class FacebookGroupDeal extends Model
             // FacebookGroupPostScheduler lọc "bài có ảnh tự tải" bằng whereNotNull.
             'images' => 'array',
             'with_product_image' => 'boolean',
+            // Link mua để ở bình luận, bài chỉ ghi "link ở bình luận" — xem FacebookGroupCommentQueue.
+            'link_in_comment' => 'boolean',
         ];
     }
 

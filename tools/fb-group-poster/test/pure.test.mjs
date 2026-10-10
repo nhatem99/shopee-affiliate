@@ -4,10 +4,11 @@ import os from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
 
+import { feedUrl, postUrl, snippets } from '../lib/comment.mjs';
 import { groupKey } from '../lib/groups.mjs';
 import { allowed, isUpload } from '../lib/images.mjs';
 import { identity } from '../lib/browser.mjs';
-import { GROUP_URL } from '../lib/post.mjs';
+import { GROUP_URL, postUrlFromResponse } from '../lib/post.mjs';
 import { PROFILE_URL, profileFromInput } from '../lib/profiles.mjs';
 import { TAB_URL, fingerprint, tabUrls } from '../lib/review.mjs';
 import { State } from '../lib/state.mjs';
@@ -137,4 +138,51 @@ test('identity: i_user là page đang dùng, không có thì là nick chính', a
   assert.deepEqual(await identity(context([['c_user', '100'], ['xs', 'x']])), { accountId: '100', actorId: '100' });
   assert.deepEqual(await identity(context([['c_user', '100'], ['i_user', '615']])), { accountId: '100', actorId: '615' });
   assert.deepEqual(await identity(context([['i_user', '615']])), { accountId: null, actorId: null });
+});
+
+test('postUrl chỉ nhận link bài trong nhóm trên facebook.com, đưa về www', () => {
+  assert.equal(postUrl('https://www.facebook.com/groups/sansale.vn/posts/123456/'), 'https://www.facebook.com/groups/sansale.vn/posts/123456/');
+  assert.equal(postUrl('https://m.facebook.com/groups/999/permalink/123456?ref=x'), 'https://www.facebook.com/groups/999/permalink/123456/');
+  assert.equal(postUrl('https://www.facebook.com/groups/abc/posts/123/?comment_id=5'), 'https://www.facebook.com/groups/abc/posts/123/');
+  assert.equal(postUrl('https://evil.com/groups/abc/posts/123/'), null);
+  assert.equal(postUrl('https://www.facebook.com.evil.com/groups/abc/posts/123/'), null);
+  assert.equal(postUrl('http://www.facebook.com/groups/abc/posts/123/'), null);
+  assert.equal(postUrl('https://www.facebook.com/groups/abc/'), null);
+  assert.equal(postUrl('https://www.facebook.com/groups/abc/posts/xyz/'), null);
+  assert.equal(postUrl('không phải link'), null);
+});
+
+test('snippets giống FacebookGroupReviewChecker phía server: đoạn đầu 80/50/30 chữ', () => {
+  const caption = '🔥 Deal hời hôm nay: Áo thun cotton co giãn 4 chiều, thấm hút mồ hôi, form rộng unisex, nhiều màu\n💰 Giá còn 99.000₫';
+  const parts = snippets(caption);
+  assert.deepEqual(parts.map((part) => [...part].length), [80, 50, 30]);
+  assert.ok(parts.every((part) => fingerprint(caption).startsWith(part)));
+  assert.deepEqual(snippets('Ngắn'), []);
+  assert.deepEqual(snippets(''), []);
+});
+
+test('feedUrl chỉ dựng cho link nhóm hợp lệ', () => {
+  assert.equal(feedUrl('https://www.facebook.com/groups/abc/'), 'https://www.facebook.com/groups/abc/?sorting_setting=CHRONOLOGICAL');
+  assert.equal(feedUrl('https://evil.com/groups/abc/'), null);
+});
+
+test('postUrlFromResponse lấy link bài của đúng nhóm, không có thì ghép từ post_id', () => {
+  const group = 'https://www.facebook.com/groups/sansale.vn/';
+  const body = '{"data":{"story_create":{"story":{"url":"https:\\/\\/www.facebook.com\\/groups\\/sansale.vn\\/permalink\\/777\\/","post_id":"777"}}}}';
+  assert.equal(postUrlFromResponse(body, group), 'https://www.facebook.com/groups/sansale.vn/posts/777/');
+  const otherGroup = '{"url":"https://www.facebook.com/groups/khac/posts/555/","post_id":"888"}';
+  assert.equal(postUrlFromResponse(otherGroup, group), 'https://www.facebook.com/groups/sansale.vn/posts/888/');
+  assert.equal(postUrlFromResponse('{"errors":[]}', group), null);
+});
+
+test('COMMENT_BOX nhận ô bình luận bài, không nhận ô trả lời hay ô nhắn tin', () => {
+  for (const label of ['Viết bình luận...', 'Viết bình luận công khai…', 'Bình luận dưới tên Shop Test', 'Write a comment…', 'Write a public comment…', 'Comment as Shop Test']) {
+    assert.ok(ui.COMMENT_BOX.test(label), label);
+  }
+  for (const label of ['Viết câu trả lời...', 'Trả lời Lan...', 'Reply to Lan…', 'Nhắn tin', 'Message', 'Bạn viết gì đi...']) {
+    assert.ok(!ui.COMMENT_BOX.test(label), label);
+  }
+  assert.ok(ui.COMMENT_BUTTON.test('Bình luận'));
+  assert.ok(!ui.COMMENT_BUTTON.test('Bình luận dưới tên Shop Test'));
+  assert.ok(ui.COMMENT_REJECTED.test("Your comment couldn't be posted"));
 });

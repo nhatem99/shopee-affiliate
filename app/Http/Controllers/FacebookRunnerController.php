@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\FacebookGroup;
 use App\Models\FacebookGroupPost;
 use App\Models\FacebookProfile;
+use App\Services\FacebookGroupCommentQueue;
 use App\Services\FacebookGroupPostScheduler;
 use App\Services\FacebookGroupReviewChecker;
 use App\Services\FacebookPostImages;
@@ -63,10 +64,30 @@ class FacebookRunnerController extends Controller
             'error' => ['nullable', 'string', 'max:1000'],
             // Page bot đã đăng bằng — server điền uid cho page thêm bằng link tên rút gọn.
             'actor_id' => ['nullable', 'string', 'regex:'.self::FB_ID],
+            // Link bài bot bắt được lúc bấm Đăng (bot từ 1.4.0) — link lạ thì bỏ, không báo lỗi.
+            'post_url' => ['nullable', 'string', 'max:1000'],
         ]);
 
-        if (! $this->scheduler->report($post, $data['claim_key'], $data['status'], $data['error'] ?? null, $data['actor_id'] ?? null)) {
+        if (! $this->scheduler->report($post, $data['claim_key'], $data['status'], $data['error'] ?? null, $data['actor_id'] ?? null, $data['post_url'] ?? null)) {
             return response()->json(['message' => 'Lượt nhận bài không khớp — bỏ qua kết quả này.'], 409);
+        }
+
+        return response()->json(['ok' => true]);
+    }
+
+    /** Bot báo kết quả việc "comment" — bình luận link mua vào bài đã đăng. */
+    public function comment(Request $request, FacebookGroupCommentQueue $comments, int $id): JsonResponse
+    {
+        $post = FacebookGroupPost::findOrFail($id);
+
+        $data = $request->validate([
+            'status' => ['required', Rule::in(FacebookGroupCommentQueue::RESULTS)],
+            'error' => ['nullable', 'string', 'max:1000'],
+            'post_url' => ['nullable', 'string', 'max:1000'],
+        ]);
+
+        if (! $comments->report($post, $data['status'], $data['error'] ?? null, $data['post_url'] ?? null)) {
+            return response()->json(['message' => 'Bài này không chờ bình luận — bỏ qua kết quả này.'], 409);
         }
 
         return response()->json(['ok' => true]);

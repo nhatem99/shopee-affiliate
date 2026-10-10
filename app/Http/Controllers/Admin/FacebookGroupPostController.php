@@ -12,6 +12,7 @@ use App\Models\ShortLink;
 use App\Services\DirectAffiliateLinkService;
 use App\Services\FacebookDealCaption;
 use App\Services\FacebookDealLinkBuilder;
+use App\Services\FacebookGroupCommentQueue;
 use App\Services\FacebookGroupPostScheduler;
 use App\Services\FacebookGroupRunnerSettings;
 use App\Services\FacebookPostImages;
@@ -52,6 +53,7 @@ class FacebookGroupPostController extends Controller
 
         $runnerVersion = $this->settings->runnerStatus()['version'];
         $runnerSupportsUploads = FacebookGroupPostScheduler::runnerSupportsUploads($runnerVersion);
+        $runnerSupportsComments = FacebookGroupCommentQueue::runnerSupports($runnerVersion);
 
         $groups = FacebookGroup::enabled()->orderBy('name')->get(['id', 'name', 'url', 'last_posted_at', 'last_attempt_at']);
         $readiness = $this->scheduler->groupReadiness($groups);
@@ -69,6 +71,7 @@ class FacebookGroupPostController extends Controller
                 'created_at' => $deal->created_at,
                 'shopee_url' => $deal->shopee_url,
                 'custom' => $deal->isCustom(),
+                'link_in_comment' => $deal->link_in_comment,
                 'excerpt' => $deal->isCustom() ? Str::limit(trim(strtok($deal->caption, "\n")), 120) : null,
                 'images' => $this->images->adminUrlsFor($deal),
                 // Nút "Dùng lại": nạp nội dung + ảnh của bài tự soạn này vào ô soạn bài.
@@ -88,6 +91,9 @@ class FacebookGroupPostController extends Controller
                     'review_state' => $post->review_state,
                     'reviewed_at' => $post->reviewed_at,
                     'post_url' => $post->post_url,
+                    'comment_status' => $post->comment_status,
+                    'commented_at' => $post->commented_at,
+                    'comment_error' => $post->comment_error,
                 ]),
             ]),
             'blocking' => $this->scheduler->blockingReason(),
@@ -110,6 +116,11 @@ class FacebookGroupPostController extends Controller
                 // Bot cũ không nhận bài có ảnh tự tải — có bài như vậy đang chờ thì phải báo.
                 'uploads_waiting' => ! $runnerSupportsUploads && FacebookGroupPost::where('status', FacebookGroupPost::PENDING)
                     ->whereHas('deal', fn ($query) => $query->whereNotNull('images'))
+                    ->exists(),
+                'supports_comments' => $runnerSupportsComments,
+                // Bài "link ở bình luận" cũng chỉ giao cho bot biết bình luận.
+                'comments_waiting' => ! $runnerSupportsComments && FacebookGroupPost::where('status', FacebookGroupPost::PENDING)
+                    ->whereHas('deal', fn ($query) => $query->where('link_in_comment', true))
                     ->exists(),
             ],
         ]);
@@ -160,14 +171,17 @@ class FacebookGroupPostController extends Controller
         }
 
         $product = $link->product ? array_intersect_key($link->product, array_flip(self::PRODUCT_KEYS)) : null;
+        $withVoucher = $link->source !== DirectAffiliateLinkService::SOURCE;
 
         return response()->json([
             'shopee_url' => $url,
             'canonical_url' => $link->canonicalUrl,
             'source' => $link->source,
             'product' => $product,
-            'caption' => $captions->defaultTemplate($product, $link->source !== DirectAffiliateLinkService::SOURCE),
+            'caption' => $captions->defaultTemplate($product, $withVoucher),
             'link_block' => $link->captionBlock(),
+            // Thay cho {link} khi để link ở bình luận — trang xem trước bốc {a|b} như server.
+            'comment_hint' => $captions->commentHint($withVoucher),
             'fallback_buy_url' => $link->buyUrl,
             'fallback_ytb_url' => $link->ytbActivateUrl,
         ]);
@@ -206,6 +220,7 @@ class FacebookGroupPostController extends Controller
             }],
             'fallback_ytb_url' => ['nullable', 'string', 'max:500', 'starts_with:'.url('/ytb/')],
             'with_product_image' => ['boolean'],
+            'link_in_comment' => ['boolean'],
             'images' => ['nullable', 'array', 'max:'.FacebookPostImages::MAX_PER_POST],
             'images.*' => ['string', 'distinct', $this->images->existsRule()],
             'group_ids' => ['required', 'array', 'min:1', 'max:500'],
@@ -250,6 +265,8 @@ class FacebookGroupPostController extends Controller
                 'images' => $uploads ?: null,
                 'with_product_image' => $withProductImage,
                 'caption' => $data['caption'],
+                // Bài tự soạn không có link mua để đưa xuống bình luận.
+                'link_in_comment' => ! $custom && (bool) ($data['link_in_comment'] ?? false),
                 'fallback_buy_url' => $custom ? null : ($data['fallback_buy_url'] ?? null),
                 'fallback_ytb_url' => $custom ? null : ($data['fallback_ytb_url'] ?? null),
                 'created_by' => $request->user()->id,
@@ -297,7 +314,7 @@ class FacebookGroupPostController extends Controller
             'link_kind' => null,
             'short_link_id' => null,
             'error' => null,
-        ])->save();
+        ] + FacebookGroupCommentQueue::RESET)->save();
 
         return back()->with('success', 'Đã đưa bài vào hàng đợi lại.');
     }

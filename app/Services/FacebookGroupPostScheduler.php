@@ -40,6 +40,9 @@ class FacebookGroupPostScheduler
 
     private const LOCK_KEY = 'fb-runner:claim';
 
+    /** Kết quả mà bài có thể đã lên nhóm. */
+    private const MAY_BE_ONLINE = [FacebookGroupPost::POSTED, FacebookGroupPost::PENDING_APPROVAL, FacebookGroupPost::AMBIGUOUS];
+
     /**
      * Bot từ bản này mới đính kèm được ảnh admin tự tải lên (trường "images" của lượt nhận bài).
      * Bot cũ chỉ biết "image_url" — giao bài có ảnh tự tải cho nó là bài lên nhóm thiếu ảnh, nên
@@ -66,12 +69,14 @@ class FacebookGroupPostScheduler
         private ZaloAdminNotifier $notifier,
         private FacebookPostImages $images,
         private FacebookGroupReviewChecker $reviews,
+        private FacebookGroupCommentQueue $comments,
     ) {}
 
     /**
-     * Bot hỏi việc. Trả về một trong bốn dạng:
+     * Bot hỏi việc. Trả về một trong năm dạng:
      *  • ['type' => 'post', ...]        — đăng bài này;
      *  • ['type' => 'sync_groups']      — lấy lại danh sách nhóm đã tham gia;
+     *  • ['type' => 'comment', ...]     — bình luận link mua vào bài đã lên nhóm;
      *  • ['type' => 'review_group', ...] — lúc rảnh: xem bài đã đăng có được duyệt không;
      *  • ['type' => 'idle', 'reason', 'retry_after'] — chưa có gì, ngủ rồi hỏi lại.
      *
@@ -117,8 +122,13 @@ class FacebookGroupPostScheduler
             return $this->syncJob($version);
         }
 
-        // Đăng bài trước; kiểm tra duyệt bài chỉ chen vào lúc rảnh, và vẫn trong khung giờ đăng.
-        if ($blocking = $this->blockingReason()) {
+        // Bình luận link vào bài vừa lên nhóm trước cả bài mới, không chờ khoảng nghỉ giữa hai bài —
+        // nhưng vẫn trong khung giờ đăng. Kiểm tra duyệt bài chỉ chen vào lúc rảnh.
+        $blocking = $this->blockingReason();
+        if (($blocking['reason'] ?? null) !== 'outside_window' && $comment = $this->comments->nextJob($version)) {
+            return $comment;
+        }
+        if ($blocking) {
             $review = $blocking['reason'] !== 'outside_window' ? $this->reviews->nextJob($version) : null;
 
             return $review ?? $this->idle($blocking['reason'], $blocking['retry_after']);
@@ -295,7 +305,7 @@ class FacebookGroupPostScheduler
      * Bot báo kết quả một bài. false = không khớp lượt nhận bài (key sai, bài đã chốt kết quả
      * khác) — controller trả 409 để bot biết đừng gửi lại.
      */
-    public function report(FacebookGroupPost $post, string $claimKey, string $status, ?string $error, ?string $actorId = null): bool
+    public function report(FacebookGroupPost $post, string $claimKey, string $status, ?string $error, ?string $actorId = null, ?string $postUrl = null): bool
     {
         if ($post->claim_key === null || ! hash_equals($post->claim_key, $claimKey)) {
             return false;
@@ -307,11 +317,13 @@ class FacebookGroupPostScheduler
         }
 
         $group = $post->group;
+        // Link bài bot bắt được lúc bấm Đăng (bot từ 1.4.0) — để bình luận thẳng vào bài.
+        $postUrl = FacebookGroupReviewChecker::postUrl($postUrl);
 
         // Lượt đã bị coi là "không rõ" vì bot báo muộn — giờ biết chắc đã lên thì ghi nhận.
         if ($post->status === FacebookGroupPost::AMBIGUOUS
             && in_array($status, [FacebookGroupPost::POSTED, FacebookGroupPost::PENDING_APPROVAL], true)) {
-            $post->forceFill(['status' => $status, 'error' => null])->save();
+            $post->forceFill(['status' => $status, 'error' => null, 'post_url' => $postUrl ?? $post->post_url])->save();
             $group->forceFill(['last_posted_at' => $post->finished_at ?? now()])->save();
 
             return true;
@@ -351,6 +363,9 @@ class FacebookGroupPostScheduler
             'status' => $status,
             'finished_at' => now(),
             'error' => $error !== null ? Str::limit($error, 990) : null,
+            'post_url' => $postUrl ?? $post->post_url,
+            // Bài chắc chắn chưa lên nhóm thì không có gì để bình luận.
+            'comment_status' => in_array($status, self::MAY_BE_ONLINE, true) ? $post->comment_status : null,
         ])->save();
 
         switch ($status) {
@@ -459,6 +474,7 @@ class FacebookGroupPostScheduler
         try {
             $cooldownStart = now()->subHours($this->settings->cadence()['cooldown_hours']);
             $withUploads = self::runnerSupportsUploads($runnerVersion);
+            $withComments = FacebookGroupCommentQueue::runnerSupports($runnerVersion);
 
             foreach ($this->postingProfiles($runnerVersion) as $profile) {
                 $post = FacebookGroupPost::where('status', FacebookGroupPost::PENDING)
@@ -466,6 +482,8 @@ class FacebookGroupPostScheduler
                         ->where(fn ($q) => $q->whereNull('last_attempt_at')->orWhere('last_attempt_at', '<=', $cooldownStart))
                         ->whereHas('profiles', fn ($q) => $q->whereKey($profile->id)))
                     ->when(! $withUploads, fn ($query) => $query->whereHas('deal', fn ($q) => $q->whereNull('images')))
+                    // Bot cũ không biết bình luận — giao bài "link ở bình luận" là bài lên nhóm không có link.
+                    ->when(! $withComments, fn ($query) => $query->whereHas('deal', fn ($q) => $q->where('link_in_comment', false)))
                     ->orderBy('id')
                     ->first();
                 if (! $post) {
@@ -536,8 +554,17 @@ class FacebookGroupPostScheduler
             return $this->idle('link_failed', 60);
         }
 
+        // Link để ở bình luận: chỗ {link} trong bài thành câu "link ở bình luận", khối link thành
+        // nội dung bình luận bot đăng sau (FacebookGroupCommentQueue).
+        $inComment = $deal->link_in_comment;
+        $linkBlock = $inComment
+            ? $this->captions->render($this->captions->commentHint($link->source !== DirectAffiliateLinkService::SOURCE), '')
+            : $link->captionBlock();
+
         $post->forceFill([
-            'caption' => $this->captions->render($deal->caption, $link->captionBlock()),
+            'caption' => $this->captions->render($deal->caption, $linkBlock),
+            'comment' => $inComment ? $link->captionBlock() : null,
+            'comment_status' => $inComment ? FacebookGroupPost::COMMENT_PENDING : null,
             'buy_url' => $link->buyUrl,
             'link_kind' => $kind,
             'short_link_id' => $link->shortLinkId,
@@ -614,7 +641,7 @@ class FacebookGroupPostScheduler
             'link_kind' => null,
             'short_link_id' => null,
             'error' => $note,
-        ])->save();
+        ] + FacebookGroupCommentQueue::RESET)->save();
     }
 
     /** Gỡ page khỏi nhóm nếu nhóm còn page khác. Page cuối cùng thì giữ, để tắt nhóm như cũ. */

@@ -9,6 +9,9 @@
 //                                         (thêm --image <ảnh> tối đa 5 lần để thử kèm ảnh)
 //   node poster.mjs review --group URL    xem "Nội dung của bạn" của một nhóm bot đọc được gì
 //                                         (thêm --text "đoạn đầu bài" để xem bài đó nằm ở tab nào)
+//   node poster.mjs comment --post LINK   thử bình luận vào một bài: điền ô bình luận nhưng KHÔNG gửi
+//                                         (--group URL --find "đoạn đầu bài" để bot tự tìm bài,
+//                                         --text "..." nội dung, --send để gửi thật)
 //   node poster.mjs whoami                đang dùng nick chính hay page nào
 //   node poster.mjs switch --to LINK      thử chuyển sang một page (link trang hoặc uid), --to primary
 //                                         để về nick chính — không gọi server
@@ -19,12 +22,13 @@ import { parseArgs } from 'node:util';
 
 import { Api, ApiError, AuthError, errorText } from './lib/api.mjs';
 import { accountId, identity, launch } from './lib/browser.mjs';
+import { commentOnPost, postUrl } from './lib/comment.mjs';
 import * as configModule from './lib/config.mjs';
 import { ScrapeError, scrapeJoinedGroups } from './lib/groups.mjs';
 import { MAX_IMAGES, downloadAsJpeg, fetchAsJpeg, isUpload } from './lib/images.mjs';
 import { GROUP_URL, postToGroup } from './lib/post.mjs';
 import { PROFILE_URL, profileFromInput, switchTo } from './lib/profiles.mjs';
-import { fingerprint, scanTabs, tabUrls } from './lib/review.mjs';
+import { DEFAULT_TABS, fingerprint, scanTabs, tabUrls } from './lib/review.mjs';
 import { State } from './lib/state.mjs';
 
 let logFile = null;
@@ -170,6 +174,48 @@ async function cmdReview(cfg, group, text) {
     await browser.close();
   }
   return opened ? 0 : 1;
+}
+
+// ── comment ──────────────────────────────────────────────────────────────────
+
+// Chạy tay, không gọi server: thử bình luận vào một bài bằng page đang mở. Mặc định chỉ điền ô
+// bình luận rồi dừng; --send mới gửi thật.
+async function cmdComment(cfg, { post, group, find, text, send }) {
+  const groupUrl = group || (postUrl(post || '') || '').replace(/\/(posts|permalink)\/\d+\/$/, '/');
+  const job = {
+    group_url: groupUrl,
+    post_url: post || null,
+    caption: find || '',
+    comment: text,
+    marker: send ? text.split(/\r?\n/).filter((line) => line.trim()).pop().trim() : null,
+    search: [`${groupUrl.replace(/\/+$/, '')}/${DEFAULT_TABS.published}/`],
+  };
+  if (!find) log('Không có --find: bot không kiểm tra được đây có đúng bài của mình không (chỉ điền thử).');
+  const browser = await launch(cfg);
+  let outcome;
+  try {
+    outcome = await commentOnPost(browser.page, job, { dryRun: !send, log });
+    log(`Kết quả: ${outcome.status}${outcome.error ? ` — ${outcome.error}` : ''}${outcome.postUrl ? ` (${outcome.postUrl})` : ''}`);
+    if (outcome.status === 'dry_run') {
+      await ask('Đã điền ô bình luận, KHÔNG gửi. Xem màn hình rồi bấm Enter để đóng (bình luận nháp bị bỏ)... ');
+    } else if (outcome.status !== 'commented') {
+      await screenshot(cfg, browser, 'comment');
+    }
+  } finally {
+    await browser.close();
+  }
+  return ['dry_run', 'commented'].includes(outcome.status) ? 0 : 1;
+}
+
+async function screenshot(cfg, browser, name) {
+  const shot = path.join(cfg.dataDir, 'screenshots', `${name}-${stamp().replace(/\D/g, '')}.png`);
+  try {
+    fs.mkdirSync(path.dirname(shot), { recursive: true });
+    await browser.page.screenshot({ path: shot });
+    log(`Ảnh chụp màn hình: ${shot}`);
+  } catch {
+    /* trình duyệt đã đóng */
+  }
 }
 
 // ── whoami / switch ──────────────────────────────────────────────────────────
@@ -361,8 +407,8 @@ async function finishPost(api, state, cfg, browser, postId, claimKey, result, ac
   }
 
   state.finish(result.status, result.error);
-  log(`Kết quả bài #${postId}: ${result.status}${result.error ? ` — ${result.error}` : ''}`);
-  await api.report(postId, claimKey, result.status, result.error, actorId);
+  log(`Kết quả bài #${postId}: ${result.status}${result.error ? ` — ${result.error}` : ''}${result.postUrl ? ` (${result.postUrl})` : ''}`);
+  await api.report(postId, claimKey, result.status, result.error, actorId, result.postUrl ?? null);
   state.clear();
   state.newClaimKey();
 }
@@ -390,6 +436,31 @@ async function doReview(api, browser, job) {
   const payload = Object.fromEntries(Object.entries(tabs).map(([state, tab]) => [state, { ok: tab.ok, error: tab.error, items: tab.items }]));
   const summary = await api.reportReview(job.group_id, payload, job.profile?.id ?? null);
   log(`Kết quả kiểm tra: thấy ${summary.found}/${summary.checked} bài trong "Nội dung của bạn".`);
+}
+
+// Bình luận link mua vào bài đã đăng (bài "link ở bình luận"). Phải bình luận bằng đúng page đã
+// đăng. Facebook chặn/bắt xác minh thì báo thêm ở lượt hỏi việc kế tiếp, như lúc kiểm tra duyệt bài.
+async function doComment(api, cfg, browser, job) {
+  log(`Bình luận link vào bài #${job.post_id} ở nhóm ${job.group_name || job.group_url}${job.profile ? ` bằng ${job.profile.name}` : ''}`);
+  let outcome;
+  const switched = job.profile ? await switchTo(browser, job.profile, { log }) : { ok: true };
+  if (!switched.ok) {
+    if (['checkpoint', 'blocked'].includes(switched.status)) pendingState = switched.status;
+    outcome = { status: 'failed', error: `Không chuyển được sang page đã đăng bài: ${switched.error}` };
+  } else {
+    let submitted = false;
+    try {
+      outcome = await commentOnPost(browser.page, job, { log, onSubmitting: () => (submitted = true) });
+    } catch (error) {
+      outcome = { status: submitted ? 'ambiguous' : 'failed', error: `Lỗi trình duyệt: ${error.message}` };
+    }
+  }
+  if (['checkpoint', 'blocked'].includes(outcome.status)) pendingState = outcome.status;
+  if (outcome.status !== 'commented') await screenshot(cfg, browser, `comment-${job.post_id}`);
+
+  log(`Kết quả bình luận bài #${job.post_id}: ${outcome.status}${outcome.error ? ` — ${outcome.error}` : ''}`);
+  const code = await api.reportComment(job.post_id, outcome.status, outcome.error, outcome.postUrl ?? null);
+  if (code !== 200) log(`Server không nhận kết quả bình luận (HTTP ${code}).`);
 }
 
 // Vì sao server chưa giao bài (reason trong FacebookGroupPostScheduler::poll/blockingReason).
@@ -425,6 +496,11 @@ async function tick(api, state, cfg, browser) {
   if (job.type === 'post') {
     lastIdle = null;
     await doPost(api, state, cfg, browser, job);
+    return rand(20, 40);
+  }
+  if (job.type === 'comment') {
+    lastIdle = null;
+    await doComment(api, cfg, browser, job);
     return rand(20, 40);
   }
   if (job.type === 'review_group') {
@@ -530,12 +606,26 @@ async function main() {
       image: { type: 'string', multiple: true, default: [] },
       text: { type: 'string' },
       to: { type: 'string' },
+      post: { type: 'string' },
+      find: { type: 'string' },
+      send: { type: 'boolean', default: false },
     },
   });
 
-  if (!['login', 'run', 'sync', 'check', 'dry-run', 'review', 'whoami', 'switch'].includes(command)) {
-    console.error('Dùng: node poster.mjs <login|run|sync|check|whoami|dry-run --group URL|review --group URL|switch --to LINK>');
+  if (!['login', 'run', 'sync', 'check', 'dry-run', 'review', 'comment', 'whoami', 'switch'].includes(command)) {
+    console.error('Dùng: node poster.mjs <login|run|sync|check|whoami|dry-run --group URL|review --group URL|comment --post LINK|switch --to LINK>');
     return 1;
+  }
+  if (command === 'comment') {
+    if (values.post ? !postUrl(values.post) : !(GROUP_URL.test(values.group || '') && values.find)) {
+      console.error('comment cần --post https://www.facebook.com/groups/.../posts/<số>/ hoặc --group https://www.facebook.com/groups/... --find "đoạn đầu bài"');
+      return 1;
+    }
+    if (values.send && !values.find) {
+      console.error('--send cần --find "đoạn đầu bài" — để bot chắc chắn đang bình luận vào bài của mình.');
+      return 1;
+    }
+    values.text ??= 'Bình luận thử 👇\nhttps://tietkiemvi.com';
   }
   if (command === 'switch' && values.to !== 'primary' && !PROFILE_URL.test(profileFromInput(values.to || '').url || '')) {
     console.error('switch cần --to https://www.facebook.com/profile.php?id=... (hoặc uid, hoặc tên rút gọn của page), hoặc --to primary');
@@ -561,6 +651,7 @@ async function main() {
   if (command === 'check') return cmdCheck(cfg);
   if (command === 'dry-run') return cmdDryRun(cfg, values.group, values.caption, values.image);
   if (command === 'review') return cmdReview(cfg, values.group, values.text);
+  if (command === 'comment') return cmdComment(cfg, values);
   if (command === 'whoami') return cmdWhoami(cfg);
   if (command === 'switch') return cmdSwitch(cfg, values.to);
   if (command === 'sync') return cmdSync(cfg);
