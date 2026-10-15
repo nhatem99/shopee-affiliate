@@ -84,6 +84,9 @@ class FacebookEngageQueue
         if ($profile->blocked_at !== null) {
             return $this->blocked('profile_blocked');
         }
+        if ($profile->missing_since !== null) {
+            return $this->blocked('profile_missing');
+        }
         if (! $this->settings->templates()) {
             return $this->blocked('no_templates');
         }

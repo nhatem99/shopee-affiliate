@@ -7,6 +7,7 @@ import test from 'node:test';
 import { feedUrl, postUrl, snippets } from '../lib/comment.mjs';
 import { authorOf, fillName, linkUid, mentionsOwn, postKey, probeOf } from '../lib/engage.mjs';
 import { groupKey } from '../lib/groups.mjs';
+import { pageLink } from '../lib/pages.mjs';
 import { allowed, isUpload } from '../lib/images.mjs';
 import { identity } from '../lib/browser.mjs';
 import { GROUP_URL, postUrlFromResponse } from '../lib/post.mjs';
@@ -237,4 +238,15 @@ test('mentionsOwn chỉ tính link có chữ tới nick/page mình', () => {
   const other = { href: 'https://www.facebook.com/groups/abc/user/100012345678/', text: 'Lan Anh' };
   assert.equal(mentionsOwn([avatar, other], own), false);
   assert.equal(mentionsOwn([other, named], own), true);
+});
+
+test('pageLink nhận link trang của page, giống FacebookProfile::parseUrl', () => {
+  assert.deepEqual(pageLink('https://www.facebook.com/profile.php?id=61550000000001&sk=about'), { url: 'https://www.facebook.com/profile.php?id=61550000000001', fb_id: '61550000000001' });
+  assert.deepEqual(pageLink('https://www.facebook.com/people/Shop-Xinh/61550000000002/'), { url: 'https://www.facebook.com/profile.php?id=61550000000002', fb_id: '61550000000002' });
+  assert.deepEqual(pageLink('https://m.facebook.com/ShopXinh.VN/?ref=bookmarks'), { url: 'https://www.facebook.com/ShopXinh.VN', fb_id: null });
+  assert.equal(pageLink('https://www.facebook.com/pages/creation/'), null);
+  assert.equal(pageLink('https://www.facebook.com/notifications'), null);
+  assert.equal(pageLink('https://www.facebook.com/ShopXinh.VN/inbox'), null);
+  assert.equal(pageLink('https://www.facebook.com/groups/abc/'), null);
+  assert.equal(pageLink('https://evil.com/ShopXinh.VN'), null);
 });

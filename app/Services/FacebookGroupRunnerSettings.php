@@ -42,6 +42,10 @@ class FacebookGroupRunnerSettings
 
     private const SWITCH_RESULT_KEY = 'fb_runner_switch_result';
 
+    private const PAGES_SYNC_REQUESTED_KEY = 'fb_runner_pages_sync_requested_at';
+
+    private const PAGES_SYNC_RESULT_KEY = 'fb_runner_pages_sync_result';
+
     /**
      * Mặc định "thận trọng": một nick cá nhân đăng cùng một link vào nhiều nhóm là đúng kiểu
      * Facebook bắt spam — mất nick đắt hơn nhiều so với đăng chậm. max_per_day là trần chung của
@@ -221,6 +225,36 @@ class FacebookGroupRunnerSettings
         $stored = json_decode((string) Setting::get(self::SWITCH_RESULT_KEY, ''), true);
 
         return is_array($stored) && isset($stored['profile_id']) ? $stored : null;
+    }
+
+    /** Admin bấm "Lấy danh sách page" — bot đọc "Trang của bạn" ở lượt hỏi việc tới. */
+    public function requestPagesSync(): void
+    {
+        Setting::set(self::PAGES_SYNC_REQUESTED_KEY, now()->toIso8601String());
+    }
+
+    public function pagesSyncRequested(): bool
+    {
+        return (string) Setting::get(self::PAGES_SYNC_REQUESTED_KEY, '') !== '';
+    }
+
+    public function clearPagesSyncRequest(): void
+    {
+        Setting::set(self::PAGES_SYNC_REQUESTED_KEY, '');
+    }
+
+    /** @param  array{created: int, updated: int, missing: int, error: ?string}  $result */
+    public function recordPagesSyncResult(array $result): void
+    {
+        Setting::set(self::PAGES_SYNC_RESULT_KEY, json_encode($result + ['at' => now()->toIso8601String()]));
+    }
+
+    /** @return array{created: int, updated: int, missing: int, error: ?string, at: string}|null */
+    public function pagesSyncResult(): ?array
+    {
+        $stored = json_decode((string) Setting::get(self::PAGES_SYNC_RESULT_KEY, ''), true);
+
+        return is_array($stored) && isset($stored['at']) ? $stored : null;
     }
 
     public function requestSync(): void

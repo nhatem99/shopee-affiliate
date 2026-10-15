@@ -59,6 +59,9 @@ class FacebookGroupPostScheduler
     /** Bot từ bản này mới làm việc "switch_profile" (admin bấm "Chuyển sang" một page). */
     public const SWITCH_MIN_VERSION = '1.6.0';
 
+    /** Bot từ bản này mới làm việc "sync_pages" (admin bấm "Lấy danh sách page"). */
+    public const PAGES_MIN_VERSION = '1.7.0';
+
     private const PAUSE_REASONS = [
         'checkpoint' => 'Facebook bắt xác minh tài khoản hoặc nick đã bị đăng xuất',
         'logged_out' => 'Nick Facebook trên máy chạy bot đã bị đăng xuất',
@@ -77,10 +80,11 @@ class FacebookGroupPostScheduler
     ) {}
 
     /**
-     * Bot hỏi việc. Trả về một trong bảy dạng:
+     * Bot hỏi việc. Trả về một trong tám dạng:
      *  • ['type' => 'post', ...]        — đăng bài này;
      *  • ['type' => 'switch_profile', 'profile'] — admin bấm "Chuyển sang": chuyển Chromium sang page;
      *  • ['type' => 'sync_groups']      — lấy lại danh sách nhóm đã tham gia;
+     *  • ['type' => 'sync_pages']       — đọc "Trang của bạn": các page nick đang quản lý;
      *  • ['type' => 'comment', ...]     — bình luận link mua vào bài đã lên nhóm;
      *  • ['type' => 'review_group', ...] — lúc rảnh: xem bài đã đăng có được duyệt không;
      *  • ['type' => 'engage', ...]      — lúc rảnh: bình luận dạo một bài trong nhóm follow chéo
@@ -132,6 +136,12 @@ class FacebookGroupPostScheduler
             $this->settings->clearSyncRequest();
 
             return $this->syncJob($version);
+        }
+        if ($this->settings->pagesSyncRequested() && self::runnerSupportsPages($version)) {
+            // Như lấy nhóm: giao một lần, hỏng thì admin bấm lại.
+            $this->settings->clearPagesSyncRequest();
+
+            return ['type' => 'sync_pages'];
         }
 
         // Bình luận link vào bài vừa lên nhóm trước cả bài mới, không chờ khoảng nghỉ giữa hai bài —
@@ -280,6 +290,11 @@ class FacebookGroupPostScheduler
     public static function runnerSupportsSwitch(?string $version): bool
     {
         return self::runnerAtLeast($version, self::SWITCH_MIN_VERSION);
+    }
+
+    public static function runnerSupportsPages(?string $version): bool
+    {
+        return self::runnerAtLeast($version, self::PAGES_MIN_VERSION);
     }
 
     public static function runnerAtLeast(?string $version, string $min): bool

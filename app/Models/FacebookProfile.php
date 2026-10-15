@@ -12,7 +12,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
  * Một danh tính bot dùng để đăng nhóm: nick chính (is_primary) hoặc một Trang nick đó quản lý.
  * Page đăng theo thứ tự position — page đầu đăng đủ max_per_day mới tới page sau.
  */
-#[Fillable(['fb_id', 'name', 'url', 'is_primary', 'enabled', 'position', 'max_per_day', 'blocked_at', 'blocked_reason', 'last_synced_at'])]
+#[Fillable(['fb_id', 'name', 'url', 'is_primary', 'enabled', 'position', 'max_per_day', 'blocked_at', 'blocked_reason', 'missing_since', 'last_synced_at'])]
 class FacebookProfile extends Model
 {
     protected function casts(): array
@@ -23,6 +23,7 @@ class FacebookProfile extends Model
             'position' => 'integer',
             'max_per_day' => 'integer',
             'blocked_at' => 'datetime',
+            'missing_since' => 'datetime',
             'last_synced_at' => 'datetime',
         ];
     }

@@ -27,6 +27,8 @@ const props = defineProps({
     profilesMinVersion: String,
     // { supported, min_version, requested_id, result } — nút "Chuyển sang".
     switching: Object,
+    // { supported, min_version, requested, result } — nút "Lấy danh sách page".
+    pagesSync: Object,
     groups: Array,
 })
 
@@ -44,7 +46,7 @@ function fmt(iso) {
 // Trang tự tải lại trạng thái mỗi 30 giây — bot hỏi việc 1-2 phút/lần, nhìn trang là biết nó còn chạy.
 let timer = null
 onMounted(() => {
-    timer = setInterval(() => router.reload({ only: ['runner', 'paused', 'pausedReason', 'blocking', 'today', 'syncRequested', 'lastSyncedAt', 'review', 'profiles', 'profilesSupported', 'switching', 'groups'] }), 30000)
+    timer = setInterval(() => router.reload({ only: ['runner', 'paused', 'pausedReason', 'blocking', 'today', 'syncRequested', 'lastSyncedAt', 'review', 'profiles', 'profilesSupported', 'switching', 'pagesSync', 'groups'] }), 30000)
 })
 onBeforeUnmount(() => clearInterval(timer))
 
@@ -111,6 +113,17 @@ const switchResultText = computed(() => {
     if (!r) return null
     const label = profileLabels.value[r.profile_id] || `page #${r.profile_id}`
     return r.ok ? `Đã chuyển sang ${label} lúc ${fmt(r.at)}.` : `Không chuyển được sang ${label} lúc ${fmt(r.at)}: ${r.error}`
+})
+
+function requestPagesSync() {
+    router.post('/admin/fb-groups/profiles/sync', {}, { preserveScroll: true, onSuccess: flashToast })
+}
+
+const pagesSyncText = computed(() => {
+    const r = props.pagesSync.result
+    if (!r) return null
+    if (r.error) return `Lấy lúc ${fmt(r.at)}: ${r.error}`
+    return `Lấy lúc ${fmt(r.at)}: thêm mới ${r.created} page${r.created ? ' (đang tắt — bật page muốn dùng)' : ''}, khớp ${r.updated}, không còn trên Facebook ${r.missing}${r.missing ? ' (đã tắt)' : ''}.`
 })
 
 function unblockProfile(p) {
@@ -282,6 +295,17 @@ const enabledCount = computed(() => props.groups.filter(g => g.enabled).length)
                 Bot đang chạy bản {{ runner.version || 'cũ' }} — từ bản {{ switching.min_version }} bot mới làm theo nút "Chuyển sang".
                 Cập nhật bot (<span class="font-mono">git pull</span> trên điện thoại rồi chạy lại bot).
             </p>
+            <div class="flex flex-wrap items-center gap-3 mb-3">
+                <button @click="requestPagesSync" :disabled="pagesSync.requested || !pagesSync.supported"
+                    class="bg-[var(--color-peach-soft)] hover:bg-[var(--color-peach)] text-[var(--color-ink)] font-semibold px-5 py-2 rounded-xl text-sm transition disabled:opacity-50">
+                    {{ pagesSync.requested ? 'Đang chờ bot lấy page…' : 'Lấy danh sách page' }}
+                </button>
+                <span class="text-xs text-[var(--color-muted)]">Bot về nick chính, đọc "Trang của bạn" trên Facebook: page mới thêm vào (tắt sẵn), page đã xoá thì tự tắt.</span>
+            </div>
+            <p v-if="!pagesSync.supported" class="text-xs text-amber-600 mb-3">
+                Bot đang chạy bản {{ runner.version || 'cũ' }} — từ bản {{ pagesSync.min_version }} bot mới lấy được danh sách page.
+            </p>
+            <p v-if="pagesSyncText" class="text-xs mb-3" :class="pagesSync.result.error ? 'text-red-500' : 'text-[var(--color-muted)]'">{{ pagesSyncText }}</p>
             <p v-if="switchResultText" class="text-xs mb-3" :class="switching.result.ok ? 'text-green-600' : 'text-red-500'">{{ switchResultText }}</p>
             <p v-if="!profilesSupported" class="text-xs text-amber-600 mb-3">
                 Bot đang chạy bản {{ runner.version || 'cũ' }} — từ bản {{ profilesMinVersion }} bot mới chuyển page được, bản cũ chỉ đăng bằng nick chính.
@@ -326,6 +350,7 @@ const enabledCount = computed(() => props.groups.filter(g => g.enabled).length)
                             <td class="px-4 py-2.5 text-xs">
                                 <span :class="profileState(p)[1]">{{ profileState(p)[0] }}</span>
                                 <p v-if="p.blocked_reason" class="text-red-500 mt-0.5 max-w-xs">{{ p.blocked_reason }}</p>
+                                <p v-if="p.missing_since" class="text-red-500 mt-0.5 max-w-xs">Không còn trong danh sách page của nick trên Facebook (từ {{ fmt(p.missing_since) }}) — đã xoá page hoặc mất quyền quản trị.</p>
                             </td>
                             <td class="px-4 py-2.5 text-right whitespace-nowrap space-x-3">
                                 <span v-if="switching.requested_id === p.id" class="text-xs text-amber-600">Chờ bot chuyển…</span>

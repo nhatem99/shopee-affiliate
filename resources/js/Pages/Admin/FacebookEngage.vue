@@ -45,6 +45,7 @@ const blockingText = computed(() => {
         case 'old_runner': return `Bot đang chạy bản ${props.runner.version || 'cũ'} — cần bản ${props.runner.min_version} trở lên.`
         case 'no_profile': return 'Chưa chọn page để bình luận.'
         case 'profile_blocked': return 'Page bình luận đang nghỉ vì Facebook chặn — mở lại ở /admin/fb-groups.'
+        case 'profile_missing': return 'Page bình luận không còn trong danh sách page của nick trên Facebook — chọn page khác.'
         case 'no_templates': return 'Chưa có câu mẫu nào.'
         case 'outside_window': return `Ngoài khung giờ — bình luận tiếp lúc ${fmt(b.until)}.`
         case 'daily_cap': return `Đủ bình luận hôm nay — tiếp lúc ${fmt(b.until)}.`

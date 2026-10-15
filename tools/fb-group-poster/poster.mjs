@@ -15,6 +15,8 @@
 //   node poster.mjs engage --group URL    thử bình luận dạo một nhóm bằng page đang mở: điền ô bình
 //                                         luận bài mới nhất chưa bình luận nhưng KHÔNG gửi
 //                                         (--text "câu" --send mới gửi thật)
+//   node poster.mjs pages                 về nick chính, in danh sách page đọc được ở "Trang của bạn"
+//                                         — không gọi server
 //   node poster.mjs whoami                đang dùng nick chính hay page nào
 //   node poster.mjs switch --to LINK      thử chuyển sang một page (link trang hoặc uid), --to primary
 //                                         để về nick chính — không gọi server
@@ -30,6 +32,7 @@ import * as configModule from './lib/config.mjs';
 import { engageGroup } from './lib/engage.mjs';
 import { ScrapeError, scrapeJoinedGroups } from './lib/groups.mjs';
 import { MAX_IMAGES, downloadAsJpeg, fetchAsJpeg, isUpload } from './lib/images.mjs';
+import { scrapeManagedPages } from './lib/pages.mjs';
 import { GROUP_URL, postToGroup } from './lib/post.mjs';
 import { PROFILE_URL, profileFromInput, switchTo } from './lib/profiles.mjs';
 import { DEFAULT_TABS, fingerprint, scanTabs, tabUrls } from './lib/review.mjs';
@@ -289,6 +292,56 @@ async function cmdSwitch(cfg, to) {
   } finally {
     await browser.close();
   }
+}
+
+// ── pages ────────────────────────────────────────────────────────────────────
+
+const PRIMARY = { primary: true, name: 'nick chính', url: null, fb_id: null };
+
+// Về nick chính rồi đọc "Trang của bạn". Trả danh sách page, hoặc { error, status? } nếu hỏng.
+async function readPages(browser) {
+  const switched = await switchTo(browser, PRIMARY, { log });
+  if (!switched.ok) return { error: `Không về được nick chính: ${switched.error}`, status: switched.status };
+  try {
+    return { pages: await scrapeManagedPages(browser.page, { exclude: [switched.actorId], log }) };
+  } catch (error) {
+    if (error instanceof ScrapeError) return { error: `Không đọc được "Trang của bạn": ${error.message}`, status: error.status };
+    throw error;
+  }
+}
+
+// Chạy tay, không gọi server: xem bot đọc ra những page nào.
+async function cmdPages(cfg) {
+  const browser = await launch(cfg);
+  try {
+    const read = await readPages(browser);
+    if (read.error) {
+      log(read.error);
+      await screenshot(cfg, browser, 'pages');
+      return 1;
+    }
+    for (const item of read.pages) log(`  • ${item.name || '(không thấy tên)'} — ${item.url}`);
+    if (!read.pages.length) await screenshot(cfg, browser, 'pages');
+    return read.pages.length ? 0 : 1;
+  } finally {
+    await browser.close();
+  }
+}
+
+// Admin bấm "Lấy danh sách page" ở /admin/fb-groups.
+async function doSyncPages(api, cfg, browser) {
+  log('Server yêu cầu lấy danh sách page của nick.');
+  const read = await readPages(browser);
+  if (read.error) {
+    log(read.error);
+    if (['checkpoint', 'blocked'].includes(read.status)) pendingState = read.status;
+    await screenshot(cfg, browser, 'pages');
+    await api.uploadPages([], read.error);
+    return;
+  }
+  if (!read.pages.length) await screenshot(cfg, browser, 'pages');
+  const result = await api.uploadPages(read.pages);
+  log(`Đã gửi ${read.pages.length} page lên server: thêm mới ${result.created}, khớp ${result.updated}, không còn ${result.missing}.`);
 }
 
 // ── sync ─────────────────────────────────────────────────────────────────────
@@ -572,6 +625,11 @@ async function tick(api, state, cfg, browser) {
     await doReview(api, browser, job);
     return rand(20, 40);
   }
+  if (job.type === 'sync_pages') {
+    lastIdle = null;
+    await doSyncPages(api, cfg, browser);
+    return 20;
+  }
   if (job.type === 'switch_profile') {
     lastIdle = null;
     await doSwitch(api, browser, job);
@@ -686,8 +744,8 @@ async function main() {
     },
   });
 
-  if (!['login', 'run', 'sync', 'check', 'dry-run', 'review', 'comment', 'engage', 'whoami', 'switch'].includes(command)) {
-    console.error('Dùng: node poster.mjs <login|run|sync|check|whoami|dry-run --group URL|review --group URL|comment --post LINK|engage --group URL|switch --to LINK>');
+  if (!['login', 'run', 'sync', 'check', 'dry-run', 'review', 'comment', 'engage', 'pages', 'whoami', 'switch'].includes(command)) {
+    console.error('Dùng: node poster.mjs <login|run|sync|check|whoami|pages|dry-run --group URL|review --group URL|comment --post LINK|engage --group URL|switch --to LINK>');
     return 1;
   }
   if (command === 'engage') {
@@ -738,6 +796,7 @@ async function main() {
   if (command === 'review') return cmdReview(cfg, values.group, values.text);
   if (command === 'comment') return cmdComment(cfg, values);
   if (command === 'engage') return cmdEngage(cfg, values);
+  if (command === 'pages') return cmdPages(cfg);
   if (command === 'whoami') return cmdWhoami(cfg);
   if (command === 'switch') return cmdSwitch(cfg, values.to);
   if (command === 'sync') return cmdSync(cfg);

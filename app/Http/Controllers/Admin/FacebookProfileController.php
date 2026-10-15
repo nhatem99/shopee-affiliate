@@ -50,7 +50,15 @@ class FacebookProfileController extends Controller
         return back()->with('success', 'Đã thêm page — bot sẽ chuyển sang page này lấy danh sách nhóm ở lượt hỏi tới.');
     }
 
-    public function update(Request $request, FacebookProfile $facebookProfile): RedirectResponse
+    /** Bot đọc "Trang của bạn" trên Facebook ở lượt hỏi việc tới — xem FacebookPageListSync. */
+    public function requestSync(FacebookGroupRunnerSettings $settings): RedirectResponse
+    {
+        $settings->requestPagesSync();
+
+        return back()->with('success', 'Đã gửi yêu cầu — bot đọc danh sách page của nick ở lượt hỏi việc tới (tối đa vài phút).');
+    }
+
+    public function update(Request $request, FacebookProfile $facebookProfile, FacebookGroupRunnerSettings $settings): RedirectResponse
     {
         $data = $request->validate([
             'enabled' => ['sometimes', 'boolean'],
@@ -59,6 +67,13 @@ class FacebookProfileController extends Controller
         ]);
 
         $facebookProfile->forceFill($data)->save();
+
+        // Page do "Lấy danh sách page" thêm vào (tắt sẵn) bật lần đầu — chưa biết page vào nhóm nào.
+        if (($data['enabled'] ?? false) && $facebookProfile->last_synced_at === null) {
+            $settings->requestSync();
+
+            return back()->with('success', 'Đã bật — bot sẽ lấy danh sách nhóm của '.$facebookProfile->label().' ở lượt hỏi tới.');
+        }
 
         return back();
     }

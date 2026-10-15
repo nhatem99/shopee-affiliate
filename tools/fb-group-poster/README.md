@@ -164,6 +164,12 @@ mở trang của page rồi bấm **Chuyển ngay** (như bấm tay). Muốn v�
 `i_user`. Trang phải tự tham gia từng nhóm, và nhóm phải cho Trang tham gia. Thêm page xong, bot tự
 lấy danh sách nhóm của page đó.
 
+Tạo page mới hay xoá page trên Facebook: bấm **Lấy danh sách page** ở `/admin/fb-groups` (bot từ
+1.7.0). Bot về nick chính, đọc trang "Trang của bạn" (`facebook.com/pages/?category=your_pages`):
+page mới được thêm vào ở trạng thái **tắt** (bật lên thì bot lấy nhóm của page), page không còn thì
+tự tắt kèm dòng "Không còn trong danh sách page". Xem trước bot đọc được gì (không gọi server):
+`node poster.mjs pages`.
+
 Muốn bot đang chạy chuyển sang một page (để tự thao tác trên Chromium hay chạy lệnh thử bằng page
 đó): bấm **Chuyển sang** ở dòng page đó trên `/admin/fb-groups` (bot từ 1.6.0) — bot chuyển ở lượt
 hỏi việc tới, kết quả hiện ngay trên mục Page đăng bài. Việc sau cần page khác thì bot tự chuyển đi.

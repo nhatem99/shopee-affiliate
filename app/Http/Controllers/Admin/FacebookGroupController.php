@@ -95,6 +95,7 @@ class FacebookGroupController extends Controller
                 'groups_count' => $profile->groups_count,
                 'blocked_at' => $profile->blocked_at?->toIso8601String(),
                 'blocked_reason' => $profile->blocked_reason,
+                'missing_since' => $profile->missing_since?->toIso8601String(),
                 'last_synced_at' => $profile->last_synced_at?->toIso8601String(),
                 // Page bot nhận bài kế tiếp (page đầu còn chỗ) — chưa chắc còn bài cho nó.
                 'next' => $postingIds->first() === $profile->id,
@@ -102,6 +103,13 @@ class FacebookGroupController extends Controller
             ]),
             'profilesSupported' => FacebookGroupPostScheduler::runnerSupportsProfiles($runner['version']),
             // Nút "Chuyển sang": yêu cầu đang chờ bot, kết quả lần chuyển gần nhất.
+            // Nút "Lấy danh sách page": yêu cầu đang chờ bot, kết quả lần đọc gần nhất.
+            'pagesSync' => [
+                'supported' => FacebookGroupPostScheduler::runnerSupportsPages($runner['version']),
+                'min_version' => FacebookGroupPostScheduler::PAGES_MIN_VERSION,
+                'requested' => $this->settings->pagesSyncRequested(),
+                'result' => $this->settings->pagesSyncResult(),
+            ],
             'switching' => [
                 'supported' => FacebookGroupPostScheduler::runnerSupportsSwitch($runner['version']),
                 'min_version' => FacebookGroupPostScheduler::SWITCH_MIN_VERSION,

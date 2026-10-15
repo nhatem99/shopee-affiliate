@@ -137,6 +137,13 @@ export class Api {
     throw new ApiError(`Không báo được kết quả bình luận dạo #${engageId}: ${last?.message}`);
   }
 
+  // Danh sách page đọc ở "Trang của bạn" (việc "sync_pages"); đọc hỏng thì gửi error, danh sách rỗng.
+  async uploadPages(pages, error = null) {
+    const [status, data] = await this.post('/runner/fb/pages', { pages, error: error ? String(error).slice(0, 1000) : null });
+    if (status !== 200) throw new ApiError(`Gửi danh sách page lỗi HTTP ${status}: ${JSON.stringify(data)}`);
+    return data;
+  }
+
   // Kết quả việc "switch_profile". Lỗi thì chỉ ghi log — trang admin vẫn thấy page đang mở qua lượt hỏi việc.
   async reportSwitch(profileId, switched) {
     const [status] = await this.post('/runner/fb/switch-result', {

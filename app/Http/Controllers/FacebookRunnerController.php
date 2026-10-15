@@ -10,6 +10,7 @@ use App\Services\FacebookEngageQueue;
 use App\Services\FacebookGroupCommentQueue;
 use App\Services\FacebookGroupPostScheduler;
 use App\Services\FacebookGroupReviewChecker;
+use App\Services\FacebookPageListSync;
 use App\Services\FacebookPostImages;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -108,6 +109,28 @@ class FacebookRunnerController extends Controller
         $this->scheduler->recordSwitch(FacebookProfile::findOrFail($data['profile_id']), $data['ok'], $data['error'] ?? null, $data['actor_id'] ?? null);
 
         return response()->json(['ok' => true]);
+    }
+
+    /**
+     * Bot gửi danh sách page đọc được ở "Trang của bạn" (việc "sync_pages"). Đọc hỏng thì gửi error
+     * kèm danh sách rỗng.
+     */
+    public function pages(Request $request, FacebookPageListSync $sync): JsonResponse
+    {
+        $data = $request->validate([
+            'pages' => ['present', 'array', 'max:500'],
+            'pages.*.url' => ['required', 'string', 'max:500'],
+            'pages.*.name' => ['nullable', 'string', 'max:255'],
+            'error' => ['nullable', 'string', 'max:1000'],
+        ]);
+
+        if (! empty($data['error'])) {
+            $sync->fail($data['error']);
+
+            return response()->json(['created' => 0, 'updated' => 0, 'missing' => 0, 'error' => $data['error']]);
+        }
+
+        return response()->json($sync->apply($data['pages']));
     }
 
     /** Bot báo kết quả việc "engage" — bình luận dạo một bài trong nhóm follow chéo. */
