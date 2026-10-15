@@ -8,7 +8,7 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
-#[Fillable(['fb_group_key', 'name', 'url', 'enabled', 'source', 'disabled_reason', 'last_seen_at', 'last_attempt_at', 'last_posted_at', 'last_checked_at'])]
+#[Fillable(['fb_group_key', 'name', 'url', 'enabled', 'source', 'disabled_reason', 'engage_enabled', 'engage_disabled_reason', 'last_seen_at', 'last_attempt_at', 'last_posted_at', 'last_checked_at', 'last_engaged_at'])]
 class FacebookGroup extends Model
 {
     /**
@@ -25,16 +25,24 @@ class FacebookGroup extends Model
     {
         return [
             'enabled' => 'boolean',
+            'engage_enabled' => 'boolean',
             'last_seen_at' => 'datetime',
             'last_attempt_at' => 'datetime',
             'last_posted_at' => 'datetime',
             'last_checked_at' => 'datetime',
+            'last_engaged_at' => 'datetime',
         ];
     }
 
     public function posts(): HasMany
     {
         return $this->hasMany(FacebookGroupPost::class);
+    }
+
+    /** Các lượt bình luận dạo (nhóm follow chéo) — FacebookEngageQueue. */
+    public function engageComments(): HasMany
+    {
+        return $this->hasMany(FacebookEngageComment::class);
     }
 
     /** Các page (kể cả nick chính) đã vào nhóm này — bot chỉ đăng nhóm bằng những page đó. */

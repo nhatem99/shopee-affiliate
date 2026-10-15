@@ -112,6 +112,31 @@ export class Api {
     throw new ApiError(`Không báo được kết quả bình luận bài #${postId}: ${last?.message}`);
   }
 
+  // Kết quả việc "engage" (bình luận dạo). Trả mã HTTP như reportComment: 409 = lượt này đã có kết
+  // quả, 422 = server không nhận dữ liệu — gửi lại cũng vậy. Lỗi mạng thì thử lại vài lần.
+  async reportEngage(engageId, outcome) {
+    const payload = {
+      status: outcome.status,
+      comment: outcome.comment ?? null,
+      post_url: outcome.postUrl ?? null,
+      author: outcome.author ?? null,
+      error: outcome.error ? String(outcome.error).slice(0, 1000) : null,
+    };
+    let last = null;
+    for (let attempt = 0; attempt < 3; attempt++) {
+      try {
+        const [code] = await this.post(`/runner/fb/engage/${engageId}/result`, payload);
+        if ([200, 404, 409, 422].includes(code)) return code;
+        last = new ApiError(`HTTP ${code}`);
+      } catch (caught) {
+        if (caught instanceof AuthError) throw caught;
+        last = caught;
+      }
+      await sleep(5000 * (attempt + 1));
+    }
+    throw new ApiError(`Không báo được kết quả bình luận dạo #${engageId}: ${last?.message}`);
+  }
+
   // Ảnh admin tự tải lên cho bài — chỉ server của mình có, phải kèm token. `path` đã được
   // images.mjs kiểm đúng dạng /runner/fb/images/<tên> nên không gọi được đường nào khác.
   async download(path, maxBytes) {

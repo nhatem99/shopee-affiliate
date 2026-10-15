@@ -12,6 +12,9 @@
 //   node poster.mjs comment --post LINK   thử bình luận vào một bài: điền ô bình luận nhưng KHÔNG gửi
 //                                         (--group URL --find "đoạn đầu bài" để bot tự tìm bài,
 //                                         --text "..." nội dung, --send để gửi thật)
+//   node poster.mjs engage --group URL    thử bình luận dạo một nhóm bằng page đang mở: điền ô bình
+//                                         luận bài mới nhất chưa bình luận nhưng KHÔNG gửi
+//                                         (--text "câu" --send mới gửi thật)
 //   node poster.mjs whoami                đang dùng nick chính hay page nào
 //   node poster.mjs switch --to LINK      thử chuyển sang một page (link trang hoặc uid), --to primary
 //                                         để về nick chính — không gọi server
@@ -24,6 +27,7 @@ import { Api, ApiError, AuthError, errorText } from './lib/api.mjs';
 import { accountId, identity, launch } from './lib/browser.mjs';
 import { commentOnPost, postUrl } from './lib/comment.mjs';
 import * as configModule from './lib/config.mjs';
+import { engageGroup } from './lib/engage.mjs';
 import { ScrapeError, scrapeJoinedGroups } from './lib/groups.mjs';
 import { MAX_IMAGES, downloadAsJpeg, fetchAsJpeg, isUpload } from './lib/images.mjs';
 import { GROUP_URL, postToGroup } from './lib/post.mjs';
@@ -200,6 +204,31 @@ async function cmdComment(cfg, { post, group, find, text, send }) {
       await ask('Đã điền ô bình luận, KHÔNG gửi. Xem màn hình rồi bấm Enter để đóng (bình luận nháp bị bỏ)... ');
     } else if (outcome.status !== 'commented') {
       await screenshot(cfg, browser, 'comment');
+    }
+  } finally {
+    await browser.close();
+  }
+  return ['dry_run', 'commented'].includes(outcome.status) ? 0 : 1;
+}
+
+// ── engage ───────────────────────────────────────────────────────────────────
+
+// Chạy tay, không gọi server: thử bình luận dạo một nhóm bằng page đang mở (đổi page bằng lệnh
+// switch). Mặc định chỉ điền ô bình luận rồi dừng; --send mới gửi thật.
+async function cmdEngage(cfg, { group, text, send }) {
+  const browser = await launch(cfg);
+  let outcome;
+  try {
+    const { accountId: uid, actorId } = await identity(browser.context);
+    const job = { group_url: group, comment: text, skip_posts: [], own_ids: [uid, actorId].filter(Boolean) };
+    outcome = await engageGroup(browser.page, job, { dryRun: !send, log });
+    log(`Kết quả: ${outcome.status}${outcome.error ? ` — ${outcome.error}` : ''}${outcome.postUrl ? ` (${outcome.postUrl})` : ''}`);
+    if (outcome.author) log(`Người đăng: ${outcome.author}`);
+    if (outcome.comment) log(`Câu bình luận: ${outcome.comment}`);
+    if (outcome.status === 'dry_run') {
+      await ask('Đã điền ô bình luận, KHÔNG gửi. Xem màn hình rồi bấm Enter để đóng (bình luận nháp bị bỏ)... ');
+    } else if (outcome.status !== 'commented') {
+      await screenshot(cfg, browser, 'engage');
     }
   } finally {
     await browser.close();
@@ -463,6 +492,32 @@ async function doComment(api, cfg, browser, job) {
   if (code !== 200) log(`Server không nhận kết quả bình luận (HTTP ${code}).`);
 }
 
+// Bình luận dạo một bài trong nhóm follow chéo bằng page server giao. Facebook chặn bình luận thì chỉ
+// báo qua kết quả — server tắt bình luận dạo, đăng deal vẫn chạy. Bắt xác minh/đăng xuất thì báo thêm
+// ở lượt hỏi việc kế tiếp để server dừng cả bot.
+async function doEngage(api, cfg, browser, job) {
+  log(`Bình luận dạo ở nhóm ${job.group_name || job.group_url}${job.profile ? ` bằng ${job.profile.name}` : ''}`);
+  let outcome;
+  const switched = job.profile ? await switchTo(browser, job.profile, { log }) : { ok: true };
+  if (!switched.ok) {
+    if (['checkpoint', 'blocked'].includes(switched.status)) pendingState = switched.status;
+    outcome = { status: 'failed', error: `Không chuyển được sang page bình luận: ${switched.error}` };
+  } else {
+    let submitted = false;
+    try {
+      outcome = await engageGroup(browser.page, job, { log, onSubmitting: () => (submitted = true) });
+    } catch (error) {
+      outcome = { status: submitted ? 'ambiguous' : 'failed', error: `Lỗi trình duyệt: ${error.message}` };
+    }
+  }
+  if (outcome.status === 'checkpoint') pendingState = 'checkpoint';
+  if (!['commented', 'no_post'].includes(outcome.status)) await screenshot(cfg, browser, `engage-${job.engage_id}`);
+
+  log(`Kết quả bình luận dạo: ${outcome.status}${outcome.error ? ` — ${outcome.error}` : ''}${outcome.postUrl ? ` (${outcome.postUrl})` : ''}`);
+  const code = await api.reportEngage(job.engage_id, outcome);
+  if (code !== 200) log(`Server không nhận kết quả bình luận dạo (HTTP ${code}).`);
+}
+
 // Vì sao server chưa giao bài (reason trong FacebookGroupPostScheduler::poll/blockingReason).
 const IDLE_REASONS = {
   empty: 'Chưa có bài nào trong hàng đợi — soạn bài ở /admin/fb-posts.',
@@ -506,6 +561,11 @@ async function tick(api, state, cfg, browser) {
   if (job.type === 'review_group') {
     lastIdle = null;
     await doReview(api, browser, job);
+    return rand(20, 40);
+  }
+  if (job.type === 'engage') {
+    lastIdle = null;
+    await doEngage(api, cfg, browser, job);
     return rand(20, 40);
   }
   if (job.type === 'sync_groups') {
@@ -612,9 +672,20 @@ async function main() {
     },
   });
 
-  if (!['login', 'run', 'sync', 'check', 'dry-run', 'review', 'comment', 'whoami', 'switch'].includes(command)) {
-    console.error('Dùng: node poster.mjs <login|run|sync|check|whoami|dry-run --group URL|review --group URL|comment --post LINK|switch --to LINK>');
+  if (!['login', 'run', 'sync', 'check', 'dry-run', 'review', 'comment', 'engage', 'whoami', 'switch'].includes(command)) {
+    console.error('Dùng: node poster.mjs <login|run|sync|check|whoami|dry-run --group URL|review --group URL|comment --post LINK|engage --group URL|switch --to LINK>');
     return 1;
+  }
+  if (command === 'engage') {
+    if (!GROUP_URL.test(values.group || '')) {
+      console.error('engage cần --group https://www.facebook.com/groups/...');
+      return 1;
+    }
+    if (values.send && !values.text) {
+      console.error('--send cần --text "câu bình luận" — để không gửi nhầm câu thử.');
+      return 1;
+    }
+    values.text ??= 'Bình luận thử {ten} 👋';
   }
   if (command === 'comment') {
     if (values.post ? !postUrl(values.post) : !(GROUP_URL.test(values.group || '') && values.find)) {
@@ -652,6 +723,7 @@ async function main() {
   if (command === 'dry-run') return cmdDryRun(cfg, values.group, values.caption, values.image);
   if (command === 'review') return cmdReview(cfg, values.group, values.text);
   if (command === 'comment') return cmdComment(cfg, values);
+  if (command === 'engage') return cmdEngage(cfg, values);
   if (command === 'whoami') return cmdWhoami(cfg);
   if (command === 'switch') return cmdSwitch(cfg, values.to);
   if (command === 'sync') return cmdSync(cfg);

@@ -70,14 +70,17 @@ class FacebookGroupPostScheduler
         private FacebookPostImages $images,
         private FacebookGroupReviewChecker $reviews,
         private FacebookGroupCommentQueue $comments,
+        private FacebookEngageQueue $engage,
     ) {}
 
     /**
-     * Bot hỏi việc. Trả về một trong năm dạng:
+     * Bot hỏi việc. Trả về một trong sáu dạng:
      *  • ['type' => 'post', ...]        — đăng bài này;
      *  • ['type' => 'sync_groups']      — lấy lại danh sách nhóm đã tham gia;
      *  • ['type' => 'comment', ...]     — bình luận link mua vào bài đã lên nhóm;
      *  • ['type' => 'review_group', ...] — lúc rảnh: xem bài đã đăng có được duyệt không;
+     *  • ['type' => 'engage', ...]      — lúc rảnh: bình luận dạo một bài trong nhóm follow chéo
+     *                                     (FacebookEngageQueue, nhịp và khung giờ riêng);
      *  • ['type' => 'idle', 'reason', 'retry_after'] — chưa có gì, ngủ rồi hỏi lại.
      *
      * @param  array{state?: ?string, version?: ?string, account?: ?string, account_id?: ?string, actor_id?: ?string}  $runner
@@ -123,7 +126,8 @@ class FacebookGroupPostScheduler
         }
 
         // Bình luận link vào bài vừa lên nhóm trước cả bài mới, không chờ khoảng nghỉ giữa hai bài —
-        // nhưng vẫn trong khung giờ đăng. Kiểm tra duyệt bài chỉ chen vào lúc rảnh.
+        // nhưng vẫn trong khung giờ đăng. Kiểm tra duyệt bài và bình luận dạo chỉ chen vào lúc rảnh;
+        // bình luận dạo theo khung giờ riêng nên vẫn chạy khi ngoài giờ đăng deal.
         $blocking = $this->blockingReason();
         if (($blocking['reason'] ?? null) !== 'outside_window' && $comment = $this->comments->nextJob($version)) {
             return $comment;
@@ -131,12 +135,16 @@ class FacebookGroupPostScheduler
         if ($blocking) {
             $review = $blocking['reason'] !== 'outside_window' ? $this->reviews->nextJob($version) : null;
 
-            return $review ?? $this->idle($blocking['reason'], $blocking['retry_after']);
+            return $review
+                ?? $this->engage->nextJob($version)
+                ?? $this->idle($blocking['reason'], $this->soonerForEngage($blocking['retry_after'], $version));
         }
 
         $post = $this->claimNext($claimKey, $version);
         if (! $post) {
-            return $this->reviews->nextJob($version) ?? $this->idle('empty', 120);
+            return $this->reviews->nextJob($version)
+                ?? $this->engage->nextJob($version)
+                ?? $this->idle('empty', $this->soonerForEngage(120, $version));
         }
 
         return $this->prepare($post);
@@ -759,6 +767,14 @@ class FacebookGroupPostScheduler
         $seconds = (int) max(15, min(self::MAX_RETRY_AFTER, now()->diffInSeconds($until, false)));
 
         return ['reason' => $reason, 'retry_after' => $seconds, 'until' => $until->toIso8601String()];
+    }
+
+    /** Bot đang rảnh ngủ tới lượt bình luận dạo kế tiếp nếu lượt đó tới sớm hơn. */
+    private function soonerForEngage(int $retryAfter, ?string $version): int
+    {
+        $engage = $this->engage->retryAfter($version);
+
+        return $engage !== null ? min($retryAfter, $engage) : $retryAfter;
     }
 
     private function idle(string $reason, int $retryAfter): array

@@ -5,6 +5,7 @@ import path from 'node:path';
 import test from 'node:test';
 
 import { feedUrl, postUrl, snippets } from '../lib/comment.mjs';
+import { authorOf, fillName, linkUid, mentionsOwn, postKey, probeOf } from '../lib/engage.mjs';
 import { groupKey } from '../lib/groups.mjs';
 import { allowed, isUpload } from '../lib/images.mjs';
 import { identity } from '../lib/browser.mjs';
@@ -185,4 +186,55 @@ test('COMMENT_BOX nhận ô bình luận bài, không nhận ô trả lời hay 
   assert.ok(ui.COMMENT_BUTTON.test('Bình luận'));
   assert.ok(!ui.COMMENT_BUTTON.test('Bình luận dưới tên Shop Test'));
   assert.ok(ui.COMMENT_REJECTED.test("Your comment couldn't be posted"));
+});
+
+test('linkUid đọc uid người/page trong link Facebook', () => {
+  assert.equal(linkUid('https://www.facebook.com/groups/abc/user/100012345678/?__cft__=x'), '100012345678');
+  assert.equal(linkUid('https://www.facebook.com/profile.php?id=61550000000001&comment_id=1'), '61550000000001');
+  assert.equal(linkUid('https://www.facebook.com/people/Shop-Xinh/61550000000002/'), '61550000000002');
+  assert.equal(linkUid('https://www.facebook.com/groups/abc/posts/123456/'), null);
+  assert.equal(linkUid('https://www.facebook.com/shopxinh'), null);
+  assert.equal(linkUid('https://evil.com/profile.php?id=61550000000001'), null);
+  assert.equal(linkUid('không phải link'), null);
+});
+
+test('postKey lấy số bài, giống FacebookEngageQueue::postKey', () => {
+  assert.equal(postKey('https://www.facebook.com/groups/abc/posts/1234567890/?__cft__=x'), '1234567890');
+  assert.equal(postKey('https://m.facebook.com/groups/123/permalink/987/'), '987');
+  assert.equal(postKey('https://www.facebook.com/groups/abc/'), null);
+  assert.equal(postKey('https://evil.com/groups/abc/posts/1/'), null);
+});
+
+test('fillName thay {ten}, không có tên thì dọn câu', () => {
+  assert.equal(fillName('Chào {ten}, follow chéo nha', 'Lan Anh'), 'Chào Lan Anh, follow chéo nha');
+  assert.equal(fillName('Chào {ten}, follow chéo nha', null), 'Chào, follow chéo nha');
+  assert.equal(fillName('Follow {ten} nhé', ''), 'Follow nhé');
+  assert.equal(fillName('{TEN} ơi ghé lại mình', 'An'), 'An ơi ghé lại mình');
+  assert.equal(fillName('Hi {ten}', 'Tên {lạ}'), 'Hi Tên lạ');
+});
+
+test('probeOf lấy đoạn chữ dài nhất giữa các emoji của dòng đầu', () => {
+  assert.equal(probeOf('Follow chéo nha 😊'), 'Follow chéo nha');
+  assert.equal(probeOf('🥰 Ghé rồi nè ❤️ ok'), 'Ghé rồi nè');
+  assert.equal(probeOf('\nDòng đầu trống\nDòng hai'), 'Dòng đầu trống');
+  assert.equal(probeOf('😊😊 ok'), null);
+});
+
+test('authorOf lấy link người/page đầu tiên có chữ', () => {
+  const links = [
+    { href: 'https://www.facebook.com/groups/abc/user/100012345678/', text: '' },
+    { href: 'https://www.facebook.com/groups/abc/user/100012345678/', text: 'Lan Anh' },
+    { href: 'https://www.facebook.com/groups/abc/posts/1/', text: '3 giờ' },
+  ];
+  assert.equal(authorOf(links), 'Lan Anh');
+  assert.equal(authorOf([{ href: 'https://www.facebook.com/groups/abc/posts/1/', text: '3 giờ' }]), null);
+});
+
+test('mentionsOwn chỉ tính link có chữ tới nick/page mình', () => {
+  const own = new Set(['61550000000001']);
+  const avatar = { href: 'https://www.facebook.com/profile.php?id=61550000000001', text: '' };
+  const named = { href: 'https://www.facebook.com/profile.php?id=61550000000001&comment_id=9', text: 'Shop Xinh' };
+  const other = { href: 'https://www.facebook.com/groups/abc/user/100012345678/', text: 'Lan Anh' };
+  assert.equal(mentionsOwn([avatar, other], own), false);
+  assert.equal(mentionsOwn([other, named], own), true);
 });

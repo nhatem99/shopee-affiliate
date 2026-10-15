@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\Admin\FacebookEngageController;
 use App\Http\Controllers\Admin\FacebookGroupController;
 use App\Http\Controllers\Admin\FacebookGroupPostController;
 use App\Http\Controllers\Admin\FacebookPostTemplateController;
@@ -23,6 +24,7 @@ Route::prefix('runner/fb')
         Route::post('/poll', [FacebookRunnerController::class, 'poll'])->name('poll');
         Route::post('/posts/{id}/result', [FacebookRunnerController::class, 'result'])->whereNumber('id')->name('result');
         Route::post('/posts/{id}/comment', [FacebookRunnerController::class, 'comment'])->whereNumber('id')->name('comment');
+        Route::post('/engage/{id}/result', [FacebookRunnerController::class, 'engage'])->whereNumber('id')->name('engage');
         Route::post('/groups', [FacebookRunnerController::class, 'groups'])->name('groups');
         Route::post('/groups/{id}/review', [FacebookRunnerController::class, 'review'])->whereNumber('id')->name('review');
         Route::get('/images/{name}', [FacebookRunnerController::class, 'image'])->where('name', FacebookPostImages::NAME_PATTERN)->name('image');
@@ -44,6 +46,13 @@ Route::middleware(['web', 'auth', 'auth.admin'])->prefix('admin')->name('admin.'
     Route::post('/fb-groups', [FacebookGroupController::class, 'store'])->name('fb-groups.store');
     Route::patch('/fb-groups/{facebookGroup}', [FacebookGroupController::class, 'update'])->name('fb-groups.update');
     Route::delete('/fb-groups/{facebookGroup}', [FacebookGroupController::class, 'destroy'])->name('fb-groups.destroy');
+
+    // Bình luận dạo trong nhóm follow chéo — FacebookEngageQueue.
+    Route::get('/fb-engage', [FacebookEngageController::class, 'index'])->name('fb-engage');
+    Route::post('/fb-engage/settings', [FacebookEngageController::class, 'updateSettings'])->name('fb-engage.settings');
+    Route::post('/fb-engage/toggle', [FacebookEngageController::class, 'toggle'])->name('fb-engage.toggle');
+    Route::post('/fb-engage/clear-wait', [FacebookEngageController::class, 'clearWait'])->name('fb-engage.clear-wait');
+    Route::post('/fb-engage/groups', [FacebookEngageController::class, 'updateGroups'])->name('fb-engage.groups');
 
     Route::get('/fb-posts', [FacebookGroupPostController::class, 'index'])->name('fb-posts');
     Route::post('/fb-posts/compose', [FacebookGroupPostController::class, 'compose'])->name('fb-posts.compose');

@@ -2,9 +2,11 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\FacebookEngageComment;
 use App\Models\FacebookGroup;
 use App\Models\FacebookGroupPost;
 use App\Models\FacebookProfile;
+use App\Services\FacebookEngageQueue;
 use App\Services\FacebookGroupCommentQueue;
 use App\Services\FacebookGroupPostScheduler;
 use App\Services\FacebookGroupReviewChecker;
@@ -88,6 +90,27 @@ class FacebookRunnerController extends Controller
 
         if (! $comments->report($post, $data['status'], $data['error'] ?? null, $data['post_url'] ?? null)) {
             return response()->json(['message' => 'Bài này không chờ bình luận — bỏ qua kết quả này.'], 409);
+        }
+
+        return response()->json(['ok' => true]);
+    }
+
+    /** Bot báo kết quả việc "engage" — bình luận dạo một bài trong nhóm follow chéo. */
+    public function engage(Request $request, FacebookEngageQueue $engage, int $id): JsonResponse
+    {
+        $row = FacebookEngageComment::findOrFail($id);
+
+        $data = $request->validate([
+            'status' => ['required', Rule::in(FacebookEngageComment::RESULTS)],
+            // Câu đã gửi thật ({ten} đã thay bằng tên người đăng).
+            'comment' => ['nullable', 'string', 'max:2000'],
+            'post_url' => ['nullable', 'string', 'max:1000'],
+            'author' => ['nullable', 'string', 'max:255'],
+            'error' => ['nullable', 'string', 'max:1000'],
+        ]);
+
+        if (! $engage->report($row, $data['status'], $data['comment'] ?? null, $data['post_url'] ?? null, $data['author'] ?? null, $data['error'] ?? null)) {
+            return response()->json(['message' => 'Lượt bình luận này đã có kết quả — bỏ qua.'], 409);
         }
 
         return response()->json(['ok' => true]);

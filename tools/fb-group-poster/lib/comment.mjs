@@ -18,10 +18,10 @@ const POST_PATH = /^\/groups\/([A-Za-z0-9][A-Za-z0-9._-]*)\/(posts|permalink)\/(
 const SNIPPET_LENGTHS = [80, 50, 30];
 const MAX_COMMENT = 2000;
 // Thẻ bài tìm thấy ở bảng tin/tab — đánh dấu để Playwright tìm lại đúng thẻ đó.
-const MARK = 'data-tkv-post';
+export const MARK = 'data-tkv-post';
 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
-const pause = (low = 0.6, high = 1.6) => sleep((low + Math.random() * (high - low)) * 1000);
+export const pause = (low = 0.6, high = 1.6) => sleep((low + Math.random() * (high - low)) * 1000);
 const result = (status, error = null, postUrl = null) => ({ status, error, postUrl });
 
 // Chỉ mở link bài trên facebook.com (m./web. đổi về www.), bỏ phần ?... — null nếu không phải.
@@ -117,7 +117,7 @@ export async function commentOnPost(page, job, { dryRun = false, onSubmitting = 
 }
 
 // Mỗi dòng một lần: Enter trong ô bình luận là gửi luôn, xuống dòng phải Shift+Enter.
-async function typeLines(page, text) {
+export async function typeLines(page, text) {
   const lines = text.split(/\r?\n/);
   for (let i = 0; i < lines.length; i++) {
     if (i > 0) await page.keyboard.press('Shift+Enter');
@@ -130,7 +130,7 @@ function lastLine(text) {
   return text.split(/\r?\n/).filter((line) => line.trim()).pop().trim().slice(0, 40);
 }
 
-async function goto(page, url) {
+export async function goto(page, url) {
   try {
     await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 60_000 });
   } catch (error) {
@@ -198,7 +198,7 @@ async function searchPage(page, url, wanted) {
   return { found: true, url: link };
 }
 
-async function articleLink(article) {
+export async function articleLink(article) {
   const hrefs = await article.locator('a[href]').evaluateAll((anchors) => anchors.map((a) => a.href));
   for (const href of hrefs) {
     const url = postUrl(href.split('?')[0]);
@@ -209,7 +209,7 @@ async function articleLink(article) {
 
 // Ô bình luận của bài: scope = thẻ bài (bảng tin/tab) hoặc null (trang riêng của bài). Chưa có ô
 // thì bấm nút "Bình luận" — Facebook có thể mở bài trong hộp thoại, khi đó ô nằm trong hộp thoại.
-async function commentBox(page, scope) {
+export async function commentBox(page, scope) {
   const where = scope ?? page;
   const box = await visibleBox(where);
   if (box) return box;
@@ -239,25 +239,31 @@ async function visibleBox(where) {
   return null;
 }
 
-// Có chữ đó ngoài các ô đang gõ — kể cả trong link (Facebook bọc link ngoài bằng l.php?u=...).
-// scoped: chỉ xét thẻ bài đã đánh dấu và hộp thoại bài (mở ra khi bấm "Bình luận").
-async function hasText(page, probe, scoped = false) {
+// Số lần chữ đó hiện ngoài các ô đang gõ — kể cả trong link (Facebook bọc link ngoài bằng
+// l.php?u=...). scoped: chỉ xét thẻ bài đã đánh dấu và hộp thoại bài (mở ra khi bấm "Bình luận").
+export async function countText(page, probe, scoped = false) {
   return page.evaluate(({ probe, scoped, mark }) => {
     const roots = scoped ? [document.querySelector(`[${mark}]`), ...document.querySelectorAll('[role="dialog"]')].filter(Boolean) : [document.body];
-    return roots.some((root) => {
+    let count = 0;
+    for (const root of roots) {
       const typing = Array.from(root.querySelectorAll('[contenteditable="true"]')).map((el) => el.innerText).filter(Boolean);
       let text = root.innerText || '';
       for (const part of typing) text = text.replace(part, '');
-      if (text.includes(probe)) return true;
-      return Array.from(root.querySelectorAll('a[href]')).some((a) => {
+      count += text.split(probe).length - 1;
+      count += Array.from(root.querySelectorAll('a[href]')).filter((a) => {
         try {
           return decodeURIComponent(a.href).includes(probe);
         } catch {
           return false;
         }
-      });
-    });
+      }).length;
+    }
+    return count;
   }, { probe, scoped, mark: MARK });
+}
+
+async function hasText(page, probe, scoped = false) {
+  return (await countText(page, probe, scoped)) > 0;
 }
 
 async function approvalHint(page) {
@@ -265,7 +271,8 @@ async function approvalHint(page) {
   return ui.APPROVAL.test(text) ? ' (bài còn chờ admin nhóm duyệt)' : '';
 }
 
-async function confirm(page, box, probe, scoped, url, timeoutSeconds = 30) {
+// baseline: số lần probe đã hiện trước khi gửi — câu bình luận chung chung có thể người khác đã viết y hệt.
+export async function confirm(page, box, probe, scoped, url, { timeoutSeconds = 30, baseline = 0 } = {}) {
   const deadline = Date.now() + timeoutSeconds * 1000;
   let emptied = false;
   while (Date.now() < deadline) {
@@ -281,7 +288,7 @@ async function confirm(page, box, probe, scoped, url, timeoutSeconds = 30) {
     } catch {
       emptied = true; // ô biến mất cùng hộp thoại sau khi gửi
     }
-    if (emptied && (await hasText(page, probe, scoped))) return result('commented', null, url);
+    if (emptied && probe && (await countText(page, probe, scoped)) > baseline) return result('commented', null, url);
   }
   return emptied
     ? result('ambiguous', `Đã gửi bình luận nhưng sau ${timeoutSeconds} giây chưa thấy hiện ra`, url)

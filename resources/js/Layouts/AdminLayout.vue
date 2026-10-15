@@ -133,6 +133,7 @@ const navGroups = [
         items: [
             { href: '/admin/fb-posts', icon: '📢', label: 'Đăng bài vào nhóm' },
             { href: '/admin/fb-groups', icon: '🧑‍🤝‍🧑', label: 'Nhóm & bot đăng bài' },
+            { href: '/admin/fb-engage', icon: '🗨️', label: 'Bình luận dạo' },
         ],
     },
     {

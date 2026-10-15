@@ -2,7 +2,8 @@
 
 Bản Node của bot ở `deploy/fb-group-runner` (bản Python cho Mac). Hai bản nói chuyện với server
 giống nhau, chỉ **chạy một bản một lúc** — riêng việc kiểm tra bài có được duyệt không (bên dưới)
-chỉ bản Node từ 1.2.0 làm, đăng bằng nhiều page chỉ bản Node từ 1.3.0 làm.
+chỉ bản Node từ 1.2.0 làm, đăng bằng nhiều page chỉ bản Node từ 1.3.0 làm, bình luận dạo nhóm follow
+chéo chỉ bản Node từ 1.5.0 làm.
 
 Bot chạy trên **điện thoại Android (Termux)**, dùng wifi nhà. Không chạy trên VPS: Facebook nhận
 ra IP trung tâm dữ liệu và bắt xác minh/khoá nick.
@@ -128,6 +129,32 @@ node poster.mjs comment --group https://www.facebook.com/groups/<id-nhom-test> -
 `--send` mới gửi thật (phải có `--find` để bot chắc đúng bài). Không thấy ô bình luận: chữ trên ô và
 nút nằm ở `COMMENT_BOX` / `COMMENT_BUTTON` trong `lib/ui.mjs`.
 
+## 3b''. Bình luận dạo nhóm follow chéo
+
+Từ bản 1.5.0, lúc rảnh (không có bài deal cần đăng) bot bình luận dạo trong các nhóm follow chéo:
+chuyển sang page chọn ở `/admin/fb-engage`, mở bảng tin một nhóm (bài mới trước), chọn bài đầu tiên
+chưa bình luận rồi bình luận một câu bốc ngẫu nhiên từ câu mẫu, ngay dưới bài trên bảng tin. Bot bỏ
+qua bài mình đăng, bài mình đã bình luận (server nhớ số bài, và trong thẻ bài có link tới page/nick
+của mình), và bài không lấy được link. Bật/tắt, page, câu mẫu, số bình luận/ngày, khoảng nghỉ, mỗi
+nhóm cách bao lâu, khung giờ và nhóm nào được bình luận đều chỉnh ở `/admin/fb-engage`. Bình luận dạo
+chạy theo khung giờ riêng, không phụ thuộc khung giờ đăng deal.
+
+Page phải tự tham gia các nhóm follow chéo, sau đó bấm **Lấy nhóm đã tham gia** ở `/admin/fb-groups`
+để server biết page đã vào nhóm nào.
+
+Thử tay trên một nhóm (**tắt bot chạy nền trước**, xem mục 3c). Bot dùng page đang mở, nên chuyển page
+trước bằng `switch`. Mặc định chỉ điền ô bình luận rồi dừng, xem trên Termux:X11 rồi bấm Enter để bỏ:
+
+```bash
+node poster.mjs switch --to https://www.facebook.com/profile.php?id=<uid-page>
+node poster.mjs engage --group https://www.facebook.com/groups/<id-nhom-follow>
+node poster.mjs engage --group https://www.facebook.com/groups/<id-nhom-follow> --text "Follow chéo nha {ten} 😊" --send
+```
+
+Lệnh in ra bài đã chọn, tên người đăng và câu sẽ gửi. Không thấy bài nào: Facebook có thể đổi cách
+hiện link bài (bot rê chuột qua mốc giờ để lấy link). Không thấy ô bình luận: xem `COMMENT_BOX` /
+`COMMENT_BUTTON` trong `lib/ui.mjs`.
+
 ## 3c. Đăng bằng nhiều page
 
 Từ bản 1.3.0, ngoài nick chính bot đăng được bằng các Trang (fanpage) mà nick đang quản trị. Thêm
@@ -191,6 +218,8 @@ Tắt bot chạy nền: `pkill -f boot/fb-poster.sh` trước, rồi `pkill -f "
 | Một page **đang nghỉ** vì Facebook tạm chặn đăng bài | Bot đã tự chuyển sang page sau. Để page đó nghỉ 1–2 ngày, giảm số bài/ngày của nó rồi mới bấm **Mở lại**. |
 | Một page **đang nghỉ** vì "Bot không chuyển được sang page này" | Mở Termux:X11 xem trang của page còn nút **Chuyển ngay** không, nick còn quản trị page không. Thử `node poster.mjs switch --to <link page>` (mục 3c), sửa xong bấm **Mở lại**. |
 | Bài báo **"chưa bình luận được link"** | Bot thử 3 lần (cách nhau 20 phút) vẫn hỏng — lý do ghi ngay dưới bài ở `/admin/fb-posts`, ảnh chụp màn hình ở `screenshots/comment-<số bài>-…png`. Bình luận tay vào bài, hoặc thử `node poster.mjs comment` (mục 3b'). |
+| `/admin/fb-engage` báo **"Bot tự tắt: Facebook báo tạm chặn bình luận"** | Đăng deal vẫn chạy. Để page nghỉ 1–2 ngày, giảm số bình luận/ngày, thêm câu mẫu khác nhau rồi mới bấm **Bật bình luận dạo**. |
+| Nhóm ở `/admin/fb-engage` báo **"Bot tự tắt"** | Page chưa vào nhóm hoặc nhóm không cho page bình luận. Cho page tham gia nhóm rồi tích lại. |
 | Bài **"Không rõ — xem nhóm"** | Bot đã bấm Đăng nhưng không xác nhận được. Mở nhóm xem; chỉ **Đăng lại** khi chắc chắn bài chưa lên. |
 | `Server từ chối token (403)` | Token đã bị tạo lại — dán token mới vào `config.json`. |
 | `Chromium không mở được cổng 9222` | Xem `~/.local/share/tietkiemvi-fb-runner/chromium.log`; mở app Termux:X11 một lần rồi chạy lại. |
