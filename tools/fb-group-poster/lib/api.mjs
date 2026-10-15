@@ -137,6 +137,29 @@ export class Api {
     throw new ApiError(`Không báo được kết quả bình luận dạo #${engageId}: ${last?.message}`);
   }
 
+  // Kết quả việc "shopee_video": link video đọc được trên trang sản phẩm, hoặc vì sao không lấy được.
+  // 409 = video không còn chờ (admin đã tải tay / xoá), 422 = server không nhận — gửi lại cũng vậy.
+  async reportVideo(videoId, outcome) {
+    const payload = {
+      status: outcome.status,
+      videos: (outcome.videos || []).slice(0, 20),
+      error: outcome.error ? String(outcome.error).slice(0, 1000) : null,
+    };
+    let last = null;
+    for (let attempt = 0; attempt < 3; attempt++) {
+      try {
+        const [code] = await this.post(`/runner/fb/videos/${videoId}/result`, payload);
+        if ([200, 404, 409, 422].includes(code)) return code;
+        last = new ApiError(`HTTP ${code}`);
+      } catch (caught) {
+        if (caught instanceof AuthError) throw caught;
+        last = caught;
+      }
+      await sleep(5000 * (attempt + 1));
+    }
+    throw new ApiError(`Không báo được kết quả lấy video #${videoId}: ${last?.message}`);
+  }
+
   // Danh sách page đọc ở "Trang của bạn" (việc "sync_pages"); đọc hỏng thì gửi error, danh sách rỗng.
   async uploadPages(pages, error = null) {
     const [status, data] = await this.post('/runner/fb/pages', { pages, error: error ? String(error).slice(0, 1000) : null });

@@ -53,6 +53,51 @@ class FacebookDealCaption
     }
 
     /**
+     * Caption Reel đăng lên page (/admin/fb-videos). Link lên ngay dòng thứ hai: caption Reel chỉ
+     * hiện 1–2 dòng, còn lại nằm sau "Xem thêm" — y như lý do của FacebookReelSlotService::caption.
+     * Link trong caption Reel bấm được (đo 08-09-2026), link trong bình luận Reel thì không.
+     */
+    public function reelTemplate(?array $product, bool $withVoucher = true): string
+    {
+        $name = $this->plain($product['product_name'] ?? '') ?: 'Sản phẩm Shopee đang giảm giá';
+
+        $lines = ['{🔥|⚡|💥} '.Str::limit($name, 120), '{link}', ''];
+
+        $price = $product['discounted_price'] ?? null;
+        $original = $product['original_price'] ?? null;
+        if (is_numeric($price) && $price > 0) {
+            $lines[] = '💰 Giá còn '.$this->vnd($price).(is_numeric($original) && $original > $price ? ' (giá gốc '.$this->vnd($original).')' : '');
+        }
+
+        $lines[] = $withVoucher
+            ? '{Mã có giới hạn lượt|Số lượng mã có hạn}, {nhanh tay kẻo hết|tranh thủ nhé} {🛒|⏰}'
+            : '{Giá có thể đổi bất cứ lúc nào|Giá tốt không chờ ai}, {nhanh tay kẻo lỡ|tranh thủ nhé} {🛒|⏰}';
+
+        return implode("\n", $lines);
+    }
+
+    /**
+     * Hai dòng chữ mặc định chèn lên video (FacebookVideoEditor). Không emoji — font trên VPS không
+     * có hình emoji, ffmpeg sẽ vẽ ô vuông.
+     *
+     * @return array{top: string, bottom: ?string}
+     */
+    public function videoOverlay(?array $product): array
+    {
+        $name = trim(preg_replace('/[^\p{L}\p{N}\p{P}\p{Zs}]/u', '', (string) ($product['product_name'] ?? '')));
+
+        $price = $product['discounted_price'] ?? null;
+        $percent = $product['discount_percent'] ?? null;
+        $bottom = null;
+        if (is_numeric($price) && $price > 0) {
+            $bottom = 'Chỉ còn '.number_format($price, 0, ',', '.').'đ'
+                .(is_numeric($percent) && $percent > 0 ? ' - giảm '.round($percent).'%' : '');
+        }
+
+        return ['top' => Str::limit($name, 90, '…'), 'bottom' => $bottom];
+    }
+
+    /**
      * Thay cho {link} khi link để ở bình luận (FacebookGroupCommentQueue) — bài không còn link nào.
      * Cũng bốc {a|b} như mẫu bài.
      */

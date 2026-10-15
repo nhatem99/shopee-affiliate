@@ -5,6 +5,7 @@ use App\Http\Controllers\Admin\FacebookGroupController;
 use App\Http\Controllers\Admin\FacebookGroupPostController;
 use App\Http\Controllers\Admin\FacebookPostTemplateController;
 use App\Http\Controllers\Admin\FacebookProfileController;
+use App\Http\Controllers\Admin\FacebookVideoController;
 use App\Http\Controllers\FacebookRunnerController;
 use App\Http\Middleware\VerifyFacebookRunnerToken;
 use App\Services\FacebookPostImages;
@@ -25,6 +26,7 @@ Route::prefix('runner/fb')
         Route::post('/posts/{id}/result', [FacebookRunnerController::class, 'result'])->whereNumber('id')->name('result');
         Route::post('/posts/{id}/comment', [FacebookRunnerController::class, 'comment'])->whereNumber('id')->name('comment');
         Route::post('/engage/{id}/result', [FacebookRunnerController::class, 'engage'])->whereNumber('id')->name('engage');
+        Route::post('/videos/{id}/result', [FacebookRunnerController::class, 'video'])->whereNumber('id')->name('video');
         Route::post('/switch-result', [FacebookRunnerController::class, 'switched'])->name('switch-result');
         Route::post('/pages', [FacebookRunnerController::class, 'pages'])->name('pages');
         Route::post('/groups', [FacebookRunnerController::class, 'groups'])->name('groups');
@@ -57,6 +59,16 @@ Route::middleware(['web', 'auth', 'auth.admin'])->prefix('admin')->name('admin.'
     Route::post('/fb-engage/toggle', [FacebookEngageController::class, 'toggle'])->name('fb-engage.toggle');
     Route::post('/fb-engage/clear-wait', [FacebookEngageController::class, 'clearWait'])->name('fb-engage.clear-wait');
     Route::post('/fb-engage/groups', [FacebookEngageController::class, 'updateGroups'])->name('fb-engage.groups');
+
+    // Reel từ video sản phẩm Shopee — FacebookVideoQueue, FacebookVideoEditor.
+    Route::get('/fb-videos', [FacebookVideoController::class, 'index'])->name('fb-videos');
+    Route::post('/fb-videos', [FacebookVideoController::class, 'store'])->name('fb-videos.store');
+    Route::post('/fb-videos/{facebookVideo}/upload', [FacebookVideoController::class, 'upload'])->name('fb-videos.upload');
+    Route::patch('/fb-videos/{facebookVideo}', [FacebookVideoController::class, 'update'])->name('fb-videos.update');
+    Route::post('/fb-videos/{facebookVideo}/publish', [FacebookVideoController::class, 'publish'])->name('fb-videos.publish');
+    Route::post('/fb-videos/{facebookVideo}/refetch', [FacebookVideoController::class, 'refetch'])->name('fb-videos.refetch');
+    Route::delete('/fb-videos/{facebookVideo}', [FacebookVideoController::class, 'destroy'])->name('fb-videos.destroy');
+    Route::get('/fb-videos/{facebookVideo}/file/{kind}', [FacebookVideoController::class, 'file'])->whereIn('kind', ['output', 'source'])->name('fb-videos.file');
 
     Route::get('/fb-posts', [FacebookGroupPostController::class, 'index'])->name('fb-posts');
     Route::post('/fb-posts/compose', [FacebookGroupPostController::class, 'compose'])->name('fb-posts.compose');

@@ -188,6 +188,25 @@ node poster.mjs switch --to primary
 ảnh màn hình Termux:X11) cho người sửa code. Chữ trên nút nằm ở `SWITCH_BUTTON` trong `lib/ui.mjs`,
 cách nhận ra page đang dùng nằm ở `identity()` trong `lib/browser.mjs`.
 
+## 3d. Lấy video sản phẩm Shopee cho Reel
+
+Từ bản 1.8.0: admin dán link Shopee ở `/admin/fb-videos`, bot mở trang sản phẩm bằng Chromium này,
+đọc link video trong dữ liệu Shopee trả về rồi gửi cho server. Server tự tải, cắt, dựng khung dọc và
+đăng Reel lên page. Việc này không đụng tới Facebook, nên bot làm cả lúc đang tạm dừng đăng deal.
+
+Server không tự lấy được vì Shopee chặn (lỗi 90309999). Chromium phải **đăng nhập Shopee một lần**:
+mở tab mới trên Termux:X11, vào `https://shopee.vn` đăng nhập, xong thì đóng tab. Thử trước (tắt bot
+chạy nền trước như mục 3c), không gọi server:
+
+```bash
+node poster.mjs shopee-video --url "https://shopee.vn/product/<shop_id>/<item_id>"
+```
+
+Kết quả `found` kèm link `.mp4` là chạy được. `login_required`: chưa đăng nhập Shopee. `blocked`:
+Shopee bắt xác minh — mở trang đó trên Chromium làm xác minh rồi thử lại. `no_video` mà sản phẩm có
+video, hoặc `failed`: chạy lại kèm `--dump` rồi gửi file `shopee-*.json` nó ghi ra cho người sửa code
+(cách đọc link nằm ở `extractVideos()` trong `lib/shopee.mjs`).
+
 ## 4. Chạy
 
 Chạy tay (Ctrl+C để dừng):

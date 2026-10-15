@@ -18,6 +18,8 @@
 //   node poster.mjs pages                 về nick chính, in danh sách page đọc được ở "Trang của bạn"
 //                                         — không gọi server
 //   node poster.mjs whoami                đang dùng nick chính hay page nào
+//   node poster.mjs shopee-video --url LINK  mở trang sản phẩm Shopee, in link video đọc được — không
+//                                         gọi server (--dump ghi phản hồi API Shopee ra file để gửi người sửa code)
 //   node poster.mjs switch --to LINK      thử chuyển sang một page (link trang hoặc uid), --to primary
 //                                         để về nick chính — không gọi server
 import fs from 'node:fs';
@@ -33,6 +35,7 @@ import { engageGroup } from './lib/engage.mjs';
 import { ScrapeError, scrapeJoinedGroups } from './lib/groups.mjs';
 import { MAX_IMAGES, downloadAsJpeg, fetchAsJpeg, isUpload } from './lib/images.mjs';
 import { scrapeManagedPages } from './lib/pages.mjs';
+import { fetchShopeeVideo } from './lib/shopee.mjs';
 import { GROUP_URL, postToGroup } from './lib/post.mjs';
 import { PROFILE_URL, profileFromInput, switchTo } from './lib/profiles.mjs';
 import { DEFAULT_TABS, fingerprint, scanTabs, tabUrls } from './lib/review.mjs';
@@ -292,6 +295,46 @@ async function cmdSwitch(cfg, to) {
   } finally {
     await browser.close();
   }
+}
+
+// ── shopee-video ─────────────────────────────────────────────────────────────
+
+// Chạy tay, không gọi server: xem bot đọc được video nào ở một trang sản phẩm Shopee. Lần đầu thường
+// gặp "chưa đăng nhập Shopee" — mở shopee.vn trên Chromium (Termux:X11) đăng nhập rồi chạy lại.
+async function cmdShopeeVideo(cfg, url, dump) {
+  const browser = await launch(cfg);
+  try {
+    const result = await fetchShopeeVideo(browser, url, { log });
+    log(`Kết quả: ${result.status}${result.error ? ` — ${result.error}` : ''}`);
+    for (const video of result.videos) {
+      const size = video.width ? ` ${video.width}x${video.height}` : '';
+      const length = video.duration ? ` ${video.duration}s` : '';
+      log(`  • ${video.url}${size}${length}`);
+    }
+    log(`Bắt được ${result.responses.length} phản hồi API sản phẩm của Shopee.`);
+    if (dump) {
+      const file = path.join(cfg.dataDir, `shopee-${stamp().replace(/\D/g, '')}.json`);
+      fs.writeFileSync(file, JSON.stringify(result.responses, null, 2));
+      log(`Đã ghi phản hồi API ra ${file}`);
+    }
+    return result.status === 'found' ? 0 : 1;
+  } finally {
+    await browser.close();
+  }
+}
+
+// Admin dán link ở /admin/fb-videos: mở trang sản phẩm Shopee, gửi link video về cho server tải.
+async function doShopeeVideo(api, browser, job) {
+  log(`Lấy video sản phẩm Shopee #${job.video_id}: ${job.url}`);
+  let outcome;
+  try {
+    outcome = await fetchShopeeVideo(browser, job.url, { log });
+  } catch (error) {
+    outcome = { status: 'failed', videos: [], error: `Lỗi trình duyệt: ${error.message}` };
+  }
+  log(`Kết quả lấy video: ${outcome.status}${outcome.videos.length ? ` (${outcome.videos.length} link)` : ''}${outcome.error ? ` — ${outcome.error}` : ''}`);
+  const code = await api.reportVideo(job.video_id, outcome);
+  if (code !== 200) log(`Server không nhận kết quả lấy video (HTTP ${code}).`);
 }
 
 // ── pages ────────────────────────────────────────────────────────────────────
@@ -640,6 +683,11 @@ async function tick(api, state, cfg, browser) {
     await doEngage(api, cfg, browser, job);
     return rand(20, 40);
   }
+  if (job.type === 'shopee_video') {
+    lastIdle = null;
+    await doShopeeVideo(api, browser, job);
+    return 15;
+  }
   if (job.type === 'sync_groups') {
     lastIdle = null;
     log('Server yêu cầu lấy danh sách nhóm.');
@@ -741,11 +789,17 @@ async function main() {
       post: { type: 'string' },
       find: { type: 'string' },
       send: { type: 'boolean', default: false },
+      url: { type: 'string' },
+      dump: { type: 'boolean', default: false },
     },
   });
 
-  if (!['login', 'run', 'sync', 'check', 'dry-run', 'review', 'comment', 'engage', 'pages', 'whoami', 'switch'].includes(command)) {
-    console.error('Dùng: node poster.mjs <login|run|sync|check|whoami|pages|dry-run --group URL|review --group URL|comment --post LINK|engage --group URL|switch --to LINK>');
+  if (!['login', 'run', 'sync', 'check', 'dry-run', 'review', 'comment', 'engage', 'pages', 'whoami', 'switch', 'shopee-video'].includes(command)) {
+    console.error('Dùng: node poster.mjs <login|run|sync|check|whoami|pages|dry-run --group URL|review --group URL|comment --post LINK|engage --group URL|switch --to LINK|shopee-video --url LINK>');
+    return 1;
+  }
+  if (command === 'shopee-video' && !/^https:\/\/(?:[\w-]+\.)*shopee\.vn\//.test(values.url || '')) {
+    console.error('shopee-video cần --url https://shopee.vn/... (link sản phẩm)');
     return 1;
   }
   if (command === 'engage') {
@@ -799,6 +853,7 @@ async function main() {
   if (command === 'pages') return cmdPages(cfg);
   if (command === 'whoami') return cmdWhoami(cfg);
   if (command === 'switch') return cmdSwitch(cfg, values.to);
+  if (command === 'shopee-video') return cmdShopeeVideo(cfg, values.url, values.dump);
   if (command === 'sync') return cmdSync(cfg);
   return cmdRun(cfg);
 }

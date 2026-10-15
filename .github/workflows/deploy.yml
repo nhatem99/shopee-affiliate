@@ -41,6 +41,13 @@ jobs:
             git fetch origin "+refs/heads/$DEPLOY_REF:refs/remotes/origin/$DEPLOY_REF"
             git reset --hard "origin/$DEPLOY_REF"
 
+            # ffmpeg (có drawtext) + font có dấu tiếng Việt để dựng Reel ở /admin/fb-videos
+            # (FacebookVideoEditor). Chỉ cài lần đầu; cài lỗi cũng không chặn deploy — trang admin báo thiếu.
+            if ! command -v ffmpeg >/dev/null || [ ! -f /usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf ]; then
+              (apt-get update -qq && DEBIAN_FRONTEND=noninteractive apt-get install -y -qq ffmpeg fonts-dejavu-core) \
+                || echo "Cài ffmpeg lỗi — /admin/fb-videos chưa dựng được video"
+            fi
+
             composer install --no-dev --optimize-autoloader --no-interaction
 
             npm ci

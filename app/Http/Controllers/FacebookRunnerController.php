@@ -6,12 +6,14 @@ use App\Models\FacebookEngageComment;
 use App\Models\FacebookGroup;
 use App\Models\FacebookGroupPost;
 use App\Models\FacebookProfile;
+use App\Models\FacebookVideo;
 use App\Services\FacebookEngageQueue;
 use App\Services\FacebookGroupCommentQueue;
 use App\Services\FacebookGroupPostScheduler;
 use App\Services\FacebookGroupReviewChecker;
 use App\Services\FacebookPageListSync;
 use App\Services\FacebookPostImages;
+use App\Services\FacebookVideoQueue;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\URL;
@@ -152,6 +154,31 @@ class FacebookRunnerController extends Controller
         }
 
         return response()->json(['ok' => true]);
+    }
+
+    /**
+     * Bot báo kết quả việc "shopee_video": các link mp4 đọc được trên trang sản phẩm Shopee (Shopee
+     * để sẵn nhiều độ phân giải), hoặc vì sao không lấy được.
+     */
+    public function video(Request $request, FacebookVideoQueue $videos, int $id): JsonResponse
+    {
+        $video = FacebookVideo::findOrFail($id);
+
+        $data = $request->validate([
+            'status' => ['required', Rule::in(FacebookVideoQueue::RESULTS)],
+            'videos' => ['present', 'array', 'max:20'],
+            'videos.*.url' => ['required', 'string', 'max:2000'],
+            'videos.*.width' => ['nullable', 'integer', 'min:0', 'max:10000'],
+            'videos.*.height' => ['nullable', 'integer', 'min:0', 'max:10000'],
+            'videos.*.duration' => ['nullable', 'numeric', 'min:0', 'max:36000'],
+            'error' => ['nullable', 'string', 'max:1000'],
+        ]);
+
+        if (! $videos->report($video, $data['status'], $data['videos'], $data['error'] ?? null)) {
+            return response()->json(['message' => 'Video này không chờ kết quả bot — bỏ qua.'], 409);
+        }
+
+        return response()->json(['ok' => true, 'status' => $video->status]);
     }
 
     /**

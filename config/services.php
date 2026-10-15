@@ -269,4 +269,14 @@ return [
         'key' => env('ADDLIVETAG_API_KEY'),
     ],
 
+    // Dựng Reel từ video sản phẩm Shopee (FacebookVideoEditor). Prod: gói ffmpeg + fonts-dejavu-core
+    // của apt (deploy.yml tự cài nếu thiếu). Mac: bản ffmpeg Homebrew thiếu drawtext — cài
+    // ffmpeg-full rồi trỏ FFMPEG_BINARY/FFPROBE_BINARY vào /opt/homebrew/opt/ffmpeg-full/bin/.
+    'fb_video' => [
+        'ffmpeg' => env('FFMPEG_BINARY', 'ffmpeg'),
+        'ffprobe' => env('FFPROBE_BINARY', 'ffprobe'),
+        // Bỏ trống thì tự tìm DejaVu Sans Bold (Ubuntu) / Arial Bold (Mac) — font phải có dấu tiếng Việt.
+        'font' => env('FB_VIDEO_FONT'),
+    ],
+
 ];

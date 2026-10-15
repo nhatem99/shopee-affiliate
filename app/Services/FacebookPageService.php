@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use GuzzleHttp\Psr7\Utils;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
@@ -10,6 +11,8 @@ use Illuminate\Support\Str;
  * Đăng comment lên bài viết có sẵn trên fanpage Facebook qua Graph API, dùng Page Access
  * Token của chính fanpage (không phải User Access Token). Token phải có quyền
  * pages_manage_engagement trên page tương ứng với pageId.
+ *
+ * Đăng Reel từ video sản phẩm (publishReel, /admin/fb-videos) cần thêm pages_manage_posts.
  */
 class FacebookPageService
 {
@@ -213,6 +216,111 @@ class FacebookPageService
 
             return null;
         }
+    }
+
+    /**
+     * Đăng một file mp4 thành Reel của page theo Reels Publishing API: start (lấy video_id) →
+     * tải file lên rupload.facebook.com → finish với video_state=PUBLISHED. Trả video_id (cũng là
+     * id reel: facebook.com/reel/{id}), null nếu hỏng — lý do ở $lastError.
+     *
+     * Token phải có pages_manage_posts (+ pages_read_engagement, pages_show_list). Token chỉ để
+     * bình luận/đổi caption thì hỏng ngay bước start với lỗi #200 — admin cấp lại token ở
+     * /admin/api-config.
+     *
+     * Facebook xử lý video sau khi finish trả về — xem reelStatus() để biết đã lên hẳn chưa.
+     */
+    public function publishReel(string $path, string $description): ?string
+    {
+        $this->lastError = null;
+        $endpoint = 'https://graph.facebook.com/'.self::GRAPH_VERSION."/{$this->pageId}/video_reels";
+
+        try {
+            $start = Http::asForm()->timeout(30)->post($endpoint, [
+                'upload_phase' => 'start',
+                'access_token' => $this->token,
+            ]);
+            $videoId = $start->json('video_id');
+            if (! $start->successful() || ! $videoId) {
+                return $this->reelFailed('start', $start->body());
+            }
+
+            $uploadUrl = $start->json('upload_url') ?: 'https://rupload.facebook.com/video-upload/'.self::GRAPH_VERSION."/{$videoId}";
+            $upload = Http::withHeaders([
+                'Authorization' => "OAuth {$this->token}",
+                'offset' => '0',
+                'file_size' => (string) filesize($path),
+            ])->timeout(600)->withBody(Utils::streamFor(fopen($path, 'r')), 'application/octet-stream')->post($uploadUrl);
+            if (! $upload->successful() || ! $upload->json('success')) {
+                return $this->reelFailed('upload', $upload->body());
+            }
+
+            $finish = Http::asForm()->timeout(60)->post($endpoint, [
+                'upload_phase' => 'finish',
+                'video_id' => $videoId,
+                'video_state' => 'PUBLISHED',
+                'description' => $description,
+                'access_token' => $this->token,
+            ]);
+            if (! $finish->successful() || ! $finish->json('success')) {
+                return $this->reelFailed('finish', $finish->body());
+            }
+
+            return (string) $videoId;
+        } catch (\Exception $e) {
+            return $this->reelFailed('exception', $e->getMessage());
+        }
+    }
+
+    /**
+     * Trạng thái xử lý của reel vừa đăng: ['state' => 'published'|'processing'|'error', 'error' => ?string].
+     * Null nếu không đọc được.
+     */
+    public function reelStatus(string $videoId): ?array
+    {
+        try {
+            $response = Http::timeout(15)->get(
+                'https://graph.facebook.com/'.self::GRAPH_VERSION."/{$videoId}",
+                ['fields' => 'status', 'access_token' => $this->token]
+            );
+            if (! $response->successful()) {
+                $this->lastError = $response->body();
+
+                return null;
+            }
+
+            $status = $response->json('status') ?? [];
+            $phaseError = collect(['uploading_phase', 'processing_phase', 'publishing_phase'])
+                ->map(fn (string $phase) => ($status[$phase]['status'] ?? null) === 'error'
+                    ? ($status[$phase]['errors'][0]['message'] ?? $status[$phase]['error']['message'] ?? $phase)
+                    : null)
+                ->filter()
+                ->first();
+
+            if ($phaseError || ($status['video_status'] ?? null) === 'error') {
+                return ['state' => 'error', 'error' => $phaseError ?: 'Facebook báo lỗi xử lý video'];
+            }
+
+            $published = ($status['publishing_phase']['status'] ?? null) === 'complete'
+                || ($status['publishing_phase']['publish_status'] ?? null) === 'published';
+
+            return ['state' => $published ? 'published' : 'processing', 'error' => null];
+        } catch (\Exception $e) {
+            $this->lastError = $e->getMessage();
+
+            return null;
+        }
+    }
+
+    private function reelFailed(string $step, string $body): null
+    {
+        $this->lastError = $body;
+
+        Log::warning("FacebookPageService: đăng reel hỏng ở bước {$step}", [
+            'page_id' => $this->pageId,
+            'body' => Str::limit($body, 1000),
+        ]);
+
+        return null;
     }
 
     /**

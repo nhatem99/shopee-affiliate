@@ -9,8 +9,9 @@ import path from 'node:path';
 // luận" và việc bình luận link từ 1.4.0 (FacebookGroupCommentQueue::MIN_VERSION), việc bình luận dạo
 // nhóm follow chéo từ 1.5.0 (FacebookEngageQueue::MIN_VERSION), nút "Chuyển sang" page ở trang
 // admin từ 1.6.0 (FacebookGroupPostScheduler::SWITCH_MIN_VERSION), nút "Lấy danh sách page" từ
-// 1.7.0 (FacebookGroupPostScheduler::PAGES_MIN_VERSION).
-export const VERSION = '1.7.3-node';
+// 1.7.0 (FacebookGroupPostScheduler::PAGES_MIN_VERSION), việc lấy video sản phẩm Shopee cho Reel
+// từ 1.8.0 (FacebookVideoQueue::MIN_VERSION).
+export const VERSION = '1.8.0-node';
 
 const home = (p) => (p.startsWith('~') ? path.join(os.homedir(), p.slice(1)) : p);
 

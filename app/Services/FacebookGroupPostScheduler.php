@@ -77,12 +77,14 @@ class FacebookGroupPostScheduler
         private FacebookGroupReviewChecker $reviews,
         private FacebookGroupCommentQueue $comments,
         private FacebookEngageQueue $engage,
+        private FacebookVideoQueue $videos,
     ) {}
 
     /**
-     * Bot hỏi việc. Trả về một trong tám dạng:
+     * Bot hỏi việc. Trả về một trong chín dạng:
      *  • ['type' => 'post', ...]        — đăng bài này;
      *  • ['type' => 'switch_profile', 'profile'] — admin bấm "Chuyển sang": chuyển Chromium sang page;
+     *  • ['type' => 'shopee_video', ...] — mở trang sản phẩm Shopee lấy link video (FacebookVideoQueue);
      *  • ['type' => 'sync_groups']      — lấy lại danh sách nhóm đã tham gia;
      *  • ['type' => 'sync_pages']       — đọc "Trang của bạn": các page nick đang quản lý;
      *  • ['type' => 'comment', ...]     — bình luận link mua vào bài đã lên nhóm;
@@ -125,6 +127,11 @@ class FacebookGroupPostScheduler
         $version = $runner['version'] ?? null;
         if ($switch = $this->switchJob($version)) {
             return $switch;
+        }
+        // Admin dán link ở /admin/fb-videos — chỉ mở Shopee, không đụng Facebook, nên cũng làm cả
+        // lúc tạm dừng và ngoài khung giờ đăng.
+        if ($video = $this->videos->nextJob($version)) {
+            return $video;
         }
 
         if ($this->settings->paused()) {
