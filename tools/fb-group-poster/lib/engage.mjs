@@ -86,10 +86,10 @@ export async function engageGroup(page, job, { dryRun = false, onSubmitting = nu
   const issue = await goto(page, feed);
   if (issue) return result(...issue);
 
-  const chosen = await pickPost(page, job, log);
+  const { chosen, stats } = await pickPost(page, job, log);
   if (!chosen) {
     if (await notMember(page)) return result('not_allowed', 'Page chưa là thành viên nhóm (thấy nút "Tham gia nhóm")');
-    return result('no_post', 'Không có bài nào chưa bình luận ở đầu bảng tin nhóm');
+    return result('no_post', `Không có bài nào chưa bình luận ở đầu bảng tin nhóm — ${describeStats(stats)}`);
   }
   const { url, author } = chosen;
   log(`Chọn bài ${url}${author ? ` của ${author}` : ''}.`);
@@ -123,34 +123,48 @@ function result(status, error = null, { url = null, author = null, text = null }
   return { status, error, postUrl: url, author, comment: text };
 }
 
+// Không chọn được bài thì vì sao — ghi vào lý do để xem ở /admin/fb-engage, khỏi phải mở nhật ký.
+export function describeStats({ checked, own, done, noLink, kinds }) {
+  return `xét ${checked} bài: ${own} của mình/đã bình luận, ${done} đã bình luận (server nhớ), ${noLink} không lấy được link. Thẻ trên trang: ${kinds || 'chưa đọc được'}`;
+}
+
 // Dò từ đầu bảng tin xuống, cuộn thêm nếu cần. Thấy bài hợp lệ thì đánh dấu thẻ bài (MARK).
 async function pickPost(page, job, log) {
   const skip = new Set((job.skip_posts || []).map(String));
   const own = new Set((job.own_ids || []).map(String));
   const tried = new Set();
-  let checked = 0;
+  const stats = { checked: 0, own: 0, done: 0, noLink: 0, kinds: null };
 
-  for (let round = 0; round <= SCROLLS && checked < MAX_CANDIDATES; round++) {
+  for (let round = 0; round <= SCROLLS && stats.checked < MAX_CANDIDATES; round++) {
     if (round > 0) {
       await page.mouse.wheel(0, 2500);
       await pause(1.5, 2.5);
     }
-    for (const item of await scan(page)) {
-      if (checked >= MAX_CANDIDATES) break;
+    const { units, kinds } = await scan(page);
+    stats.kinds = kinds;
+    for (const item of units) {
+      if (stats.checked >= MAX_CANDIDATES) break;
       const print = fingerprint(item.text).slice(0, 80);
       // Thẻ đang tải (chưa có chữ) để lượt cuộn sau xét lại.
       if (print.length < 10 || tried.has(print)) continue;
       tried.add(print);
-      checked++;
+      stats.checked++;
 
-      if (mentionsOwn(item.links, own)) continue;
+      if (mentionsOwn(item.links, own)) {
+        stats.own++;
+        continue;
+      }
       const links = item.links.some((link) => postUrl(link.href.split('?')[0])) ? item.links : await revealLinks(page, item.index);
       const url = links.map((link) => postUrl(link.href.split('?')[0])).find(Boolean);
       if (!url) {
+        stats.noLink++;
         log('Bỏ một bài: không lấy được link bài.');
         continue;
       }
-      if (skip.has(postKey(url))) continue;
+      if (skip.has(postKey(url))) {
+        stats.done++;
+        continue;
+      }
 
       const marked = await page.evaluate(({ attr, index, mark }) => {
         document.querySelectorAll(`[${mark}]`).forEach((el) => el.removeAttribute(mark));
@@ -159,28 +173,40 @@ async function pickPost(page, job, log) {
         article.setAttribute(mark, '1');
         return true;
       }, { attr: CANDIDATE, index: item.index, mark: MARK });
-      if (marked) return { url, author: authorOf(links) };
+      if (marked) return { chosen: { url, author: authorOf(links) }, stats };
     }
   }
-  return null;
+  log(`Không chọn được bài — ${describeStats(stats)}.`);
+  return { chosen: null, stats };
 }
 
-// Các thẻ bài lớp ngoài cùng (bình luận cũng là role=article nhưng nằm trong bài), đánh số lại mỗi lần.
+// Thẻ bài trên bảng tin, đánh số lại mỗi lần. Facebook có lúc để role=article cho bài, có lúc chỉ cho
+// bình luận — lấy theo thứ tự: khối có aria-posinset (mẫu "feed" chuẩn), role=article lớp ngoài cùng
+// (bình luận nằm trong bài), rồi con trực tiếp của role=feed. kinds: đếm từng loại, ghi vào lý do khi
+// không chọn được bài.
 async function scan(page) {
   return page.evaluate((attr) => {
     const main = document.querySelector('[role="main"]') || document.body;
+    const outermost = (els) => els.filter((el) => !els.some((other) => other !== el && other.contains(el)));
+    const posinset = outermost(Array.from(main.querySelectorAll('[aria-posinset]')));
     const articles = Array.from(main.querySelectorAll('[role="article"]')).filter((a) => !a.parentElement?.closest('[role="article"]'));
+    const feedChildren = Array.from(main.querySelectorAll('[role="feed"] > *')).filter((el) => (el.innerText || '').trim().length > 20);
+    const units = posinset.length ? posinset : articles.length ? articles : feedChildren;
+
     document.querySelectorAll(`[${attr}]`).forEach((el) => el.removeAttribute(attr));
-    return articles.map((article, index) => {
-      article.setAttribute(attr, String(index));
-      return {
-        index,
-        text: (article.innerText || '').slice(0, 1000),
-        links: Array.from(article.querySelectorAll('a[href]'))
-          .slice(0, 300)
-          .map((a) => ({ href: a.href, text: (a.innerText || '').trim().slice(0, 120) })),
-      };
-    });
+    return {
+      kinds: `aria-posinset ${posinset.length} · role=article ${articles.length} · con của role=feed ${feedChildren.length}`,
+      units: units.map((unit, index) => {
+        unit.setAttribute(attr, String(index));
+        return {
+          index,
+          text: (unit.innerText || '').slice(0, 1000),
+          links: Array.from(unit.querySelectorAll('a[href]'))
+            .slice(0, 300)
+            .map((a) => ({ href: a.href, text: (a.innerText || '').trim().slice(0, 120) })),
+        };
+      }),
+    };
   }, CANDIDATE);
 }
 

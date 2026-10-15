@@ -5,7 +5,7 @@ import path from 'node:path';
 import test from 'node:test';
 
 import { feedUrl, postUrl, snippets } from '../lib/comment.mjs';
-import { authorOf, fillName, linkUid, mentionsOwn, postKey, probeOf } from '../lib/engage.mjs';
+import { authorOf, describeStats, fillName, linkUid, mentionsOwn, postKey, probeOf } from '../lib/engage.mjs';
 import { groupKey } from '../lib/groups.mjs';
 import { cleanName, pageLink } from '../lib/pages.mjs';
 import { allowed, isUpload } from '../lib/images.mjs';
@@ -257,4 +257,12 @@ test('cleanName bỏ chữ "Ảnh đại diện của" khỏi tên page', () => 
   assert.equal(cleanName('Shop Xinh\n1,2K người theo dõi'), 'Shop Xinh');
   assert.equal(cleanName('Ảnh đại diện'), null);
   assert.equal(cleanName(''), null);
+});
+
+test('describeStats ghi rõ vì sao không chọn được bài', () => {
+  const text = describeStats({ checked: 5, own: 1, done: 2, noLink: 2, kinds: 'aria-posinset 0 · role=article 5 · con của role=feed 6' });
+  assert.match(text, /xét 5 bài/);
+  assert.match(text, /2 không lấy được link/);
+  assert.match(text, /role=article 5/);
+  assert.match(describeStats({ checked: 0, own: 0, done: 0, noLink: 0, kinds: null }), /chưa đọc được/);
 });
