@@ -13,9 +13,13 @@ import { fingerprint } from './review.mjs';
 import * as ui from './ui.mjs';
 
 const MAX_COMMENT = 2000;
-// Xét tối đa chừng này bài đầu bảng tin, cuộn thêm tối đa chừng này lần.
-const MAX_CANDIDATES = 15;
-const SCROLLS = 3;
+// Không lọc theo ngày: cuộn xuống tới khi gặp bài chưa bình luận. Chỉ dừng khi đã xét chừng này bài,
+// cuộn chừng này lần, hết thời gian (một lượt của bot bị cắt sau 15 phút), hoặc cuộn mãi không ra
+// bài mới (hết bảng tin).
+const MAX_CANDIDATES = 80;
+const MAX_SCROLLS = 30;
+const TIME_BUDGET_MS = 5 * 60_000;
+const STALE_SCROLLS = 3;
 // Đánh số thẻ bài lúc dò — khác MARK (thẻ bài đã chọn để bình luận).
 const CANDIDATE = 'data-tkv-candidate';
 
@@ -89,7 +93,7 @@ export async function engageGroup(page, job, { dryRun = false, onSubmitting = nu
   const { chosen, stats } = await pickPost(page, job, log);
   if (!chosen) {
     if (await notMember(page)) return result('not_allowed', 'Page chưa là thành viên nhóm (thấy nút "Tham gia nhóm")');
-    return result('no_post', `Không có bài nào chưa bình luận ở đầu bảng tin nhóm — ${describeStats(stats)}`);
+    return result('no_post', `Cuộn bảng tin nhóm không gặp bài nào để bình luận — ${describeStats(stats)}`);
   }
   const { url, author } = chosen;
   log(`Chọn bài ${url}${author ? ` của ${author}` : ''}.`);
@@ -134,16 +138,19 @@ async function pickPost(page, job, log) {
   const own = new Set((job.own_ids || []).map(String));
   const tried = new Set();
   const stats = { checked: 0, own: 0, done: 0, noLink: 0, kinds: null };
+  const deadline = Date.now() + TIME_BUDGET_MS;
+  let stale = 0;
 
-  for (let round = 0; round <= SCROLLS && stats.checked < MAX_CANDIDATES; round++) {
+  for (let round = 0; round <= MAX_SCROLLS && stats.checked < MAX_CANDIDATES && stale < STALE_SCROLLS && Date.now() < deadline; round++) {
     if (round > 0) {
       await page.mouse.wheel(0, 2500);
       await pause(1.5, 2.5);
     }
     const { units, kinds } = await scan(page);
     stats.kinds = kinds;
+    const before = stats.checked;
     for (const item of units) {
-      if (stats.checked >= MAX_CANDIDATES) break;
+      if (stats.checked >= MAX_CANDIDATES || Date.now() >= deadline) break;
       const print = fingerprint(item.text).slice(0, 80);
       // Thẻ đang tải (chưa có chữ) để lượt cuộn sau xét lại.
       if (print.length < 10 || tried.has(print)) continue;
@@ -175,6 +182,7 @@ async function pickPost(page, job, log) {
       }, { attr: CANDIDATE, index: item.index, mark: MARK });
       if (marked) return { chosen: { url, author: authorOf(links) }, stats };
     }
+    stale = stats.checked === before ? stale + 1 : 0;
   }
   log(`Không chọn được bài — ${describeStats(stats)}.`);
   return { chosen: null, stats };
