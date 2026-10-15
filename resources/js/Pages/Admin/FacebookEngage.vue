@@ -18,7 +18,8 @@ const props = defineProps({
     runner: Object,
     profiles: Array,
     groups: Array,
-    history: Array,
+    // Phân trang Laravel: { data, current_page, last_page, total, prev_page_url, next_page_url }.
+    history: Object,
 })
 
 function flashToast() {
@@ -105,6 +106,11 @@ function setShown(engageEnabled) {
 }
 
 // ── Lịch sử ─────────────────────────────────────────────────────────────────
+// Chỉ tải lại bảng lịch sử. Tự tải lại 30 giây giữ nguyên ?page= trên URL nên vẫn ở trang đang xem.
+function goPage(url) {
+    if (url) router.get(url, {}, { preserveState: true, preserveScroll: true, only: ['history'] })
+}
+
 const statusText = {
     claimed: ['Đang làm', 'text-amber-600'],
     commented: ['Đã bình luận', 'font-semibold text-green-600'],
@@ -277,7 +283,7 @@ const statusText = {
 
         <!-- 4. Lịch sử -->
         <section class="bg-[var(--color-surface)] rounded-2xl border border-[var(--color-line)] p-5">
-            <h2 class="font-extrabold text-[var(--color-ink)] mb-3">4. Bình luận gần đây</h2>
+            <h2 class="font-extrabold text-[var(--color-ink)] mb-3">4. Bình luận gần đây ({{ history.total }})</h2>
             <div class="overflow-x-auto rounded-xl border border-[var(--color-line)]">
                 <table class="w-full text-sm">
                     <thead class="bg-[var(--color-peach-soft)]">
@@ -289,7 +295,7 @@ const statusText = {
                         </tr>
                     </thead>
                     <tbody class="divide-y divide-[var(--color-line)]">
-                        <tr v-for="c in history" :key="c.id">
+                        <tr v-for="c in history.data" :key="c.id">
                             <td class="px-4 py-2.5 text-xs text-[var(--color-muted)] whitespace-nowrap">{{ fmt(c.claimed_at) }}</td>
                             <td class="px-4 py-2.5 text-xs">
                                 <span class="font-semibold text-[var(--color-ink)]">{{ c.group || '—' }}</span>
@@ -307,11 +313,25 @@ const statusText = {
                                 <p v-if="c.error" class="text-[var(--color-muted)] mt-0.5 max-w-xs">{{ c.error }}</p>
                             </td>
                         </tr>
-                        <tr v-if="!history.length">
+                        <tr v-if="!history.data.length">
                             <td colspan="4" class="px-4 py-8 text-center text-[var(--color-muted)]">Chưa có lượt bình luận nào.</td>
                         </tr>
                     </tbody>
                 </table>
+            </div>
+
+            <div v-if="history.last_page > 1" class="flex items-center justify-center gap-3 mt-4">
+                <button @click="goPage(history.prev_page_url)" :disabled="!history.prev_page_url"
+                    class="flex-1 md:flex-none px-4 py-2.5 md:py-2 rounded-xl text-sm font-semibold bg-[var(--color-surface)] border border-[var(--color-line)] disabled:opacity-40 disabled:cursor-not-allowed">
+                    ← Trước
+                </button>
+                <span class="flex-none text-xs text-[var(--color-muted)] tabular-nums">
+                    {{ history.current_page }} / {{ history.last_page }}
+                </span>
+                <button @click="goPage(history.next_page_url)" :disabled="!history.next_page_url"
+                    class="flex-1 md:flex-none px-4 py-2.5 md:py-2 rounded-xl text-sm font-semibold bg-[var(--color-surface)] border border-[var(--color-line)] disabled:opacity-40 disabled:cursor-not-allowed">
+                    Sau →
+                </button>
             </div>
         </section>
     </AdminLayout>

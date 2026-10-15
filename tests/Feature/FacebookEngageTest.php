@@ -333,6 +333,30 @@ class FacebookEngageTest extends TestCase
         $this->assertFalse($settings->enabled());
     }
 
+    public function test_history_is_paginated_newest_first(): void
+    {
+        $group = $this->group();
+        foreach (range(1, 25) as $n) {
+            FacebookEngageComment::create([
+                'facebook_group_id' => $group->id,
+                'facebook_profile_id' => $this->page->id,
+                'status' => FacebookEngageComment::COMMENTED,
+                'comment' => "Câu {$n}",
+                'claimed_at' => now(),
+            ]);
+        }
+
+        $admin = $this->actingAs($this->createAdmin());
+        $admin->get('/admin/fb-engage')->assertInertia(fn (Assert $page) => $page
+            ->where('history.total', 25)
+            ->where('history.last_page', 2)
+            ->has('history.data', 20)
+            ->where('history.data.0.comment', 'Câu 25'));
+        $admin->get('/admin/fb-engage?page=2')->assertInertia(fn (Assert $page) => $page
+            ->has('history.data', 5)
+            ->where('history.data.4.comment', 'Câu 1'));
+    }
+
     public function test_non_admin_cannot_open_page(): void
     {
         $this->get('/admin/fb-engage')->assertRedirect();

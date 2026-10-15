@@ -20,7 +20,7 @@ use Inertia\Response;
  */
 class FacebookEngageController extends Controller
 {
-    private const HISTORY_LIMIT = 50;
+    private const HISTORY_PER_PAGE = 20;
 
     public function __construct(
         private FacebookEngageSettings $settings,
@@ -73,9 +73,9 @@ class FacebookEngageController extends Controller
             ]),
             'history' => FacebookEngageComment::with(['group:id,name,fb_group_key', 'profile'])
                 ->latest('id')
-                ->limit(self::HISTORY_LIMIT)
-                ->get()
-                ->map(fn (FacebookEngageComment $c) => [
+                ->paginate(self::HISTORY_PER_PAGE)
+                ->withQueryString()
+                ->through(fn (FacebookEngageComment $c) => [
                     'id' => $c->id,
                     'status' => $c->status,
                     'group' => $c->group ? ($c->group->name ?: $c->group->fb_group_key) : null,
