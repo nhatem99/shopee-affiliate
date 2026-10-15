@@ -101,6 +101,13 @@ class FacebookGroupController extends Controller
                 'acting' => $acting?->is($profile) ?? false,
             ]),
             'profilesSupported' => FacebookGroupPostScheduler::runnerSupportsProfiles($runner['version']),
+            // Nút "Chuyển sang": yêu cầu đang chờ bot, kết quả lần chuyển gần nhất.
+            'switching' => [
+                'supported' => FacebookGroupPostScheduler::runnerSupportsSwitch($runner['version']),
+                'min_version' => FacebookGroupPostScheduler::SWITCH_MIN_VERSION,
+                'requested_id' => $this->settings->switchRequest(),
+                'result' => $this->settings->switchResult(),
+            ],
             'profilesMinVersion' => FacebookGroupPostScheduler::PROFILES_MIN_VERSION,
             'groups' => $groups->map(fn (FacebookGroup $group) => collect($group->toArray())->except('profiles')->all() + $readiness[$group->id] + [
                 'profile_ids' => $group->profiles->pluck('id'),

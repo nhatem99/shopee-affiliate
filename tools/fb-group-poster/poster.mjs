@@ -492,6 +492,15 @@ async function doComment(api, cfg, browser, job) {
   if (code !== 200) log(`Server không nhận kết quả bình luận (HTTP ${code}).`);
 }
 
+// Admin bấm "Chuyển sang" một page ở /admin/fb-groups: chuyển Chromium sang page đó rồi báo lại.
+async function doSwitch(api, browser, job) {
+  log(`Admin yêu cầu chuyển sang ${job.profile.name}.`);
+  const switched = await switchTo(browser, job.profile, { log });
+  if (!switched.ok && ['checkpoint', 'blocked'].includes(switched.status)) pendingState = switched.status;
+  log(switched.ok ? `Đã chuyển — đang dùng uid ${switched.actorId}.` : `Không chuyển được: ${switched.error}`);
+  await api.reportSwitch(job.profile.id, switched);
+}
+
 // Bình luận dạo một bài trong nhóm follow chéo bằng page server giao. Facebook chặn bình luận thì chỉ
 // báo qua kết quả — server tắt bình luận dạo, đăng deal vẫn chạy. Bắt xác minh/đăng xuất thì báo thêm
 // ở lượt hỏi việc kế tiếp để server dừng cả bot.
@@ -562,6 +571,11 @@ async function tick(api, state, cfg, browser) {
     lastIdle = null;
     await doReview(api, browser, job);
     return rand(20, 40);
+  }
+  if (job.type === 'switch_profile') {
+    lastIdle = null;
+    await doSwitch(api, browser, job);
+    return 20;
   }
   if (job.type === 'engage') {
     lastIdle = null;

@@ -25,6 +25,7 @@ Route::prefix('runner/fb')
         Route::post('/posts/{id}/result', [FacebookRunnerController::class, 'result'])->whereNumber('id')->name('result');
         Route::post('/posts/{id}/comment', [FacebookRunnerController::class, 'comment'])->whereNumber('id')->name('comment');
         Route::post('/engage/{id}/result', [FacebookRunnerController::class, 'engage'])->whereNumber('id')->name('engage');
+        Route::post('/switch-result', [FacebookRunnerController::class, 'switched'])->name('switch-result');
         Route::post('/groups', [FacebookRunnerController::class, 'groups'])->name('groups');
         Route::post('/groups/{id}/review', [FacebookRunnerController::class, 'review'])->whereNumber('id')->name('review');
         Route::get('/images/{name}', [FacebookRunnerController::class, 'image'])->where('name', FacebookPostImages::NAME_PATTERN)->name('image');
@@ -42,6 +43,7 @@ Route::middleware(['web', 'auth', 'auth.admin'])->prefix('admin')->name('admin.'
     Route::patch('/fb-groups/profiles/{facebookProfile}', [FacebookProfileController::class, 'update'])->name('fb-profiles.update');
     Route::post('/fb-groups/profiles/{facebookProfile}/move', [FacebookProfileController::class, 'move'])->name('fb-profiles.move');
     Route::post('/fb-groups/profiles/{facebookProfile}/unblock', [FacebookProfileController::class, 'unblock'])->name('fb-profiles.unblock');
+    Route::post('/fb-groups/profiles/{facebookProfile}/switch', [FacebookProfileController::class, 'switch'])->name('fb-profiles.switch');
     Route::delete('/fb-groups/profiles/{facebookProfile}', [FacebookProfileController::class, 'destroy'])->name('fb-profiles.destroy');
     Route::post('/fb-groups', [FacebookGroupController::class, 'store'])->name('fb-groups.store');
     Route::patch('/fb-groups/{facebookGroup}', [FacebookGroupController::class, 'update'])->name('fb-groups.update');

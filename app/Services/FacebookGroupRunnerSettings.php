@@ -38,6 +38,10 @@ class FacebookGroupRunnerSettings
 
     private const REVIEW_REQUESTED_KEY = 'fb_runner_review_requested_at';
 
+    private const SWITCH_REQUEST_KEY = 'fb_runner_switch_request';
+
+    private const SWITCH_RESULT_KEY = 'fb_runner_switch_result';
+
     /**
      * Mặc định "thận trọng": một nick cá nhân đăng cùng một link vào nhiều nhóm là đúng kiểu
      * Facebook bắt spam — mất nick đắt hơn nhiều so với đăng chậm. max_per_day là trần chung của
@@ -185,6 +189,38 @@ class FacebookGroupRunnerSettings
             ['last_seen_at' => null, 'state' => null, 'version' => null, 'account' => null, 'account_id' => null, 'actor_id' => null],
             is_array($stored) ? $stored : [],
         );
+    }
+
+    /** Admin bấm "Chuyển sang" một page — bot chuyển Chromium sang page đó ở lượt hỏi việc tới. */
+    public function requestSwitch(int $profileId): void
+    {
+        Setting::set(self::SWITCH_REQUEST_KEY, (string) $profileId);
+    }
+
+    public function switchRequest(): ?int
+    {
+        $value = (string) Setting::get(self::SWITCH_REQUEST_KEY, '');
+
+        return ctype_digit($value) ? (int) $value : null;
+    }
+
+    public function clearSwitchRequest(): void
+    {
+        Setting::set(self::SWITCH_REQUEST_KEY, '');
+    }
+
+    /** @param  array{profile_id: int, ok: bool, error: ?string}  $result */
+    public function recordSwitchResult(array $result): void
+    {
+        Setting::set(self::SWITCH_RESULT_KEY, json_encode($result + ['at' => now()->toIso8601String()]));
+    }
+
+    /** @return array{profile_id: int, ok: bool, error: ?string, at: string}|null */
+    public function switchResult(): ?array
+    {
+        $stored = json_decode((string) Setting::get(self::SWITCH_RESULT_KEY, ''), true);
+
+        return is_array($stored) && isset($stored['profile_id']) ? $stored : null;
     }
 
     public function requestSync(): void

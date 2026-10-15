@@ -25,6 +25,8 @@ const props = defineProps({
     profiles: Array,
     profilesSupported: Boolean,
     profilesMinVersion: String,
+    // { supported, min_version, requested_id, result } — nút "Chuyển sang".
+    switching: Object,
     groups: Array,
 })
 
@@ -42,7 +44,7 @@ function fmt(iso) {
 // Trang tự tải lại trạng thái mỗi 30 giây — bot hỏi việc 1-2 phút/lần, nhìn trang là biết nó còn chạy.
 let timer = null
 onMounted(() => {
-    timer = setInterval(() => router.reload({ only: ['runner', 'paused', 'pausedReason', 'blocking', 'today', 'syncRequested', 'lastSyncedAt', 'review', 'profiles', 'profilesSupported', 'groups'] }), 30000)
+    timer = setInterval(() => router.reload({ only: ['runner', 'paused', 'pausedReason', 'blocking', 'today', 'syncRequested', 'lastSyncedAt', 'review', 'profiles', 'profilesSupported', 'switching', 'groups'] }), 30000)
 })
 onBeforeUnmount(() => clearInterval(timer))
 
@@ -99,6 +101,17 @@ function setProfileCap(p, event) {
 function moveProfile(p, direction) {
     router.post(`/admin/fb-groups/profiles/${p.id}/move`, { direction }, { preserveScroll: true })
 }
+
+function switchProfile(p) {
+    router.post(`/admin/fb-groups/profiles/${p.id}/switch`, {}, { preserveScroll: true, onSuccess: flashToast })
+}
+
+const switchResultText = computed(() => {
+    const r = props.switching.result
+    if (!r) return null
+    const label = profileLabels.value[r.profile_id] || `page #${r.profile_id}`
+    return r.ok ? `Đã chuyển sang ${label} lúc ${fmt(r.at)}.` : `Không chuyển được sang ${label} lúc ${fmt(r.at)}: ${r.error}`
+})
 
 function unblockProfile(p) {
     if (!confirm(`Facebook chặn "${p.label}" lúc ${fmt(p.blocked_at)}. Đã để page nghỉ đủ (1–2 ngày) chưa? Mở lại thì bot đăng bằng page này ngay khi tới lượt.`)) return
@@ -261,6 +274,15 @@ const enabledCount = computed(() => props.groups.filter(g => g.enabled).length)
                 page sau đăng tiếp. Thêm Trang mà nick chính đang quản trị — bot tự bấm "Chuyển ngay" để đăng bằng Trang. Trang phải tự
                 tham gia từng nhóm (nhóm phải cho Trang tham gia); thêm page xong bot tự lấy danh sách nhóm của page.
             </p>
+            <p class="text-sm text-[var(--color-muted)] mb-3">
+                Nút <span class="font-semibold">Chuyển sang</span>: bot đang chạy chuyển Chromium sang page đó ở lượt hỏi việc tới (tối đa vài phút) — tiện khi muốn
+                tự thao tác hay chạy lệnh thử bằng page đó. Việc sau cần page khác (đăng deal, bình luận dạo) thì bot lại tự chuyển.
+            </p>
+            <p v-if="!switching.supported" class="text-xs text-amber-600 mb-3">
+                Bot đang chạy bản {{ runner.version || 'cũ' }} — từ bản {{ switching.min_version }} bot mới làm theo nút "Chuyển sang".
+                Cập nhật bot (<span class="font-mono">git pull</span> trên điện thoại rồi chạy lại bot).
+            </p>
+            <p v-if="switchResultText" class="text-xs mb-3" :class="switching.result.ok ? 'text-green-600' : 'text-red-500'">{{ switchResultText }}</p>
             <p v-if="!profilesSupported" class="text-xs text-amber-600 mb-3">
                 Bot đang chạy bản {{ runner.version || 'cũ' }} — từ bản {{ profilesMinVersion }} bot mới chuyển page được, bản cũ chỉ đăng bằng nick chính.
                 Cập nhật bot (<span class="font-mono">git pull</span> trên điện thoại rồi chạy lại bot).
@@ -306,6 +328,8 @@ const enabledCount = computed(() => props.groups.filter(g => g.enabled).length)
                                 <p v-if="p.blocked_reason" class="text-red-500 mt-0.5 max-w-xs">{{ p.blocked_reason }}</p>
                             </td>
                             <td class="px-4 py-2.5 text-right whitespace-nowrap space-x-3">
+                                <span v-if="switching.requested_id === p.id" class="text-xs text-amber-600">Chờ bot chuyển…</span>
+                                <button v-else-if="!p.acting" @click="switchProfile(p)" class="text-xs font-semibold text-[var(--color-accent)] hover:underline">Chuyển sang</button>
                                 <button v-if="p.blocked_at" @click="unblockProfile(p)" class="text-xs font-semibold text-[var(--color-accent)] hover:underline">Mở lại</button>
                                 <button @click="updateProfile(p, { enabled: !p.enabled })" class="text-xs font-semibold text-[var(--color-accent)] hover:underline">{{ p.enabled ? 'Tắt' : 'Bật' }}</button>
                                 <button v-if="!p.is_primary" @click="removeProfile(p)" class="text-xs font-semibold text-red-500 hover:underline">Xoá</button>

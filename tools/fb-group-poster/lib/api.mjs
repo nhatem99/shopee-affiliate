@@ -137,6 +137,17 @@ export class Api {
     throw new ApiError(`Không báo được kết quả bình luận dạo #${engageId}: ${last?.message}`);
   }
 
+  // Kết quả việc "switch_profile". Lỗi thì chỉ ghi log — trang admin vẫn thấy page đang mở qua lượt hỏi việc.
+  async reportSwitch(profileId, switched) {
+    const [status] = await this.post('/runner/fb/switch-result', {
+      profile_id: profileId,
+      ok: Boolean(switched.ok),
+      error: switched.ok ? null : String(switched.error || '').slice(0, 1000),
+      actor_id: switched.ok ? switched.actorId ?? null : null,
+    });
+    return status;
+  }
+
   // Ảnh admin tự tải lên cho bài — chỉ server của mình có, phải kèm token. `path` đã được
   // images.mjs kiểm đúng dạng /runner/fb/images/<tên> nên không gọi được đường nào khác.
   async download(path, maxBytes) {

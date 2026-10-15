@@ -7,8 +7,9 @@ import path from 'node:path';
 // việc kiểm tra duyệt bài từ 1.2.0 (FacebookGroupReviewChecker::MIN_VERSION), bài của các page
 // ngoài nick chính từ 1.3.0 (FacebookGroupPostScheduler::PROFILES_MIN_VERSION), bài "link ở bình
 // luận" và việc bình luận link từ 1.4.0 (FacebookGroupCommentQueue::MIN_VERSION), việc bình luận dạo
-// nhóm follow chéo từ 1.5.0 (FacebookEngageQueue::MIN_VERSION).
-export const VERSION = '1.5.0-node';
+// nhóm follow chéo từ 1.5.0 (FacebookEngageQueue::MIN_VERSION), nút "Chuyển sang" page ở trang
+// admin từ 1.6.0 (FacebookGroupPostScheduler::SWITCH_MIN_VERSION).
+export const VERSION = '1.6.0-node';
 
 const home = (p) => (p.startsWith('~') ? path.join(os.homedir(), p.slice(1)) : p);
 

@@ -164,6 +164,10 @@ mở trang của page rồi bấm **Chuyển ngay** (như bấm tay). Muốn v�
 `i_user`. Trang phải tự tham gia từng nhóm, và nhóm phải cho Trang tham gia. Thêm page xong, bot tự
 lấy danh sách nhóm của page đó.
 
+Muốn bot đang chạy chuyển sang một page (để tự thao tác trên Chromium hay chạy lệnh thử bằng page
+đó): bấm **Chuyển sang** ở dòng page đó trên `/admin/fb-groups` (bot từ 1.6.0) — bot chuyển ở lượt
+hỏi việc tới, kết quả hiện ngay trên mục Page đăng bài. Việc sau cần page khác thì bot tự chuyển đi.
+
 Thử tay trước khi cho bot chạy thật. **Tắt bot chạy nền trước** (xem cuối mục 4): hai bot cùng
 điều khiển một Chromium sẽ giẫm chân nhau.
 

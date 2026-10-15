@@ -95,6 +95,21 @@ class FacebookRunnerController extends Controller
         return response()->json(['ok' => true]);
     }
 
+    /** Bot báo kết quả việc "switch_profile" — admin bấm "Chuyển sang" một page. */
+    public function switched(Request $request): JsonResponse
+    {
+        $data = $request->validate([
+            'profile_id' => ['required', 'integer'],
+            'ok' => ['required', 'boolean'],
+            'error' => ['nullable', 'string', 'max:1000'],
+            'actor_id' => ['nullable', 'string', 'regex:'.self::FB_ID],
+        ]);
+
+        $this->scheduler->recordSwitch(FacebookProfile::findOrFail($data['profile_id']), $data['ok'], $data['error'] ?? null, $data['actor_id'] ?? null);
+
+        return response()->json(['ok' => true]);
+    }
+
     /** Bot báo kết quả việc "engage" — bình luận dạo một bài trong nhóm follow chéo. */
     public function engage(Request $request, FacebookEngageQueue $engage, int $id): JsonResponse
     {

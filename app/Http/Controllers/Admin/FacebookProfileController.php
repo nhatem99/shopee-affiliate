@@ -90,6 +90,17 @@ class FacebookProfileController extends Controller
         return back()->with('success', 'Đã mở lại '.$facebookProfile->label().'.');
     }
 
+    /**
+     * Xin bot đang chạy chuyển Chromium sang page này (nick chính: về nick chính). Bot làm ở lượt hỏi
+     * việc tới; việc sau cần page khác thì bot lại tự chuyển đi.
+     */
+    public function switch(FacebookProfile $facebookProfile, FacebookGroupRunnerSettings $settings): RedirectResponse
+    {
+        $settings->requestSwitch($facebookProfile->id);
+
+        return back()->with('success', 'Đã gửi yêu cầu — bot chuyển sang '.$facebookProfile->label().' ở lượt hỏi việc tới (tối đa vài phút).');
+    }
+
     public function destroy(FacebookProfile $facebookProfile): RedirectResponse
     {
         if ($facebookProfile->is_primary) {

@@ -56,6 +56,9 @@ class FacebookGroupPostScheduler
      */
     public const PROFILES_MIN_VERSION = '1.3.0';
 
+    /** Bot từ bản này mới làm việc "switch_profile" (admin bấm "Chuyển sang" một page). */
+    public const SWITCH_MIN_VERSION = '1.6.0';
+
     private const PAUSE_REASONS = [
         'checkpoint' => 'Facebook bắt xác minh tài khoản hoặc nick đã bị đăng xuất',
         'logged_out' => 'Nick Facebook trên máy chạy bot đã bị đăng xuất',
@@ -74,8 +77,9 @@ class FacebookGroupPostScheduler
     ) {}
 
     /**
-     * Bot hỏi việc. Trả về một trong sáu dạng:
+     * Bot hỏi việc. Trả về một trong bảy dạng:
      *  • ['type' => 'post', ...]        — đăng bài này;
+     *  • ['type' => 'switch_profile', 'profile'] — admin bấm "Chuyển sang": chuyển Chromium sang page;
      *  • ['type' => 'sync_groups']      — lấy lại danh sách nhóm đã tham gia;
      *  • ['type' => 'comment', ...]     — bình luận link mua vào bài đã lên nhóm;
      *  • ['type' => 'review_group', ...] — lúc rảnh: xem bài đã đăng có được duyệt không;
@@ -113,10 +117,15 @@ class FacebookGroupPostScheduler
             return $this->idle('busy', 60);
         }
 
+        // Admin tự bấm chuyển — làm cả khi đang tạm dừng (thường là lúc admin muốn tự thao tác).
+        $version = $runner['version'] ?? null;
+        if ($switch = $this->switchJob($version)) {
+            return $switch;
+        }
+
         if ($this->settings->paused()) {
             return $this->idle('paused', 300);
         }
-        $version = $runner['version'] ?? null;
         if ($this->settings->syncRequested()) {
             // Giao một lần rồi xoá cờ: bot lấy hỏng (không chuyển được page, Facebook đổi giao
             // diện...) mà giữ cờ thì lượt hỏi nào cũng lại mở Facebook lấy nhóm. Hỏng thì bấm lại.
@@ -266,6 +275,11 @@ class FacebookGroupPostScheduler
     public static function runnerSupportsProfiles(?string $version): bool
     {
         return self::runnerAtLeast($version, self::PROFILES_MIN_VERSION);
+    }
+
+    public static function runnerSupportsSwitch(?string $version): bool
+    {
+        return self::runnerAtLeast($version, self::SWITCH_MIN_VERSION);
     }
 
     public static function runnerAtLeast(?string $version, string $min): bool
@@ -418,6 +432,22 @@ class FacebookGroupPostScheduler
         }
 
         return true;
+    }
+
+    /**
+     * Bot báo đã chuyển (hoặc không chuyển được) sang page admin bấm "Chuyển sang". Page thêm bằng
+     * link tên rút gọn thì lấy luôn uid bot thấy.
+     */
+    public function recordSwitch(FacebookProfile $profile, bool $ok, ?string $error, ?string $actorId): void
+    {
+        if ($ok) {
+            $this->rememberPageId($profile, $actorId);
+        }
+        $this->settings->recordSwitchResult([
+            'profile_id' => $profile->id,
+            'ok' => $ok,
+            'error' => $ok ? null : Str::limit($error ?: 'Không rõ lý do', 490),
+        ]);
     }
 
     /**
@@ -633,6 +663,22 @@ class FacebookGroupPostScheduler
             'type' => 'sync_groups',
             'profiles' => FacebookProfile::where('enabled', true)->ordered()->get()->map->forRunner()->all(),
         ];
+    }
+
+    /**
+     * Giao một lần rồi xoá yêu cầu, như lấy nhóm. Bot cũ không biết việc này — để yêu cầu nằm chờ tới
+     * khi bot được cập nhật (trang admin báo).
+     */
+    private function switchJob(?string $runnerVersion): ?array
+    {
+        $id = $this->settings->switchRequest();
+        if ($id === null || ! self::runnerSupportsSwitch($runnerVersion)) {
+            return null;
+        }
+        $this->settings->clearSwitchRequest();
+        $profile = FacebookProfile::find($id);
+
+        return $profile ? ['type' => 'switch_profile', 'profile' => $profile->forRunner()] : null;
     }
 
     /** Bài chưa lên nhóm, đưa về hàng chờ để page khác nhận (giữ queued_at — hạn chờ vẫn tính). */
