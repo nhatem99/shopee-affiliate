@@ -7,7 +7,7 @@ import test from 'node:test';
 import { feedUrl, postUrl, snippets } from '../lib/comment.mjs';
 import { authorOf, fillName, linkUid, mentionsOwn, postKey, probeOf } from '../lib/engage.mjs';
 import { groupKey } from '../lib/groups.mjs';
-import { pageLink } from '../lib/pages.mjs';
+import { cleanName, pageLink } from '../lib/pages.mjs';
 import { allowed, isUpload } from '../lib/images.mjs';
 import { identity } from '../lib/browser.mjs';
 import { GROUP_URL, postUrlFromResponse } from '../lib/post.mjs';
@@ -249,4 +249,12 @@ test('pageLink nhận link trang của page, giống FacebookProfile::parseUrl',
   assert.equal(pageLink('https://www.facebook.com/ShopXinh.VN/inbox'), null);
   assert.equal(pageLink('https://www.facebook.com/groups/abc/'), null);
   assert.equal(pageLink('https://evil.com/ShopXinh.VN'), null);
+});
+
+test('cleanName bỏ chữ "Ảnh đại diện của" khỏi tên page', () => {
+  assert.equal(cleanName('Ảnh đại diện của Mẹ Của Bi'), 'Mẹ Của Bi');
+  assert.equal(cleanName('Profile picture of Shop Xinh'), 'Shop Xinh');
+  assert.equal(cleanName('Shop Xinh\n1,2K người theo dõi'), 'Shop Xinh');
+  assert.equal(cleanName('Ảnh đại diện'), null);
+  assert.equal(cleanName(''), null);
 });

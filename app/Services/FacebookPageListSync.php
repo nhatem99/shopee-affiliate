@@ -37,14 +37,16 @@ class FacebookPageListSync
             if ($parsed === null || ($parsed['fb_id'] !== null && $parsed['fb_id'] === $primaryId)) {
                 continue;
             }
-            $name = Str::limit(trim((string) ($item['name'] ?? '')), 250, '') ?: null;
+            $name = Str::limit(self::cleanName((string) ($item['name'] ?? '')), 250, '') ?: null;
 
             $match = $this->match($profiles, $parsed, $name);
             if ($match) {
                 if (isset($seen[$match->id])) {
                     continue;
                 }
-                $changes = ['missing_since' => null, 'name' => $match->name ?: $name];
+                // Tên cũ đọc nhầm chữ mô tả ảnh đại diện (bot 1.7.0 đầu tiên) thì lấy tên mới.
+                $stale = $match->name === null || self::cleanName($match->name) !== $match->name;
+                $changes = ['missing_since' => null, 'name' => $stale ? ($name ?? (self::cleanName((string) $match->name) ?: null)) : $match->name];
                 if ($match->fb_id === null && $parsed['fb_id'] !== null && ! FacebookProfile::where('fb_id', $parsed['fb_id'])->exists()) {
                     $changes['fb_id'] = $parsed['fb_id'];
                 }
@@ -84,6 +86,15 @@ class FacebookPageListSync
         Log::info('FacebookPageListSync: đã đối chiếu danh sách page', $result + ['received' => count($pages)]);
 
         return $result;
+    }
+
+    /**
+     * Bỏ chữ mô tả ảnh đại diện ("Ảnh đại diện của <tên>") Facebook để ở aria-label — giống
+     * cleanName() trong tools/fb-group-poster/lib/pages.mjs.
+     */
+    public static function cleanName(string $name): string
+    {
+        return trim((string) preg_replace('/^\s*(ảnh đại diện( của)?|profile (picture|photo)( of)?)\s*/iu', '', $name));
     }
 
     /** Bot không đọc được trang (Facebook bắt xác minh, đổi giao diện...) — chỉ ghi lại để admin thấy. */

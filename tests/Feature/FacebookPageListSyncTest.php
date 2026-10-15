@@ -104,6 +104,23 @@ class FacebookPageListSyncTest extends TestCase
         $this->assertNull($page->fresh()->missing_since);
     }
 
+    public function test_avatar_label_names_are_cleaned_and_old_wrong_names_fixed(): void
+    {
+        // Bot 1.7.0 đầu tiên lưu nhầm chữ mô tả ảnh đại diện làm tên page.
+        $wrong = $this->page(['fb_id' => '61550000000001', 'url' => FacebookProfile::profileUrl('61550000000001'), 'name' => 'Ảnh đại diện của Mẹ Của Bi']);
+        $kept = $this->page(['fb_id' => '61550000000002', 'url' => FacebookProfile::profileUrl('61550000000002'), 'name' => 'Tên tôi tự đặt']);
+
+        $this->upload([
+            ['url' => FacebookProfile::profileUrl('61550000000001'), 'name' => 'Mẹ Của Bi'],
+            ['url' => FacebookProfile::profileUrl('61550000000002'), 'name' => 'Shop Hai'],
+            ['url' => FacebookProfile::profileUrl('61550000000003'), 'name' => 'Ảnh đại diện của Shop Ba'],
+        ])->assertOk();
+
+        $this->assertSame('Mẹ Của Bi', $wrong->fresh()->name);
+        $this->assertSame('Tên tôi tự đặt', $kept->fresh()->name);
+        $this->assertSame('Shop Ba', FacebookProfile::where('fb_id', '61550000000003')->value('name'));
+    }
+
     public function test_empty_list_or_error_changes_nothing(): void
     {
         $page = $this->page(['fb_id' => '61550000000001', 'url' => FacebookProfile::profileUrl('61550000000001')]);

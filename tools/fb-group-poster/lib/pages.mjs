@@ -15,6 +15,14 @@ const NOT_PAGES = new Set([
 
 const rand = (low, high) => Math.floor(low + Math.random() * (high - low + 1));
 
+// Chữ mô tả ảnh đại diện ("Ảnh đại diện của <tên>") — không phải tên page. Giống
+// FacebookPageListSync::cleanName phía server.
+const AVATAR_LABEL = /^\s*(ảnh đại diện( của)?|profile (picture|photo)( of)?)\s*/iu;
+
+export function cleanName(text) {
+  return String(text || '').replace(AVATAR_LABEL, '').split('\n').map((line) => line.trim()).find(Boolean) || null;
+}
+
 // Link tới trang của một page: profile.php?id=<uid>, /people/<tên>/<uid>/, hoặc /<tên rút gọn>.
 // Trả { url, fb_id } (giống FacebookProfile::parseUrl phía server), không phải link page thì null.
 export function pageLink(href) {
@@ -55,18 +63,22 @@ export async function scrapeManagedPages(page, { exclude = [], maxPages = 300, l
     const links = await page.evaluate(() =>
       Array.from((document.querySelector('[role="main"]') || document.body).querySelectorAll('a[href]')).map((a) => ({
         href: a.href,
-        text: (a.innerText || a.getAttribute('aria-label') || '').trim(),
+        text: (a.innerText || '').trim(),
+        label: (a.getAttribute('aria-label') || '').trim(),
       })),
     );
     for (const link of links) {
       const parsed = pageLink(link.href);
       if (!parsed || skip.has(parsed.fb_id)) continue;
       const key = parsed.fb_id || parsed.url.toLowerCase();
-      if (!found.has(key)) found.set(key, { url: parsed.url, name: null });
-      // Link đầu tiên của một page có khi chỉ là ảnh đại diện (không có chữ) — lấy tên ở link sau.
+      if (!found.has(key)) found.set(key, { url: parsed.url, name: null, fromLabel: false });
+      // Link đầu tiên của một page thường là ảnh đại diện (không chữ, aria-label "Ảnh đại diện của
+      // <tên>") — ưu tiên chữ của link tên; chỉ dùng aria-label (bỏ phần "Ảnh đại diện của") khi không có.
       const entry = found.get(key);
-      const name = link.text.split('\n').map((line) => line.trim()).find(Boolean);
-      if (!entry.name && name) entry.name = name.slice(0, 255);
+      const text = cleanName(link.text);
+      if (text && (!entry.name || entry.fromLabel)) Object.assign(entry, { name: text.slice(0, 255), fromLabel: false });
+      const label = cleanName(link.label);
+      if (!entry.name && label) Object.assign(entry, { name: label.slice(0, 255), fromLabel: true });
     }
     unchanged = found.size === before ? unchanged + 1 : 0;
     await page.mouse.wheel(0, 3000);
@@ -74,5 +86,5 @@ export async function scrapeManagedPages(page, { exclude = [], maxPages = 300, l
   }
 
   log(`Tìm thấy ${found.size} page.`);
-  return [...found.values()];
+  return [...found.values()].map(({ url, name }) => ({ url, name }));
 }

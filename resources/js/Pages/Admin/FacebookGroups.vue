@@ -221,9 +221,18 @@ function remove(group) {
 }
 
 const filter = ref('')
+// '' = mọi page, 'none' = nhóm chưa page nào vào, số = id page.
+const profileFilter = ref('')
 const shownGroups = computed(() => {
     const q = filter.value.trim().toLowerCase()
-    return q ? props.groups.filter(g => (g.name || '').toLowerCase().includes(q) || g.url.includes(q)) : props.groups
+    const profile = profileFilter.value
+    return props.groups.filter(g => (!q || (g.name || '').toLowerCase().includes(q) || g.url.includes(q))
+        && (profile === '' || (profile === 'none' ? !g.profile_ids.length : g.profile_ids.includes(profile))))
+})
+const groupCountByProfile = computed(() => {
+    const counts = {}
+    for (const g of props.groups) for (const id of g.profile_ids) counts[id] = (counts[id] || 0) + 1
+    return counts
 })
 const enabledCount = computed(() => props.groups.filter(g => g.enabled).length)
 </script>
@@ -482,8 +491,17 @@ const enabledCount = computed(() => props.groups.filter(g => g.enabled).length)
             <p v-if="addForm.errors.url" class="text-red-500 text-xs -mt-2 mb-3">{{ addForm.errors.url }}</p>
             <p v-if="errors.group" class="text-red-500 text-xs mb-3">{{ errors.group }}</p>
 
-            <input v-if="groups.length > 10" v-model="filter" type="search" placeholder="Lọc theo tên…"
-                class="w-full md:w-72 border border-[var(--color-line)] rounded-xl px-3 py-2 text-sm mb-3" />
+            <div class="flex flex-col md:flex-row gap-2 mb-3">
+                <input v-if="groups.length > 10" v-model="filter" type="search" placeholder="Lọc theo tên…"
+                    class="w-full md:w-72 border border-[var(--color-line)] rounded-xl px-3 py-2 text-sm" />
+                <select v-if="profiles.length > 1" v-model="profileFilter"
+                    class="w-full md:w-72 border border-[var(--color-line)] rounded-xl px-3 py-2 text-sm">
+                    <option value="">Mọi page</option>
+                    <option v-for="p in profiles" :key="p.id" :value="p.id">{{ p.label }} ({{ groupCountByProfile[p.id] || 0 }} nhóm)</option>
+                    <option value="none">Chưa page nào vào</option>
+                </select>
+                <span v-if="filter || profileFilter !== ''" class="self-center text-xs text-[var(--color-muted)]">{{ shownGroups.length }} nhóm</span>
+            </div>
 
             <div class="overflow-x-auto rounded-xl border border-[var(--color-line)]">
                 <table class="w-full text-sm">
