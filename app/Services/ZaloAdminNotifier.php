@@ -3,6 +3,9 @@
 namespace App\Services;
 
 use App\Jobs\SendZaloMessage;
+use App\Models\ChatConversation;
+use App\Models\ChatMessage;
+use App\Models\User;
 use App\Models\Withdrawal;
 
 /**
@@ -38,5 +41,16 @@ class ZaloAdminNotifier
             "Ví: {$provider} {$withdrawal->account_number} - {$withdrawal->account_name}",
             'Duyệt: '.route('admin.withdrawals'),
         ]));
+    }
+
+    public function chatReceived(User $user, ChatConversation $conversation, ChatMessage $message): void
+    {
+        $this->notify(implode("\n", array_filter([
+            '💬 Khách nhắn hỗ trợ',
+            'Khách: '.$user->name.($user->email ? " ({$user->email})" : ''),
+            '"'.ChatService::preview($message, 200).'"',
+            $message->order_id ? 'Đơn: '.$message->order_id : null,
+            'Trả lời: '.route('admin.chats.show', $conversation),
+        ])));
     }
 }

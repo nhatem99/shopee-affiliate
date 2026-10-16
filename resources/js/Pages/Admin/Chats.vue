@@ -4,7 +4,7 @@ import { Head, Link, router } from '@inertiajs/vue3'
 import AdminLayout from '@/Layouts/AdminLayout.vue'
 import ChatComposer from '@/Components/ChatComposer.vue'
 import ChatMessages from '@/Components/ChatMessages.vue'
-import { useToast } from '@/composables/useToast'
+import { useDesktopNotify } from '@/composables/useDesktopNotify'
 
 const props = defineProps({
     conversations: Object, // paginator
@@ -12,7 +12,6 @@ const props = defineProps({
     filters: { type: Object, default: () => ({}) },
 })
 
-const toast = useToast()
 const list = ref(null)
 const composer = ref(null)
 
@@ -39,8 +38,8 @@ function poll() {
     if (document.visibilityState !== 'visible' || composer.value?.busy) return
 
     router.reload({
-        // 'chat' là badge ở sidebar — xin luôn ở đây để AdminLayout khỏi poll chồng lên trang này.
-        only: ['conversations', 'active', 'chat'],
+        // 'adminAlerts' là chuông + badge sidebar — xin luôn ở đây để AdminLayout khỏi poll chồng lên.
+        only: ['conversations', 'active', 'adminAlerts'],
         // Luôn gửi cả 0 lẫn 1 — xem lý do ở Chat.vue.
         data: { typing: composer.value?.isTyping() ? 1 : 0 },
         replace: true,
@@ -84,23 +83,9 @@ function send(payload) {
     })
 }
 
-// Thông báo trên máy tính (AdminLayout bắn khi số khách chờ tăng). Trình duyệt chỉ cho xin quyền
-// từ một cú bấm thật, nên nút xin quyền nằm đây chứ không tự bật lên.
-const canAskNotify = ref(false)
-
-function refreshNotifyState() {
-    canAskNotify.value = typeof Notification !== 'undefined' && Notification.permission === 'default'
-}
-
-onMounted(refreshNotifyState)
-
-function askNotify() {
-    Notification.requestPermission().then((result) => {
-        refreshNotifyState()
-        if (result === 'granted') toast.success('Đã bật — có khách nhắn là hiện thông báo, miễn là còn mở tab quản trị.')
-        else toast.info('Bạn đã từ chối. Bật lại trong phần quyền của trình duyệt cho trang này.')
-    })
-}
+// Thông báo trên máy tính (AdminLayout bắn khi số việc chờ tăng). Nút này cũng có trong chuông ở
+// header; nhắc thêm ở đây vì đây là trang admin hay để mở cả ngày nhất.
+const { permission: notifyPermission, ask: askNotify } = useDesktopNotify()
 </script>
 
 <template>
@@ -108,9 +93,9 @@ function askNotify() {
     <AdminLayout>
         <template #title>Hộp thư hỗ trợ</template>
 
-        <div v-if="canAskNotify" class="mb-4 flex flex-wrap items-center gap-3 rounded-2xl border border-[var(--color-line)] bg-[var(--color-surface)] px-4 py-3">
+        <div v-if="notifyPermission === 'default'" class="mb-4 flex flex-wrap items-center gap-3 rounded-2xl border border-[var(--color-line)] bg-[var(--color-surface)] px-4 py-3">
             <span class="text-sm text-[var(--color-muted)] flex-1 min-w-[200px]">
-                Bật thông báo trên máy tính để biết có khách nhắn mà không phải ngồi canh trang này.
+                Bật thông báo trên máy tính để biết có khách nhắn hay rút tiền mà không phải ngồi canh trang này.
             </span>
             <button type="button" @click="askNotify" class="btn-fire px-4 py-2 rounded-xl text-sm">🔔 Bật thông báo</button>
         </div>

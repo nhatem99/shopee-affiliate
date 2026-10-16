@@ -5,6 +5,7 @@ namespace App\Http\Middleware;
 use App\Http\Controllers\NotificationController;
 use App\Http\Controllers\ProfileController;
 use App\Models\Setting;
+use App\Services\AdminAlertService;
 use App\Services\CashbackService;
 use App\Services\ChatService;
 use App\Services\ImpersonationService;
@@ -40,9 +41,14 @@ class HandleInertiaRequests extends Middleware
             // Chuông thông báo ở header. Chỉ khách (không phải admin) mới có; đóng trong closure
             // để không tốn hai truy vấn cho khách vãng lai và các request partial reload.
             'notifications' => fn () => $this->notifications($request),
-            // Badge chat hỗ trợ: số tin chưa đọc của khách, hoặc số khách đang chờ admin trả
-            // lời. Đóng closure như notifications() — khách vãng lai không tốn truy vấn nào.
+            // Badge chat hỗ trợ của khách: số tin admin gửi mà chưa đọc. Đóng closure như
+            // notifications() — khách vãng lai không tốn truy vấn nào.
             'chat' => fn () => $this->chat($request),
+            // Admin không có chuông thông báo như khách — đây là phần thay thế: chuông ở header
+            // và badge ở sidebar của AdminLayout (khách đang chờ trả lời, lệnh rút chờ duyệt).
+            'adminAlerts' => fn () => $request->user()?->isAdmin()
+                ? app(AdminAlertService::class)->counts()
+                : null,
             // Banner "Số dư khả dụng" trong AccountDrawer.vue (menu trượt từ icon hamburger).
             // Cùng lý do đóng closure như notifications(): availableBalance() chạy 2 query tổng
             // hợp, chỉ đáng tính trên full visit của khách đã đăng nhập, không phải mọi request.
@@ -129,10 +135,9 @@ class HandleInertiaRequests extends Middleware
     }
 
     /**
-     * Khách: số tin admin gửi mà chưa đọc. Admin: số hội thoại đang chờ trả lời.
-     *
-     * Admin vẫn có badge kể cả khi chat đang tắt ở Cài đặt — tắt chỉ chặn khách gửi THÊM, những
-     * gì đang chờ trả lời thì không được phép biến mất khỏi tầm mắt.
+     * Số tin admin gửi mà khách chưa đọc. Phía admin xem adminAlerts — admin vẫn thấy số khách
+     * đang chờ kể cả khi chat đang tắt ở Cài đặt: tắt chỉ chặn khách gửi THÊM, những gì đang chờ
+     * trả lời thì không được phép biến mất khỏi tầm mắt.
      *
      * @return array{unread: int}|null
      */
@@ -140,17 +145,11 @@ class HandleInertiaRequests extends Middleware
     {
         $user = $request->user();
 
-        if (! $user) {
+        if (! $user || $user->isAdmin() || ! ChatService::enabled()) {
             return null;
         }
 
-        $chat = app(ChatService::class);
-
-        if ($user->isAdmin()) {
-            return ['unread' => $chat->unreadForAdmin()];
-        }
-
-        return ChatService::enabled() ? ['unread' => $chat->unreadForUser($user)] : null;
+        return ['unread' => app(ChatService::class)->unreadForUser($user)];
     }
 
     /**

@@ -6,6 +6,7 @@ use App\Models\ChatConversation;
 use App\Models\Setting;
 use App\Models\ShopeeOrder;
 use App\Models\User;
+use App\Models\Withdrawal;
 use App\Notifications\AdminReplyNotification;
 use App\Services\ChatService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -190,25 +191,36 @@ class SupportChatTest extends TestCase
         app(ChatService::class)->sendFromUser($user, 'Alo anh ơi');
 
         $this->actingAs($admin)->get('/admin/dashboard')
-            ->assertInertia(fn ($page) => $page->where('chat.unread', 1));
+            ->assertInertia(fn ($page) => $page->where('adminAlerts.chats', 1)->where('chat', null));
 
         app(ChatService::class)->sendFromAdmin(ChatConversation::first(), $admin, 'Chào bạn');
 
         $this->actingAs($user)->get('/')
-            ->assertInertia(fn ($page) => $page->where('chat.unread', 1));
+            ->assertInertia(fn ($page) => $page->where('chat.unread', 1)->where('adminAlerts', null));
     }
 
-    public function test_sidebar_badge_endpoint_returns_just_the_waiting_count(): void
+    public function test_admin_alerts_count_waiting_chats_and_pending_withdrawals(): void
     {
         $user = $this->createUser();
         app(ChatService::class)->sendFromUser($user, 'Em cần hỗ trợ');
+        foreach (['pending', 'pending', 'approved', 'completed', 'rejected'] as $status) {
+            Withdrawal::create([
+                'user_id' => $user->id,
+                'provider' => 'momo',
+                'account_number' => '0901234567',
+                'account_name' => 'KHACH A',
+                'amount' => 50000,
+                'status' => $status,
+            ]);
+        }
 
-        // Phải trả về con số, không phải bị route /chats/{conversation} bắt mất chữ "unread".
-        $this->actingAs($this->createAdmin())->getJson('/admin/chats/unread')
+        // Rút tiền: chỉ đếm lệnh CHƯA ai đụng tới — đã duyệt thì việc còn lại là chuyển khoản,
+        // admin tự biết, không phải khách đang chờ được trả lời.
+        $this->actingAs($this->createAdmin())->getJson('/admin/alerts')
             ->assertOk()
-            ->assertExactJson(['unread' => 1]);
+            ->assertExactJson(['chats' => 1, 'withdrawals' => 2]);
 
-        $this->actingAs($user)->getJson('/admin/chats/unread')->assertForbidden();
+        $this->actingAs($user)->getJson('/admin/alerts')->assertForbidden();
     }
 
     public function test_customer_cannot_reach_the_admin_inbox(): void

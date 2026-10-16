@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\Admin\ActivityController;
+use App\Http\Controllers\Admin\AlertController;
 use App\Http\Controllers\Admin\ApiConfigController;
 use App\Http\Controllers\Admin\BlockedIpController;
 use App\Http\Controllers\Admin\ChatController as AdminChatController;
@@ -200,6 +201,11 @@ Route::middleware('auth')->group(function () {
 // Admin routes
 Route::middleware(['auth', 'auth.admin'])->prefix('admin')->name('admin.')->group(function () {
     Route::get('/dashboard', [DashboardController::class, 'index'])->name('dashboard');
+    // Chuông + badge "khách đang chờ" (tin nhắn chưa trả lời, lệnh rút chưa duyệt), AdminLayout
+    // gọi lại mỗi 30 giây. Là JSON chứ không phải partial reload của Inertia: reload chạy LẠI
+    // controller của trang đang mở, tức mở /admin/dashboard là cứ 30 giây chạy lại toàn bộ thống
+    // kê chỉ để lấy mấy con số.
+    Route::get('/alerts', [AlertController::class, 'index'])->name('alerts');
     Route::get('/activities', [ActivityController::class, 'index'])->name('activities');
     Route::get('/activities/export', [ActivityController::class, 'export'])->name('activities.export');
     Route::post('/activities/prune-bots', [ActivityController::class, 'pruneBots'])->name('activities.prune-bots');
@@ -226,11 +232,6 @@ Route::middleware(['auth', 'auth.admin'])->prefix('admin')->name('admin.')->grou
     Route::post('/users/{user}/impersonate', [ImpersonationController::class, 'start'])->name('users.impersonate');
     // Hộp thư hỗ trợ: khách nhắn ở /ho-tro, admin đọc và trả lời ở đây.
     Route::get('/chats', [AdminChatController::class, 'index'])->name('chats');
-    // Badge "có khách đang chờ" ở sidebar, AdminLayout gọi lại mỗi 30 giây. Là JSON chứ không
-    // phải partial reload của Inertia: reload chạy LẠI controller của trang đang mở, tức mở
-    // /admin/dashboard là cứ 30 giây chạy lại toàn bộ thống kê chỉ để lấy một con số.
-    // Phải khai trước /chats/{conversation}, không thì 'unread' bị bắt làm id hội thoại.
-    Route::get('/chats/unread', [AdminChatController::class, 'unread'])->name('chats.unread');
     Route::get('/chats/{conversation}', [AdminChatController::class, 'show'])->name('chats.show');
     Route::post('/chats/{conversation}/reply', [AdminChatController::class, 'reply'])->middleware('throttle:chat')->name('chats.reply');
     Route::get('/settings', [SettingsController::class, 'index'])->name('settings');

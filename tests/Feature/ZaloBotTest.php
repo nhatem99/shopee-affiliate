@@ -3,11 +3,13 @@
 namespace Tests\Feature;
 
 use App\Jobs\SendZaloMessage;
+use App\Models\ChatConversation;
 use App\Models\Commission;
 use App\Models\PayoutAccount;
 use App\Models\Setting;
 use App\Models\User;
 use App\Models\ZaloChat;
+use App\Services\ChatService;
 use App\Services\ZaloBotService;
 use App\Services\ZaloBotSettings;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -176,6 +178,43 @@ class ZaloBotTest extends TestCase
             ->assertSessionHasNoErrors();
 
         Queue::assertNothingPushed();
+    }
+
+    // ── Báo admin khi khách nhắn hỗ trợ ─────────────────────────────────────
+
+    public function test_chat_message_notifies_admin_once_per_waiting_streak(): void
+    {
+        Queue::fake();
+        $user = $this->createUser(['name' => 'Khách A', 'email' => 'a@example.com']);
+        $chat = app(ChatService::class);
+
+        $chat->sendFromUser($user, 'Đơn em chưa được hoàn tiền ạ');
+        $chat->sendFromUser($user, 'Anh xem giúp em');
+
+        // Hai dòng liền nhau, mỗi admin vẫn chỉ nhận một tin — có link mở thẳng hội thoại.
+        $conversation = ChatConversation::firstOrFail();
+        Queue::assertPushed(SendZaloMessage::class, 2);
+        Queue::assertPushed(SendZaloMessage::class, fn ($job) => $job->chatId === 'admin-chat-1'
+            && str_contains($job->text, 'Khách A')
+            && str_contains($job->text, 'Đơn em chưa được hoàn tiền ạ')
+            && str_contains($job->text, '/admin/chats/'.$conversation->id));
+
+        // Admin đọc xong (hết lượt chờ), khách nhắn tiếp là một lượt chờ mới — báo lại.
+        $chat->markReadByAdmin($conversation);
+        $chat->sendFromUser($user, 'Còn một đơn nữa ạ');
+
+        Queue::assertPushed(SendZaloMessage::class, 4);
+    }
+
+    public function test_chat_works_without_zalo_configured(): void
+    {
+        Queue::fake();
+        config(['services.zalo_bot.token' => null]);
+
+        app(ChatService::class)->sendFromUser($this->createUser(), 'Em cần hỗ trợ');
+
+        Queue::assertNothingPushed();
+        $this->assertSame(1, ChatConversation::firstOrFail()->admin_unread);
     }
 
     // ── Service ──────────────────────────────────────────────────────────────

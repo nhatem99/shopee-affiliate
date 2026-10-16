@@ -5,93 +5,120 @@ import axios from 'axios'
 import { useAuthStore } from '@/Stores/useAuthStore'
 import ToastContainer from '@/Components/ToastContainer.vue'
 import ThemeToggle from '@/Components/ThemeToggle.vue'
+import AdminAlertBell from '@/Components/AdminAlertBell.vue'
 
 const page = usePage()
 const auth = useAuthStore()
 const current = computed(() => page.url)
 
-// Con số lấy về từ nhịp poll nhẹ bên dưới; chưa poll lần nào thì dùng số server gửi kèm trang.
-const polledUnread = ref(null)
-const chatUnread = computed(() => polledUnread.value ?? page.props.chat?.unread ?? 0)
-
-// Mỗi lần chuyển trang (và mỗi nhịp poll của /admin/chats) server đều gửi lại con số mới nhất —
-// tin nó hơn số đã poll, nếu không thì vừa trả lời xong badge vẫn treo tới nhịp poll kế tiếp.
-watch(() => page.props.chat?.unread, (value) => {
-    if (typeof value === 'number') polledUnread.value = value
-})
-
 /*
- * Khách nhắn tin trong lúc admin đang làm việc khác — đây là chỗ báo cho admin biết.
+ * Việc khách đang chờ admin: hội thoại chưa trả lời, lệnh rút chưa duyệt (AdminAlertService).
  *
  * Admin KHÔNG có chuông thông báo như khách (xem HandleInertiaRequests::notifications), nên nếu
- * không có đoạn này thì cách duy nhất biết có người nhắn là tự bấm vào mục Hỗ trợ mà xem. Ba
- * mức, tăng dần theo mức độ admin đã rời đi: badge ở sidebar, số trên tiêu đề tab, và thông báo
- * của hệ điều hành (chỉ khi admin đã bấm nút xin quyền ở /admin/chats).
- *
- * Cố ý VẪN poll khi tab bị ẩn, ngược với hai trang chat: tab ẩn chính là lúc cần báo nhất.
+ * không có đoạn này thì cách duy nhất biết có việc là tự bấm vào từng trang mà xem. Bốn mức, tăng
+ * dần theo mức độ admin đã rời đi: badge ở sidebar, chuông ở header, số trên tiêu đề tab, và
+ * thông báo của hệ điều hành (chỉ khi admin đã bấm cho phép ở chuông hoặc ở /admin/chats).
  */
+const ALERTS = [
+    {
+        key: 'chats',
+        href: '/admin/chats',
+        icon: '💬',
+        label: 'Khách đang chờ trả lời',
+        // Đếm SỐ KHÁCH, không phải số tin — xem ChatService::unreadForAdmin.
+        notify: (n) => ['Có khách đang chờ trả lời', n > 1 ? `${n} hội thoại chưa trả lời` : 'Một khách vừa nhắn tin'],
+    },
+    {
+        key: 'withdrawals',
+        href: '/admin/withdrawals?status=pending',
+        icon: '💸',
+        label: 'Yêu cầu rút tiền chờ duyệt',
+        notify: (n) => ['Có yêu cầu rút tiền mới', n > 1 ? `${n} yêu cầu đang chờ duyệt` : 'Một khách vừa yêu cầu rút tiền'],
+    },
+]
+
+// Con số lấy về từ nhịp poll nhẹ bên dưới; chưa poll lần nào thì dùng số server gửi kèm trang.
+const polled = ref(null)
+const counts = computed(() => polled.value ?? page.props.adminAlerts ?? {})
+const alertItems = computed(() => ALERTS.map((a) => ({ ...a, count: counts.value[a.key] ?? 0 })))
+const alertTotal = computed(() => alertItems.value.reduce((sum, a) => sum + a.count, 0))
+
+// Mỗi lần chuyển trang (và mỗi nhịp poll của /admin/chats) server đều gửi lại con số mới nhất —
+// tin nó hơn số đã poll, nếu không thì vừa trả lời/duyệt xong badge vẫn treo tới nhịp poll kế.
+watch(() => page.props.adminAlerts, (value) => {
+    if (value) polled.value = value
+})
+
+// Cố ý VẪN poll khi tab bị ẩn, ngược với hai trang chat: tab ẩn chính là lúc cần báo nhất.
 const POLL_MS = 30000
 let timer = null
-let offNavigate = null
-let lastSeenUnread = null
+let titleObserver = null
+let lastSeen = null
 
-function pollBadge() {
-    // Trang /admin/chats tự poll và đã xin luôn prop 'chat' — đừng hỏi chồng lên.
+function pollAlerts() {
+    // Trang /admin/chats tự poll và đã xin luôn prop 'adminAlerts' — đừng hỏi chồng lên.
     if (current.value.startsWith('/admin/chats')) return
 
     // Endpoint JSON riêng, KHÔNG phải router.reload: partial reload vẫn chạy lại controller của
     // trang đang mở — đứng ở /admin/dashboard thì cứ 30 giây chạy lại toàn bộ thống kê.
-    axios.get('/admin/chats/unread')
+    axios.get('/admin/alerts')
         .then(({ data }) => {
-            if (typeof data?.unread === 'number') polledUnread.value = data.unread
+            if (data && typeof data === 'object') polled.value = data
         })
-        // Mạng chập chờn hay phiên hết hạn thì im lặng bỏ qua: đây là một con số trang trí, không
+        // Mạng chập chờn hay phiên hết hạn thì im lặng bỏ qua: đây là mấy con số báo hiệu, không
         // đáng để ném lỗi vào mặt admin đang làm việc khác.
         .catch(() => {})
 }
 
-// Inertia đặt lại document.title sau mỗi lần điều hướng (thẻ <Head> của từng trang), nên số đếm
-// phải được gắn lại sau đó — setTimeout để chạy sau lượt cập nhật title của Inertia.
+// Inertia tự dựng lại thẻ <title> mỗi lần <Head> của trang render — thay hẳn phần tử, trễ 1ms qua
+// debounce — nên số gắn vào lúc nào cũng có thể bị xoá ngay sau đó (setTimeout 0 sau 'navigate'
+// từng thua cuộc đua này: tab chưa bao giờ hiện số). Canh luôn <head>: tiêu đề đổi là gắn lại.
+// So trước khi gán, không thì chính lần gán này kích hoạt observer thành vòng lặp.
 function applyTitleBadge() {
     const base = document.title.replace(/^\(\d+\+?\)\s+/, '')
-    document.title = chatUnread.value ? `(${chatUnread.value}) ${base}` : base
+    const next = alertTotal.value ? `(${alertTotal.value}) ${base}` : base
+    if (document.title !== next) document.title = next
 }
 
-function notifyDesktop(count) {
+function notifyDesktop(alert, count) {
     if (typeof Notification === 'undefined' || Notification.permission !== 'granted') return
 
-    const notification = new Notification('Có khách đang chờ trả lời', {
-        body: count > 1 ? `${count} hội thoại chưa trả lời` : 'Một khách vừa nhắn tin',
-        tag: 'chat-unread', // thay thế thông báo cũ thay vì xếp chồng một dãy
+    const [title, body] = alert.notify(count)
+    const notification = new Notification(title, {
+        body,
+        tag: `admin-${alert.key}`, // thay thế thông báo cũ cùng loại thay vì xếp chồng một dãy
     })
 
     notification.onclick = () => {
         window.focus()
-        router.visit('/admin/chats')
+        router.visit(alert.href)
         notification.close()
     }
 }
 
-watch(chatUnread, (count) => {
+watch(alertItems, (items) => {
     applyTitleBadge()
 
     // Lần đầu chỉ ghi nhận mốc: mở trang quản trị mà có sẵn 3 khách đang chờ từ hôm qua thì đó
     // không phải "vừa có người nhắn".
-    if (lastSeenUnread !== null && count > lastSeenUnread) notifyDesktop(count)
+    for (const item of items) {
+        if (lastSeen && item.count > (lastSeen[item.key] ?? 0)) notifyDesktop(item, item.count)
+    }
 
-    lastSeenUnread = count
+    lastSeen = Object.fromEntries(items.map((a) => [a.key, a.count]))
 })
 
 onMounted(() => {
-    lastSeenUnread = chatUnread.value
+    lastSeen = Object.fromEntries(alertItems.value.map((a) => [a.key, a.count]))
     applyTitleBadge()
-    timer = setInterval(pollBadge, POLL_MS)
-    offNavigate = router.on('navigate', () => setTimeout(applyTitleBadge, 0))
+    timer = setInterval(pollAlerts, POLL_MS)
+    titleObserver = new MutationObserver(applyTitleBadge)
+    titleObserver.observe(document.head, { childList: true, subtree: true, characterData: true })
 })
 
 onBeforeUnmount(() => {
     clearInterval(timer)
-    if (offNavigate) offNavigate()
+    titleObserver?.disconnect()
 })
 
 const mobileOpen = ref(false)
@@ -115,10 +142,9 @@ const navGroups = [
             { href: '/admin/users', icon: '👥', label: 'Tài khoản' },
             { href: '/admin/orders', icon: '📦', label: 'Đơn hàng' },
             { href: '/admin/shopee-orders', icon: '🧾', label: 'Báo cáo Shopee' },
-            { href: '/admin/withdrawals', icon: '💸', label: 'Rút tiền' },
-            // badge: số khách đang chờ trả lời (page.props.chat) — admin không có chuông thông
-            // báo như khách, đây là chỗ DUY NHẤT thấy có người nhắn tin.
-            { href: '/admin/chats', icon: '💬', label: 'Hỗ trợ', badge: true },
+            // badge: key trong ALERTS — số việc đang chờ ở trang đó, cùng con số với chuông.
+            { href: '/admin/withdrawals', icon: '💸', label: 'Rút tiền', badge: 'withdrawals' },
+            { href: '/admin/chats', icon: '💬', label: 'Hỗ trợ', badge: 'chats' },
         ],
     },
     {
@@ -194,9 +220,9 @@ const navGroups = [
                             <span>{{ item.icon }}</span>
                             <span class="flex-1 min-w-0 truncate">{{ item.label }}</span>
                             <span
-                                v-if="item.badge && chatUnread"
+                                v-if="item.badge && counts[item.badge]"
                                 class="flex-none min-w-[20px] h-5 px-1.5 rounded-full bg-[var(--color-accent)] text-white text-[11px] font-extrabold flex items-center justify-center"
-                            >{{ chatUnread > 9 ? '9+' : chatUnread }}</span>
+                            >{{ counts[item.badge] > 9 ? '9+' : counts[item.badge] }}</span>
                         </Link>
                     </div>
                 </div>
@@ -226,6 +252,7 @@ const navGroups = [
                 </div>
                 <div class="flex items-center gap-3 flex-none">
                     <span class="hidden sm:block text-sm text-[var(--color-muted)]">{{ new Date().toLocaleDateString('vi-VN') }}</span>
+                    <AdminAlertBell :items="alertItems" :total="alertTotal" />
                     <ThemeToggle />
                 </div>
             </header>

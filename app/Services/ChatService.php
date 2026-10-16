@@ -55,6 +55,8 @@ class ChatService
         return Setting::getBool(self::ENABLED_KEY, true);
     }
 
+    public function __construct(private ZaloAdminNotifier $zalo) {}
+
     public function conversationFor(User $user): ChatConversation
     {
         return ChatConversation::firstOrCreate(['user_id' => $user->id]);
@@ -106,6 +108,8 @@ class ChatService
     public function sendFromUser(User $user, ?string $body, ?string $imagePath = null, ?string $orderId = null): ChatMessage
     {
         $conversation = $this->conversationFor($user);
+        // Hội thoại mới tạo chưa nạp cột này (null) — cũng là chưa chờ.
+        $wasWaiting = $conversation->admin_unread > 0;
 
         $message = $conversation->messages()->create([
             'sender_id' => $user->id,
@@ -117,6 +121,13 @@ class ChatService
 
         $conversation->update(['last_message_at' => $message->created_at]);
         $conversation->increment('admin_unread');
+
+        // Báo Zalo chỉ ở tin ĐẦU của một lượt chờ, cùng lý do với notifyUser(): khách gõ liền 5
+        // dòng thì admin nhận một tin, không phải năm. Lượt chờ hết khi admin mở hội thoại
+        // (markReadByAdmin đưa admin_unread về 0).
+        if (! $wasWaiting) {
+            $this->zalo->chatReceived($user, $conversation, $message);
+        }
 
         return $message;
     }

@@ -6,7 +6,6 @@ use App\Http\Controllers\Controller;
 use App\Models\ChatConversation;
 use App\Services\ChatService;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
-use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Validation\ValidationException;
@@ -30,14 +29,6 @@ class ChatController extends Controller
             'active' => null,
             'filters' => $request->only('q'),
         ]);
-    }
-
-    /**
-     * Chỉ con số cho badge ở sidebar — xem lý do dùng JSON thay vì partial reload ở routes/web.php.
-     */
-    public function unread(): JsonResponse
-    {
-        return response()->json(['unread' => $this->chat->unreadForAdmin()]);
     }
 
     public function show(Request $request, ChatConversation $conversation): Response
