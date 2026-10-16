@@ -11,7 +11,7 @@ import { useCashback } from '@/composables/useCashback'
 // phục nhất không phải bảng xếp hạng mà là dòng "tháng này đã hoàn ₫X cho N người" ở đầu khối.
 // Bảng xếp hạng là phần chơi: bục top 3 + danh sách tới hạng 10 + hạng của chính người xem.
 //
-// Số liệu lấy từ server (CashbackLeaderboardService): tên đã che, tiền là tiền đã thật sự vào ví
+// Số liệu lấy từ server (CashbackLeaderboardService): tên đầy đủ, tiền là tiền đã thật sự vào ví
 // trong tháng. Component không tự tính gì thêm — số ở đây mà lệch với ví khách là mất tin ngay.
 const props = defineProps({
     // { month, entries: [{rank, name, amount, orders, is_me}], total_users, total_amount, me }
@@ -79,7 +79,6 @@ const inTopList = computed(() => entries.value.some(e => e.is_me))
                     Tháng này tụi mình đã hoàn
                     <b class="text-[var(--color-brand-green)] text-base">{{ vnd(leaderboard.total_amount) }}</b>
                     vào ví của <b class="text-[var(--color-ink)]">{{ leaderboard.total_users }}</b> người.
-                    Tên đã được che một phần để giữ riêng tư.
                 </p>
                 <p v-else class="text-[var(--color-muted)] text-sm leading-relaxed max-w-xl mx-auto">
                     Bảng tháng này còn trống — tiền chỉ lên bảng khi đơn đã <b>Hoàn thành</b> trên Shopee và
@@ -228,7 +227,7 @@ const inTopList = computed(() => entries.value.some(e => e.is_me))
             </div>
 
             <p class="text-[11px] text-[var(--color-muted)] text-center mt-3 leading-relaxed">
-                Xếp theo số tiền đã thật sự vào ví trong tháng (đơn hoàn thành + đối soát xong). Bảng làm mới sau mỗi đợt đối soát, không phải tức thì.<template v-if="compact"> Tên đã che một phần để giữ riêng tư.</template>
+                Xếp theo số tiền đã thật sự vào ví trong tháng (đơn hoàn thành + đối soát xong). Bảng làm mới sau mỗi đợt đối soát, không phải tức thì.
             </p>
         </div>
     </section>

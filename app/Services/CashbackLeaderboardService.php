@@ -40,15 +40,15 @@ class CashbackLeaderboardService
 
     public const DEMO_DEFAULT = true;
 
-    /** Tên đã che sẵn + số tiền vừa phải, cùng dạng với dữ liệu thật để bố cục không đổi khi thay. */
+    /** Tên đầy đủ + số tiền vừa phải, cùng dạng với dữ liệu thật để bố cục không đổi khi thay. */
     private const DEMO_ENTRIES = [
-        ['name' => 'Nguyễn T*** H***', 'amount' => 186500, 'orders' => 7],
-        ['name' => 'Trần M*** A***', 'amount' => 142000, 'orders' => 5],
-        ['name' => 'Lê H*** P***', 'amount' => 97300, 'orders' => 4],
-        ['name' => 'Phạm Q*** N***', 'amount' => 64800, 'orders' => 3],
-        ['name' => 'Hoàng B*** L***', 'amount' => 51200, 'orders' => 2],
-        ['name' => 'Vũ N*** K***', 'amount' => 38900, 'orders' => 2],
-        ['name' => 'Đặng T*** V***', 'amount' => 22400, 'orders' => 1],
+        ['name' => 'Nguyễn Thị Hương', 'amount' => 186500, 'orders' => 7],
+        ['name' => 'Trần Minh Anh', 'amount' => 142000, 'orders' => 5],
+        ['name' => 'Lê Hoàng Phúc', 'amount' => 97300, 'orders' => 4],
+        ['name' => 'Phạm Quốc Nam', 'amount' => 64800, 'orders' => 3],
+        ['name' => 'Hoàng Bảo Long', 'amount' => 51200, 'orders' => 2],
+        ['name' => 'Vũ Ngọc Khánh', 'amount' => 38900, 'orders' => 2],
+        ['name' => 'Đặng Thanh Vân', 'amount' => 22400, 'orders' => 1],
     ];
 
     /** Bảng đổi rất chậm (tiền chỉ vào ví khi admin nhập báo cáo) nên cache thoải mái. */
@@ -72,7 +72,7 @@ class CashbackLeaderboardService
 
         // Phần theo từng người xem KHÔNG cache chung: cache theo từng user thì vừa phình bộ nhớ
         // vừa dễ hiện số cũ đúng lúc khách vừa nhận tiền. user_id chỉ sống trong cache để đánh
-        // dấu dòng "Bạn" — không bao giờ đưa ra frontend, tên đã che rồi mà kèm id thì che vô ích.
+        // dấu dòng "Bạn" — không bao giờ đưa ra frontend, người lạ không cần biết id tài khoản.
         $board['entries'] = array_map(function (array $entry) use ($viewer) {
             $entry['is_me'] = $viewer !== null && $entry['user_id'] === $viewer->id;
             unset($entry['user_id']);
@@ -145,13 +145,12 @@ class CashbackLeaderboardService
             $entries[] = [
                 'rank' => $i + 1,
                 'user_id' => (int) $row->id,
-                'name' => self::maskName((string) $row->name),
+                'name' => self::displayName((string) $row->name),
                 // Ảnh đại diện khách TỰ tải lên ở trang Thông tin cá nhân. Không có thì frontend
                 // vẽ chữ cái đầu như trước — mặc định của mọi tài khoản vẫn là không có ảnh.
                 //
-                // Đây là chỗ duy nhất trên bảng lộ ra thứ không che được: tên đã che nhưng mặt
-                // thì không. Vì vậy avatar phải là hành động chủ động của khách (tải lên, gỡ
-                // xuống bất cứ lúc nào), không bao giờ tự lấy từ Google hay nơi nào khác.
+                // Avatar phải là hành động chủ động của khách (tải lên, gỡ xuống bất cứ lúc
+                // nào), không bao giờ tự lấy từ Google hay nơi nào khác.
                 'avatar' => $row->avatar_path ? Storage::disk('uploads')->url($row->avatar_path) : null,
                 'amount' => (float) $row->total,
                 'orders' => (int) $row->orders,
@@ -237,33 +236,13 @@ class CashbackLeaderboardService
     }
 
     /**
-     * Che tên trước khi đưa ra công khai: giữ nguyên chữ đầu (họ), các chữ sau chỉ để lại ký tự
-     * đầu. "Nguyễn Văn An" → "Nguyễn V*** A***". Tên một chữ thì giữ 2 ký tự đầu.
-     *
-     * Khách chưa bao giờ đồng ý cho hiện tên đầy đủ trước người lạ; mà bảng này còn cho biết họ
-     * đã mua bao nhiêu — ghép hai thứ đó lại là lộ thói quen mua sắm của một người có tên thật.
+     * Tên hiện công khai: đầy đủ như khách tự đặt (quyết định của admin, 2026-10-16 — trước đây
+     * che thành "Nguyễn V*** A***"). Chỉ gom khoảng trắng thừa; tên trống thì hiện "Ẩn danh".
      */
-    public static function maskName(string $name): string
+    public static function displayName(string $name): string
     {
-        $words = preg_split('/\s+/u', trim($name), -1, PREG_SPLIT_NO_EMPTY) ?: [];
+        $name = trim(preg_replace('/\s+/u', ' ', $name) ?? '');
 
-        if ($words === []) {
-            return 'Ẩn danh';
-        }
-
-        if (count($words) === 1) {
-            $word = $words[0];
-            $keep = mb_strlen($word) > 2 ? 2 : 1;
-
-            return mb_substr($word, 0, $keep).'***';
-        }
-
-        $masked = [array_shift($words)];
-
-        foreach ($words as $word) {
-            $masked[] = mb_substr($word, 0, 1).'***';
-        }
-
-        return implode(' ', $masked);
+        return $name === '' ? 'Ẩn danh' : $name;
     }
 }

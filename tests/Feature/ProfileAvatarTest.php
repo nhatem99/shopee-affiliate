@@ -140,8 +140,7 @@ class ProfileAvatarTest extends TestCase
         $this->assertStringContainsString($withPhoto->refresh()->avatar_path, $board['entries'][0]['avatar']);
         $this->assertNull($board['entries'][1]['avatar']);
 
-        // Tên vẫn phải che như cũ — có ảnh không phải là lý do để hiện tên đầy đủ.
-        $this->assertSame('Nguyễn V*** A***', $board['entries'][0]['name']);
+        $this->assertSame('Nguyễn Văn An', $board['entries'][0]['name']);
     }
 
     /**

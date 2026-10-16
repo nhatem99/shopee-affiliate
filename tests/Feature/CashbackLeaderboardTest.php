@@ -48,7 +48,7 @@ class CashbackLeaderboardTest extends TestCase
         return app(CashbackLeaderboardService::class)->forMonth($viewer);
     }
 
-    public function test_xep_theo_tong_tien_trong_thang_va_che_ten(): void
+    public function test_xep_theo_tong_tien_trong_thang_va_hien_du_ten(): void
     {
         $a = $this->createUser(['name' => 'Nguyễn Văn An']);
         $b = $this->createUser(['name' => 'Trần Bình']);
@@ -62,9 +62,9 @@ class CashbackLeaderboardTest extends TestCase
         $this->assertSame(2, $board['total_users']);
         $this->assertSame(35000.0, $board['total_amount']);
         $this->assertSame([1, 2], array_column($board['entries'], 'rank'));
-        $this->assertSame('Trần B***', $board['entries'][0]['name']);
+        $this->assertSame('Trần Bình', $board['entries'][0]['name']);
         $this->assertSame(20000.0, $board['entries'][0]['amount']);
-        $this->assertSame('Nguyễn V*** A***', $board['entries'][1]['name']);
+        $this->assertSame('Nguyễn Văn An', $board['entries'][1]['name']);
         $this->assertSame(15000.0, $board['entries'][1]['amount']);
         $this->assertSame(2, $board['entries'][1]['orders']);
         $this->assertArrayNotHasKey('user_id', $board['entries'][0]);
@@ -167,7 +167,7 @@ class CashbackLeaderboardTest extends TestCase
         $this->get('/')
             ->assertOk()
             ->assertInertia(fn ($page) => $page
-                ->where('leaderboard.entries.0.name', 'Lê T*** H***')
+                ->where('leaderboard.entries.0.name', 'Lê Thị Hoa')
                 ->where('leaderboard.total_users', 1)
             );
 
@@ -236,7 +236,7 @@ class CashbackLeaderboardTest extends TestCase
 
         $this->assertFalse($board['demo']);
         $this->assertCount(1, $board['entries']);
-        $this->assertSame('Lê T*** H***', $board['entries'][0]['name']);
+        $this->assertSame('Lê Thị Hoa', $board['entries'][0]['name']);
     }
 
     public function test_admin_bat_tat_duoc_minh_hoa_o_trang_cai_dat(): void
@@ -252,11 +252,10 @@ class CashbackLeaderboardTest extends TestCase
         $this->assertTrue($this->board()['demo']);
     }
 
-    public function test_che_ten(): void
+    public function test_ten_hien_day_du_chi_gom_khoang_trang(): void
     {
-        $this->assertSame('Nguyễn V*** A***', CashbackLeaderboardService::maskName('  Nguyễn   Văn An '));
-        $this->assertSame('ho***', CashbackLeaderboardService::maskName('hoangvu'));
-        $this->assertSame('A***', CashbackLeaderboardService::maskName('An'));
-        $this->assertSame('Ẩn danh', CashbackLeaderboardService::maskName('   '));
+        $this->assertSame('Nguyễn Văn An', CashbackLeaderboardService::displayName('  Nguyễn   Văn An '));
+        $this->assertSame('hoangvu', CashbackLeaderboardService::displayName('hoangvu'));
+        $this->assertSame('Ẩn danh', CashbackLeaderboardService::displayName('   '));
     }
 }
