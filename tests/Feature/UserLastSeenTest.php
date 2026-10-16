@@ -70,4 +70,23 @@ class UserLastSeenTest extends TestCase
                 ->where('users.data.0.last_seen_at', $customer->fresh()->last_seen_at->toDateTimeString())
                 ->where('users.data.0.last_seen_human', '1 giờ trước'));
     }
+
+    public function test_admin_user_list_is_sorted_by_last_seen_with_never_seen_last(): void
+    {
+        $admin = $this->createAdmin();
+        $seenLongAgo = $this->createUser();
+        $seenLongAgo->forceFill(['last_seen_at' => now()->subDays(3)])->save();
+        $seenRecently = $this->createUser();
+        $seenRecently->forceFill(['last_seen_at' => now()->subMinutes(10)])->save();
+        // Tạo sau cùng nhưng chưa từng vào web — không được chen lên trên người vừa truy cập.
+        $neverSeen = $this->createUser();
+
+        // Lọc role=user để bỏ chính admin (middleware vừa ghi last_seen_at = now cho admin).
+        $this->actingAs($admin)
+            ->get('/admin/users?role=user')
+            ->assertInertia(fn ($page) => $page
+                ->where('users.data.0.id', $seenRecently->id)
+                ->where('users.data.1.id', $seenLongAgo->id)
+                ->where('users.data.2.id', $neverSeen->id));
+    }
 }

@@ -31,6 +31,8 @@ class UserController extends Controller
             // từng dòng: 20 user/trang x 2 quan hệ = 40 truy vấn thừa cho mỗi lần mở trang.
             ->withSum(['commissions as approved_commission_total' => fn (Builder $q) => $q->where('status', 'approved')], 'amount')
             ->withSum(['withdrawals as reserved_withdrawal_total' => fn (Builder $q) => $q->whereIn('status', ['pending', 'approved', 'completed'])], 'amount')
+            // Ai vừa vào web nằm trên cùng. DESC đẩy NULL (chưa từng vào) xuống cuối ở cả MySQL lẫn SQLite.
+            ->orderByDesc('last_seen_at')
             ->latest()
             ->paginate(20);
 
