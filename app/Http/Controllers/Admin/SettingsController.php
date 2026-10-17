@@ -9,6 +9,7 @@ use App\Services\CashbackLinkService;
 use App\Services\CashbackService;
 use App\Services\ChatService;
 use App\Services\DailyCheckInService;
+use App\Services\DealngonInvite;
 use App\Services\DirectAffiliateLinkService;
 use App\Services\GuideVideoService;
 use App\Services\MembershipTierService;
@@ -28,6 +29,7 @@ class SettingsController extends Controller
         return Inertia::render('Admin/Settings', [
             'customerAuthEnabled' => Setting::getBool('customer_auth_enabled', true),
             'voucherToolEnabled' => CashbackLinkService::voucherToolEnabled(),
+            'dealngonInviteEnabled' => DealngonInvite::enabled(),
             // Video hướng dẫn lấy mã ở trang công khai /huong-dan — xem GuideVideoService.
             'guideVideo' => app(GuideVideoService::class)->adminState(),
             'maintenanceMode' => Setting::getBool('maintenance_mode', false),
@@ -67,6 +69,7 @@ class SettingsController extends Controller
         $validated = $request->validate([
             'customer_auth_enabled' => ['sometimes', 'boolean'],
             'voucher_tool_enabled' => ['sometimes', 'boolean'],
+            'dealngon_invite_enabled' => ['sometimes', 'boolean'],
             'maintenance_mode' => ['sometimes', 'boolean'],
             'auto_maintenance_enabled' => ['sometimes', 'boolean'],
             'festive_decor' => ['sometimes', 'boolean'],
@@ -115,6 +118,10 @@ class SettingsController extends Controller
         // (group_links_direct_affiliate).
         if (array_key_exists('voucher_tool_enabled', $validated)) {
             Setting::set(CashbackLinkService::VOUCHER_TOOL_KEY, $validated['voucher_tool_enabled'] ? '1' : '0');
+        }
+
+        if (array_key_exists('dealngon_invite_enabled', $validated)) {
+            Setting::set(DealngonInvite::ENABLED_KEY, $validated['dealngon_invite_enabled'] ? '1' : '0');
         }
 
         if (array_key_exists('customer_auth_enabled', $validated)) {

@@ -51,6 +51,26 @@ class DealngonMoveNotificationTest extends TestCase
         $this->assertSame(1, $seen->notifications()->count());
     }
 
+    public function test_refresh_rewrites_already_sent_notifications_and_marks_them_unread(): void
+    {
+        $user = $this->createUser(['last_seen_at' => now()]);
+        $user->notifications()->create([
+            'id' => (string) Str::uuid(),
+            'type' => DealngonMoveNotification::class,
+            'data' => ['title' => 'Câu chữ cũ', 'body' => 'cũ', 'url' => 'https://dealngon.top', 'icon' => '📢'],
+            'read_at' => now(),
+        ]);
+
+        $this->artisan('users:notify-dealngon', ['--refresh' => true])
+            ->expectsOutputToContain('Đã cập nhật 1 thông báo')
+            ->assertSuccessful();
+
+        $n = $user->notifications()->first();
+        $this->assertSame('Hoàn tiền đã chuyển sang dealngon.top', $n->data['title']);
+        $this->assertStringContainsString('xây dựng lại', $n->data['body']);
+        $this->assertNull($n->read_at);
+    }
+
     public function test_clicking_it_leaves_the_site_with_a_full_page_visit(): void
     {
         $user = $this->createUser(['last_seen_at' => now()]);

@@ -33,7 +33,12 @@ const props = defineProps({
 const toast = useToast()
 const { celebrate } = useFestive()
 const auth = useAuthStore()
-const { cashbackRate, cashbackOn, minWithdrawal, joinHref, joinLabel, vnd: money } = useCashback()
+const { cashbackRate, cashbackOn: cashbackProgramOn, minWithdrawal, joinHref, joinLabel, vnd: money, dealngonUrl, dealngonHost } = useCashback()
+
+// Hoàn tiền có được HỨA trên trang này không. Đang mời sang dealngon (DealngonInvite) thì không:
+// hoàn tiền đã chuyển sang đó, trang này chỉ còn là chỗ dán link lấy link mua — không tiền dự kiến,
+// không mời đăng nhập/đăng ký để được hoàn, không bảng vàng/hạng. Tắt công tắc là về như cũ.
+const cashbackOn = computed(() => cashbackProgramOn.value && !dealngonUrl.value)
 
 const linkUrl = ref('')
 const linkUrlInput = ref(null)
@@ -419,6 +424,22 @@ onUnmounted(() => {
                     </ol>
                 </div>
 
+                <!-- Mời sang dealngon: tietkiemvi đang xây dựng lại, hoàn tiền đã chuyển sang đó. -->
+                <a
+                    v-if="dealngonUrl"
+                    :href="dealngonUrl"
+                    class="mt-3 flex items-center gap-3 rounded-2xl border-2 border-[var(--color-brand-green)]/40 bg-[var(--color-green-soft)] px-4 py-3 no-underline"
+                >
+                    <span class="text-2xl leading-none">📢</span>
+                    <span class="flex-1 min-w-0">
+                        <span class="block text-sm font-black text-[var(--color-ink)]">Hoàn tiền đã chuyển sang {{ dealngonHost }}</span>
+                        <span class="block text-xs text-[var(--color-muted)] leading-snug mt-0.5">
+                            Tietkiemvi đang xây dựng lại — mua qua {{ dealngonHost }} để được hoàn tiền. Ở đây vẫn dán link lấy link mua bình thường.
+                        </span>
+                    </span>
+                    <span class="flex-none rounded-xl bg-[var(--color-brand-green)] text-white px-3 py-2 text-xs font-black whitespace-nowrap">Sang ngay →</span>
+                </a>
+
                 <!-- Khối bọc giới hạn vùng dính: khung dán link chỉ dính trong lúc cuộn qua kết quả
                      và các tab — qua hết thì trôi đi, không che phần hướng dẫn và FAQ. -->
                 <div>
@@ -496,7 +517,7 @@ onUnmounted(() => {
                                     >{{ vnd(shopeeProduct.original_price) }}</span>
                                 </p>
                                 <span
-                                    v-if="cashbackResult.logged_in && cashbackResult.cashback_rate > 0"
+                                    v-if="cashbackOn && cashbackResult.logged_in && cashbackResult.cashback_rate > 0"
                                     class="mt-1.5 inline-flex items-center gap-1 rounded-full bg-[var(--color-green-soft)] text-[var(--color-brand-green)] text-[11px] font-bold px-2 py-0.5"
                                 >💰 Hoàn {{ cashbackResult.cashback_rate }}% hoa hồng</span>
                             </div>
@@ -547,6 +568,12 @@ onUnmounted(() => {
                                 </template>
                             </p>
                         </div>
+
+                        <p v-if="dealngonUrl" class="mt-3 text-center text-xs text-[var(--color-muted)] leading-relaxed">
+                            Muốn được hoàn tiền cho đơn này? Dán link ở
+                            <a :href="dealngonUrl" class="font-bold text-[var(--color-brand-green)] underline underline-offset-2">{{ dealngonHost }}</a>
+                            rồi mua qua link bên đó.
+                        </p>
 
                         <!-- Khách vãng lai VẪN có link (không chặn đường mua), nhưng phải nói rõ đơn này
                              không được hoàn tiền — và cách để được. -->
@@ -622,7 +649,8 @@ onUnmounted(() => {
                 </div>
 
                 <!-- Điểm danh nhận quà: lý do để quay lại vào ngày khách KHÔNG có gì để mua. -->
-                <DailyCheckIn v-if="dailyCheckIn" :state="dailyCheckIn" class="mt-6" />
+                <!-- Đang mời sang dealngon thì thôi: thẻ này mời đăng ký/đăng nhập tài khoản ở đây. -->
+                <DailyCheckIn v-if="dailyCheckIn && !dealngonUrl" :state="dailyCheckIn" class="mt-6" />
 
                 <!-- Các bước -->
                 <section class="mt-8">
@@ -644,7 +672,7 @@ onUnmounted(() => {
 
         <!-- Hoàn tiền (bản rút gọn: hai cột ✓/✕ rồi dẫn sang /hoan-tien) + hạng thành viên. -->
         <CashbackExplainer v-if="cashbackOn" compact />
-        <MembershipTiers v-if="membershipTiers" v-bind="membershipTiers" />
+        <MembershipTiers v-if="cashbackOn && membershipTiers" v-bind="membershipTiers" />
 
         <section class="px-4 pb-10">
             <div class="max-w-3xl mx-auto">

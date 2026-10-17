@@ -6,6 +6,7 @@ use App\Models\AffiliateLink;
 use App\Models\Setting;
 use App\Services\CashbackLinkService;
 use App\Services\CashbackService;
+use App\Services\DealngonInvite;
 use App\Services\KieuShopeeService;
 use App\Services\ShopeeProductLookupService;
 use App\Services\SourceHealthService;
@@ -34,6 +35,8 @@ class CashbackLinkTest extends TestCase
         parent::setUp();
 
         Setting::set(CashbackService::RATE_KEY, '40');
+        // Test ở đây là của trang hoàn tiền đầy đủ; chế độ mời sang dealngon có test riêng ở cuối.
+        Setting::set(DealngonInvite::ENABLED_KEY, '0');
 
         Http::fake([
             'shopee.vn/api/v4/item/get*' => Http::response(['data' => [
@@ -254,6 +257,41 @@ class CashbackLinkTest extends TestCase
         $this->assertTrue($status['skipped']);
         // Lần bảo trì do lượt kiểm tra trước bật thì mở lại luôn.
         $this->assertFalse(Setting::getBool('maintenance_mode', false));
+    }
+
+    public function test_dealngon_invite_is_on_by_default_and_drops_the_estimate(): void
+    {
+        Setting::where('key', DealngonInvite::ENABLED_KEY)->delete();
+        Http::swap(new Factory);
+        Http::fake([
+            'shopee.vn/api/v4/item/get*' => Http::response([], 403),
+            ShopeeProductLookupService::BASE_URL.'*' => Http::response(['productInfo' => ['productName' => 'Cà phê', 'price' => 218400, 'commission' => 18564]]),
+        ]);
+        $user = $this->createUser(['sub_id' => 'khach09']);
+
+        $this->get('/')->assertInertia(fn ($page) => $page->where('settings.dealngonUrl', 'https://dealngon.top'));
+
+        // Khách đăng nhập vẫn có link (mang mã khách), nhưng web không hứa số tiền hoàn ở đây nữa.
+        $this->actingAs($user)
+            ->post(route('cashback.link'), ['url' => self::PRODUCT_URL])
+            ->assertInertia(fn ($page) => $page
+                ->where('cashbackResult.estimate', null)
+                ->where('cashbackResult.link', fn ($link) => $this->assertCashbackLink($link, 'CB-khach09---'))
+            );
+    }
+
+    public function test_admin_can_turn_the_dealngon_invite_off(): void
+    {
+        $admin = $this->createAdmin();
+
+        $this->actingAs($admin)->post('/admin/settings', ['dealngon_invite_enabled' => true])->assertRedirect();
+        $this->assertTrue(DealngonInvite::enabled());
+        $this->actingAs($admin)->get('/admin/settings')
+            ->assertInertia(fn ($page) => $page->where('dealngonInviteEnabled', true));
+
+        $this->actingAs($admin)->post('/admin/settings', ['dealngon_invite_enabled' => false])->assertRedirect();
+        $this->assertFalse(DealngonInvite::enabled());
+        $this->get('/')->assertInertia(fn ($page) => $page->where('settings.dealngonUrl', null));
     }
 
     private function assertCashbackLink(?string $link, string $expectedSubId): bool

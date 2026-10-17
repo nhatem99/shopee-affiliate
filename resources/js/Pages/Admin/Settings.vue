@@ -18,6 +18,8 @@ const props = defineProps({
     customerAuthEnabled: { type: Boolean, required: true },
     // Công tắc "Lấy mã giảm giá trên web" — tắt (mặc định) thì trang chủ chỉ ra link hoàn tiền.
     voucherToolEnabled: { type: Boolean, default: false },
+    // Công tắc "Mời khách sang dealngon" — xem DealngonInvite.
+    dealngonInviteEnabled: { type: Boolean, default: true },
     maintenanceMode: { type: Boolean, required: true },
     autoMaintenanceEnabled: { type: Boolean, default: false },
     // { checked_at, ok, skipped, message, consecutive_failures, action } — null ở mọi trường khi
@@ -58,6 +60,8 @@ const historyRebuyEnabled = ref(props.historyRebuyEnabled)
 const savingHistoryRebuy = ref(false)
 const voucherToolEnabled = ref(props.voucherToolEnabled)
 const savingVoucherTool = ref(false)
+const dealngonInviteEnabled = ref(props.dealngonInviteEnabled)
+const savingDealngonInvite = ref(false)
 const fbigWindowAutoSwitch = ref(props.fbigWindowAutoSwitch)
 const savingFbigAutoSwitch = ref(false)
 const ytbWithKieuShopee = ref(props.ytbWithKieuShopee)
@@ -94,6 +98,7 @@ watch(() => props.autoMaintenanceEnabled, (v) => { autoMaintenanceEnabled.value 
 watch(() => props.festiveDecor, (v) => { festiveDecor.value = v })
 watch(() => props.historyRebuyEnabled, (v) => { historyRebuyEnabled.value = v })
 watch(() => props.voucherToolEnabled, (v) => { voucherToolEnabled.value = v })
+watch(() => props.dealngonInviteEnabled, (v) => { dealngonInviteEnabled.value = v })
 watch(() => props.fbigWindowAutoSwitch, (v) => { fbigWindowAutoSwitch.value = v })
 watch(() => props.ytbWithKieuShopee, (v) => { ytbWithKieuShopee.value = v })
 watch(() => props.goLinksMobileOnly, (v) => { goLinksMobileOnly.value = v })
@@ -199,6 +204,24 @@ function toggleFestive() {
             toast.error('Không lưu được cài đặt, vui lòng thử lại.')
         },
         onFinish: () => { savingFestive.value = false },
+    })
+}
+
+function toggleDealngonInvite() {
+    const next = !dealngonInviteEnabled.value
+    dealngonInviteEnabled.value = next
+    savingDealngonInvite.value = true
+
+    router.post('/admin/settings', { dealngon_invite_enabled: next }, {
+        preserveScroll: true,
+        onSuccess: () => toast.success(next
+            ? 'Đã bật — trang khách mời sang dealngon, thôi hứa hoàn tiền ở đây.'
+            : 'Đã tắt — trang khách hứa hoàn tiền ở tietkiemvi như trước.'),
+        onError: () => {
+            dealngonInviteEnabled.value = !next // rollback nếu lưu lỗi
+            toast.error('Không lưu được cài đặt, vui lòng thử lại.')
+        },
+        onFinish: () => { savingDealngonInvite.value = false },
     })
 }
 
@@ -700,6 +723,46 @@ function saveCashbackDisplayRate() {
                             {{ voucherToolEnabled
                                 ? 'Đang bật — trang chủ lấy mã giảm giá như cũ.'
                                 : 'Đang tắt — trang chủ chỉ ra link hoàn tiền, không có mã.' }}
+                        </span>
+                    </div>
+                </div>
+
+                <div class="bg-[var(--color-surface)] rounded-2xl border border-[var(--color-line)] p-6">
+                    <div class="flex items-start justify-between gap-6">
+                        <div class="min-w-0">
+                            <h2 class="font-bold text-[var(--color-ink)] mb-1">📢 Mời khách sang dealngon</h2>
+                            <p class="text-sm text-[var(--color-muted)] leading-relaxed">
+                                <b>Bật</b> (đang dùng khi tietkiemvi xây dựng lại): khách đã đăng nhập thấy hộp thông báo
+                                "hoàn tiền đã chuyển sang dealngon" (một lần mỗi phiên); trang chủ thôi hứa hoàn tiền ở đây —
+                                không tiền dự kiến, không mời đăng nhập/đăng ký để được hoàn — mà mời sang dealngon.
+                                Khách vãng lai vẫn dán link lấy link bình thường, không bắt đăng nhập.
+                                <b>Tắt</b>: trang chủ hoàn tiền như trước (tiền dự kiến, bảng vàng, hạng...).
+                                Chỉ đổi giao diện — tỉ lệ hoàn và việc ghi tiền cho đơn không đổi.
+                            </p>
+                        </div>
+
+                        <button
+                            type="button"
+                            role="switch"
+                            :aria-checked="dealngonInviteEnabled"
+                            @click="toggleDealngonInvite"
+                            :disabled="savingDealngonInvite"
+                            class="relative flex-none w-14 h-8 rounded-full transition-colors duration-200 disabled:opacity-60"
+                            :class="dealngonInviteEnabled ? 'bg-[var(--color-accent)]' : 'bg-[var(--color-line)]'"
+                        >
+                            <span
+                                class="absolute top-1 left-1 w-6 h-6 rounded-full bg-white shadow-md transition-transform duration-200"
+                                :class="dealngonInviteEnabled ? 'translate-x-6' : 'translate-x-0'"
+                            ></span>
+                        </button>
+                    </div>
+
+                    <div class="mt-4 pt-4 border-t border-[var(--color-line)] flex items-center gap-2 text-sm">
+                        <span class="w-2 h-2 rounded-full flex-none" :class="dealngonInviteEnabled ? 'bg-[var(--color-accent)]' : 'bg-[var(--color-muted)]'"></span>
+                        <span class="text-[var(--color-ink)] font-medium">
+                            {{ dealngonInviteEnabled
+                                ? 'Đang bật — mời khách sang dealngon.'
+                                : 'Đang tắt — tietkiemvi hứa hoàn tiền như bình thường.' }}
                         </span>
                     </div>
                 </div>

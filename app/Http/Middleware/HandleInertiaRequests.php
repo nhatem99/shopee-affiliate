@@ -9,6 +9,7 @@ use App\Services\AdminAlertService;
 use App\Services\CashbackLinkService;
 use App\Services\CashbackService;
 use App\Services\ChatService;
+use App\Services\DealngonInvite;
 use App\Services\ImpersonationService;
 use Illuminate\Http\Request;
 use Inertia\Middleware;
@@ -104,6 +105,9 @@ class HandleInertiaRequests extends Middleware
                 // Công tắc "Lấy mã giảm giá trên web" (mặc định TẮT): tắt thì ô dán link ở trang chủ
                 // chỉ ra link hoàn tiền, mọi chữ nói về mã FB/IG/YTB trên trang khách phải ẩn theo.
                 'voucherToolEnabled' => CashbackLinkService::voucherToolEnabled(),
+                // Công tắc "Mời khách sang dealngon": có giá trị = trang khách mời sang dealngon thay
+                // vì hứa hoàn tiền ở đây (xem DealngonInvite). null = tắt.
+                'dealngonUrl' => DealngonInvite::enabled() ? DealngonInvite::url() : null,
             ],
         ]);
     }

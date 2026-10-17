@@ -11,6 +11,7 @@ import AccountDrawer from '@/Components/AccountDrawer.vue'
 import MessengerButton from '@/Components/MessengerButton.vue'
 import ChatButton from '@/Components/ChatButton.vue'
 import CashbackMarquee from '@/Components/CashbackMarquee.vue'
+import DealngonNotice from '@/Components/DealngonNotice.vue'
 import { useCashback } from '@/composables/useCashback'
 
 const auth = useAuthStore()
@@ -167,5 +168,7 @@ const accountDrawerOpen = ref(false)
         <MessengerButton v-else-if="!auth.isAdmin" />
         <ToastContainer />
         <AccountDrawer v-if="auth.isLoggedIn && !auth.isAdmin" :open="accountDrawerOpen" @close="accountDrawerOpen = false" />
+        <!-- Khách cũ đăng nhập: báo hoàn tiền đã chuyển sang dealngon (một lần mỗi phiên). -->
+        <DealngonNotice v-if="auth.isLoggedIn && !auth.isAdmin" />
     </div>
 </template>

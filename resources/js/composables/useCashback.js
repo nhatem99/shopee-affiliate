@@ -23,6 +23,16 @@ export function useCashback() {
     // Công tắc "Lấy mã giảm giá trên web" (mặc định tắt): tắt thì trang khách không còn mã giảm
     // giá nào để nhắc tới — câu nào hứa "vẫn được mã giảm giá" phải đổi theo.
     const voucherTool = computed(() => page.props.settings?.voucherToolEnabled ?? false)
+    // Công tắc "Mời khách sang dealngon" (DealngonInvite): có URL = hoàn tiền đã chuyển sang đó, trang
+    // khách ở đây không mời đăng nhập/đăng ký để được hoàn nữa mà mời sang dealngon.
+    const dealngonUrl = computed(() => page.props.settings?.dealngonUrl || null)
+    const dealngonHost = computed(() => {
+        try {
+            return dealngonUrl.value ? new URL(dealngonUrl.value).host : null
+        } catch (e) {
+            return dealngonUrl.value
+        }
+    })
 
     // Đăng ký có thể bị admin tắt (Setting 'customer_auth_enabled'). Khi tắt, /register trả 404
     // qua middleware customer.auth.enabled — nên mọi CTA phải tự đổi đích sang /login thay vì
@@ -33,7 +43,7 @@ export function useCashback() {
 
     // Khách vãng lai bấm mua = đơn đó vĩnh viễn không quy về ai được (ShortLinkController chỉ gắn
     // sub_id khi có user đăng nhập). Đây là điều kiện đáng nói nhất với khách, nên tách riêng.
-    const missingOut = computed(() => cashbackOn.value && !auth.isLoggedIn)
+    const missingOut = computed(() => cashbackOn.value && !auth.isLoggedIn && !dealngonUrl.value)
 
     function vnd(n) {
         return '₫' + Number(n || 0).toLocaleString('vi-VN')
@@ -44,6 +54,8 @@ export function useCashback() {
         cashbackOn,
         minWithdrawal,
         voucherTool,
+        dealngonUrl,
+        dealngonHost,
         customerAuthEnabled,
         joinHref,
         joinLabel,

@@ -73,9 +73,12 @@ class CashbackLinkService
             // Chữ % khách thấy luôn là tỉ lệ HIỂN THỊ admin đặt ở Cài đặt (có thể khác tỉ lệ thực
             // trả); còn SỐ TIỀN dự kiến thì tính theo tỉ lệ thực khách nhận (gồm thưởng hạng) —
             // không hứa một số tiền cao hơn số sẽ vào ví. Khách vãng lai không có: link của họ
-            // không mang mã khách, đơn không được hoàn.
+            // không mang mã khách, đơn không được hoàn. Đang mời sang dealngon thì cũng không:
+            // web không hứa hoàn tiền ở đây nữa (DealngonInvite).
             'cashback_rate' => $this->cashback->displayRate(),
-            'estimate' => $user !== null ? $this->cashback->estimateFor($user, $built['product']) : null,
+            'estimate' => $user !== null && ! DealngonInvite::enabled()
+                ? $this->cashback->estimateFor($user, $built['product'])
+                : null,
         ];
     }
 }
