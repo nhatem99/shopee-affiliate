@@ -27,6 +27,7 @@ class CashbackLinkService
         private UrlValidationService $urlValidator,
         private DirectAffiliateLinkService $direct,
         private AffiliateLinkRewriterService $rewriter,
+        private CashbackService $cashback,
     ) {}
 
     public static function voucherToolEnabled(): bool
@@ -35,7 +36,7 @@ class CashbackLinkService
     }
 
     /**
-     * @return array{product: ?array<string, mixed>, link: string, logged_in: bool}
+     * @return array{product: ?array<string, mixed>, link: string, logged_in: bool, cashback_rate: float, estimate: ?float}
      *
      * @throws AffiliateScanException Thông điệp viết sẵn để hiện thẳng cho khách.
      */
@@ -60,10 +61,21 @@ class CashbackLinkService
             ]);
         }
 
+        // Số hoa hồng gốc của sản phẩm không gửi xuống trình duyệt: chia tiền hoàn dự kiến cho nó
+        // là ra tỉ lệ thực trả, trong khi khách chỉ được thấy tỉ lệ hiển thị (xem bên dưới).
+        $product = $built['product'];
+        unset($product['commission'], $product['cashback_rate']);
+
         return [
-            'product' => $built['product'],
+            'product' => $product,
             'link' => $built['url'],
             'logged_in' => $user !== null,
+            // Chữ % khách thấy luôn là tỉ lệ HIỂN THỊ admin đặt ở Cài đặt (có thể khác tỉ lệ thực
+            // trả); còn SỐ TIỀN dự kiến thì tính theo tỉ lệ thực khách nhận (gồm thưởng hạng) —
+            // không hứa một số tiền cao hơn số sẽ vào ví. Khách vãng lai không có: link của họ
+            // không mang mã khách, đơn không được hoàn.
+            'cashback_rate' => $this->cashback->displayRate(),
+            'estimate' => $user !== null ? $this->cashback->estimateFor($user, $built['product']) : null,
         ];
     }
 }

@@ -74,11 +74,15 @@ class ShopeeLinkResolverService
             $pool->as('proxy')->withHeaders(ShopeeProductLookupService::headers())->timeout(10)->get(ShopeeProductLookupService::BASE_URL, ['item_id' => $itemId]);
         });
 
+        $proxy = $this->productLookup->parseResponse($responses['proxy'] ?? null);
+
+        // Gọi thẳng Shopee không có số hoa hồng — có thì vẫn lấy phần đó từ nguồn proxy, để ước
+        // tính tiền hoàn không mất chỉ vì lần này Shopee lọt qua anti-bot.
         if ($data = $this->parseDirectResponse($responses['direct'] ?? null)) {
-            return $data;
+            return $data + ['commission' => $proxy['commission'] ?? null];
         }
 
-        return $this->productLookup->parseResponse($responses['proxy'] ?? null);
+        return $proxy;
     }
 
     private function parseDirectResponse(mixed $response): ?array

@@ -11,6 +11,7 @@ use App\Services\ShopeeProductLookupService;
 use App\Services\SourceHealthService;
 use App\Services\VoucherRefService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Http\Client\Factory;
 use Illuminate\Support\Facades\Http;
 use Mockery;
 use Tests\TestCase;
@@ -53,9 +54,8 @@ class CashbackLinkTest extends TestCase
             ->get('/')
             ->assertOk()
             ->assertInertia(fn ($page) => $page
-                ->component('Home')
+                ->component('HomeCashback')
                 ->where('settings.voucherToolEnabled', false)
-                ->where('canUseVoucherTool', true)
                 ->where('ytbVouchers', null)
             );
     }
@@ -68,7 +68,7 @@ class CashbackLinkTest extends TestCase
             ->post(route('cashback.link'), ['url' => self::PRODUCT_URL])
             ->assertOk()
             ->assertInertia(fn ($page) => $page
-                ->component('Home')
+                ->component('HomeCashback')
                 ->where('cashbackResult.logged_in', true)
                 ->where('cashbackResult.product.product_name', 'Áo thun nam')
                 ->where('cashbackResult.link', fn ($link) => $this->assertCashbackLink($link, 'CB-khach01---'))
@@ -81,6 +81,65 @@ class CashbackLinkTest extends TestCase
             'platform' => 'shopee',
             'product_name' => 'Áo thun nam',
         ]);
+    }
+
+    public function test_customer_sees_estimated_cashback_from_the_products_commission(): void
+    {
+        // Http::fake() lần hai chỉ nối thêm sau giả lập của setUp — thay hẳn bằng bộ mới.
+        Http::swap(new Factory);
+        Http::fake([
+            'shopee.vn/api/v4/item/get*' => Http::response([], 403),
+            ShopeeProductLookupService::BASE_URL.'*' => Http::response(['productInfo' => [
+                'productName' => 'Máy lọc không khí',
+                'price' => 2545000,
+                'commission' => 156700,
+                'sellerRate' => 0.06,
+                'shopeeRate' => 0.025,
+            ]]),
+        ]);
+        $user = $this->createUser();
+        // Hạng Vàng +3 điểm phần trăm: 156.700 × (40 + 3)% = 67.381.
+        $user->forceFill(['tier' => 'vang'])->save();
+
+        $this->actingAs($user)
+            ->post(route('cashback.link'), ['url' => self::PRODUCT_URL])
+            ->assertInertia(fn ($page) => $page
+                // Số hoa hồng gốc không xuống trình duyệt — chia ra là lộ tỉ lệ thực trả.
+                ->missing('cashbackResult.product.commission')
+                ->where('cashbackResult.cashback_rate', 40)
+                ->where('cashbackResult.estimate', 67381)
+            );
+    }
+
+    /** Khách thấy tỉ lệ hiển thị (60%) nhưng tiền dự kiến tính theo tỉ lệ thực (40%) — không hứa quá số vào ví. */
+    public function test_shows_the_display_rate_but_estimates_with_the_real_rate(): void
+    {
+        Http::swap(new Factory);
+        Http::fake([
+            'shopee.vn/api/v4/item/get*' => Http::response([], 403),
+            ShopeeProductLookupService::BASE_URL.'*' => Http::response(['productInfo' => ['productName' => 'Cà phê', 'price' => 218400, 'commission' => 18564]]),
+        ]);
+        Setting::set(CashbackService::DISPLAY_RATE_KEY, '60');
+
+        $this->actingAs($this->createUser())
+            ->post(route('cashback.link'), ['url' => self::PRODUCT_URL])
+            ->assertInertia(fn ($page) => $page
+                ->where('cashbackResult.cashback_rate', 60)
+                ->where('cashbackResult.estimate', 7426)
+            );
+
+        // Khách vãng lai: link không mang mã khách nên không có tiền dự kiến.
+        auth()->logout();
+        $this->post(route('cashback.link'), ['url' => self::PRODUCT_URL])
+            ->assertInertia(fn ($page) => $page->where('cashbackResult.estimate', null));
+    }
+
+    public function test_no_estimate_without_a_commission_figure(): void
+    {
+        // setUp: Shopee trả thông tin nhưng nguồn có số hoa hồng thì 404 — không đoán bằng tỉ lệ cứng.
+        $this->actingAs($this->createUser())
+            ->post(route('cashback.link'), ['url' => self::PRODUCT_URL])
+            ->assertInertia(fn ($page) => $page->where('cashbackResult.estimate', null));
     }
 
     public function test_guest_still_gets_a_link_without_customer_code(): void
@@ -159,6 +218,7 @@ class CashbackLinkTest extends TestCase
         $this->withHeaders(['User-Agent' => self::DESKTOP_UA])
             ->get('/')
             ->assertInertia(fn ($page) => $page
+                ->component('Home')
                 ->where('settings.voucherToolEnabled', true)
                 ->where('canUseVoucherTool', false)
             );

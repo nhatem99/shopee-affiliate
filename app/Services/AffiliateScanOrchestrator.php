@@ -61,7 +61,7 @@ class AffiliateScanOrchestrator
         $pctSaved = $original > 0 ? round($totalSaved / $original * 100) : 0;
         $cashbackRate = $productInfo['cashback_rate'] ?? $this->accessTrade->getCashbackRate($platform);
         $cashback = round($finalPrice * $cashbackRate);
-        unset($productInfo['cashback_rate']); // không phải cột DB — chỉ dùng để tính cashback ở trên
+        unset($productInfo['cashback_rate'], $productInfo['commission']); // không phải cột DB — chỉ dùng để tính cashback ở trên
 
         // 6. Save to DB and track commission only for logged-in users
         if ($user) {

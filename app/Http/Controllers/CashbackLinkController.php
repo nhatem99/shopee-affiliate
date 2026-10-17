@@ -12,7 +12,7 @@ use Inertia\Response;
 
 /**
  * Ô dán link trên trang chủ khi web tắt lấy mã: trả link hoàn tiền (CashbackLinkService), render
- * thẳng trang chủ với prop `cashbackResult` — cùng cách /voucher/resolve trả `voucherResult`.
+ * thẳng trang chủ hoàn tiền (Pages/HomeCashback.vue) với prop `cashbackResult`.
  */
 class CashbackLinkController extends Controller
 {
@@ -48,7 +48,7 @@ class CashbackLinkController extends Controller
             'source' => 'cashback',
         ]);
 
-        return Inertia::render('Home', [
+        return Inertia::render('HomeCashback', [
             ...$this->home->props($request),
             'cashbackResult' => $result,
         ]);

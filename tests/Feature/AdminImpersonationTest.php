@@ -140,7 +140,7 @@ class AdminImpersonationTest extends TestCase
 
         Setting::set('maintenance_mode', '1');
 
-        $this->get('/')->assertOk()->assertInertia(fn ($page) => $page->component('Home'));
+        $this->get('/')->assertOk()->assertInertia(fn ($page) => $page->component('HomeCashback'));
         $this->post('/impersonate/leave')->assertRedirect('/admin/users');
         $this->assertAuthenticatedAs($admin);
     }

@@ -62,6 +62,10 @@ class ShopeeProductLookupService
             // Tỷ lệ hoa hồng thật của shop này (seller + Shopee) — dùng để ước tính
             // hoàn tiền thay vì tỷ lệ cứng mặc định của AccessTradeService.
             'cashback_rate' => (float) ($info['sellerRate'] ?? 0) + (float) ($info['shopeeRate'] ?? 0),
+            // Số tiền hoa hồng ước tính cho MỘT sản phẩm ở giá hiện tại, ĐÃ tính trần hoa hồng của
+            // Shopee (đo 17-10-2026: phần Shopee bị chặn ở 40.000đ). Tự nhân giá × tỉ lệ là sai với
+            // hàng đắt: tivi 23,5tr × 4% = 940k trong khi hoa hồng thật chỉ 40k.
+            'commission' => isset($info['commission']) ? (float) $info['commission'] : null,
         ];
     }
 }

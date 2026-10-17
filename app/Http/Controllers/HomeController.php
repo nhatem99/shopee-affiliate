@@ -16,6 +16,7 @@ use Inertia\Response;
 /**
  * Trang chủ. Tách khỏi closure trong web.php để CashbackLinkController render lại đúng trang này
  * (props() + cashbackResult) sau mỗi lần dán link — bảng xếp hạng, điểm danh... không biến mất.
+ * Hai bản theo công tắc "Lấy mã giảm giá trên web" — xem component().
  */
 class HomeController extends Controller
 {
@@ -32,7 +33,16 @@ class HomeController extends Controller
     {
         $this->tracking->log('page_view', $request, ['url' => $request->fullUrl()]);
 
-        return Inertia::render('Home', $this->props($request));
+        return Inertia::render(self::component(), $this->props($request));
+    }
+
+    /**
+     * Web tắt lấy mã → trang chủ chỉ hoàn tiền (bố cục theo dealngon, Pages/HomeCashback.vue);
+     * bật → trang lấy mã cũ (Pages/Home.vue).
+     */
+    public static function component(): string
+    {
+        return CashbackLinkService::voucherToolEnabled() ? 'Home' : 'HomeCashback';
     }
 
     /**
@@ -44,9 +54,8 @@ class HomeController extends Controller
 
         return [
             // Công cụ lấy mã chỉ dùng được trên điện thoại — admin luôn xem/test được từ máy tính.
-            // Web tắt lấy mã thì ô dán link chỉ ra link hoàn tiền, máy tính dùng được như thường.
-            'canUseVoucherTool' => ! $voucherTool
-                || TrackingService::isMobile($request->userAgent())
+            // Chỉ Pages/Home.vue (web bật lấy mã) đọc; trang hoàn tiền dùng được cả trên máy tính.
+            'canUseVoucherTool' => TrackingService::isMobile($request->userAgent())
                 || ($request->user()?->isAdmin() ?? false),
             // Bảng xếp hạng hoàn tiền tháng này. Chỉ tính khi chương trình đang bật: tắt rồi mà vẫn
             // truy vấn là tốn công cho một khối frontend đằng nào cũng ẩn (useCashback::cashbackOn).

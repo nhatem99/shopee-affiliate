@@ -118,6 +118,34 @@ class CashbackService
     }
 
     /**
+     * Tỉ lệ một khách thực nhận cho đơn Shopee: tỉ lệ nền + thưởng hạng của họ, trần 100 — đúng
+     * con số award() đem nhân. Chương trình tắt thì 0. Khách vãng lai: tỉ lệ nền.
+     */
+    public function rateFor(?User $user): float
+    {
+        $rate = $this->rate();
+
+        return $rate > 0 ? min(100.0, $rate + $this->tiers->bonusForUser($user)) : 0.0;
+    }
+
+    /**
+     * Tiền hoàn DỰ KIẾN cho một sản phẩm: hoa hồng ước tính của sản phẩm (nguồn dữ liệu đã tính
+     * trần hoa hồng của Shopee) × tỉ lệ khách thực nhận. Chỉ là tạm tính — tiền thật tính trên
+     * hoa hồng ròng trong báo cáo Shopee sau khi đơn hoàn thành (đổi giá, voucher, số lượng đều
+     * làm lệch). Không có số hoa hồng thì null: không đoán bằng tỉ lệ cứng — từng làm vậy và lệch
+     * với tiền thật cả chục lần.
+     *
+     * @param  array<string, mixed>|null  $product
+     */
+    public function estimateFor(?User $user, ?array $product): ?float
+    {
+        $commission = (float) ($product['commission'] ?? 0);
+        $rate = $this->rateFor($user);
+
+        return $commission > 0 && $rate > 0 ? round($commission * $rate / 100) : null;
+    }
+
+    /**
      * Ghi hoa hồng cho một đơn.
      *
      * status 'approved' ngay chứ không phải 'pending': tới đây đơn ĐÃ "Hoàn thành" bên Shopee,

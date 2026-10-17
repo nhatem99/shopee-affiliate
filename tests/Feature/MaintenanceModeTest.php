@@ -15,7 +15,7 @@ class MaintenanceModeTest extends TestCase
     {
         $this->get('/')
             ->assertOk()
-            ->assertInertia(fn ($page) => $page->component('Home'));
+            ->assertInertia(fn ($page) => $page->component('HomeCashback'));
     }
 
     public function test_home_page_shows_maintenance_page_when_maintenance_mode_is_on(): void
@@ -83,7 +83,7 @@ class MaintenanceModeTest extends TestCase
         $this->actingAs($this->createAdmin())
             ->get('/')
             ->assertOk()
-            ->assertInertia(fn ($page) => $page->component('Home'));
+            ->assertInertia(fn ($page) => $page->component('HomeCashback'));
     }
 
     public function test_admin_can_use_voucher_tool_during_maintenance(): void
