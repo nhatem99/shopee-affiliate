@@ -21,7 +21,7 @@ defineProps({
 })
 
 const auth = useAuthStore()
-const { cashbackRate, minWithdrawal, joinHref, joinLabel, vnd } = useCashback()
+const { cashbackRate, minWithdrawal, joinHref, joinLabel, vnd, voucherTool } = useCashback()
 </script>
 
 <template>
@@ -38,7 +38,8 @@ const { cashbackRate, minWithdrawal, joinHref, joinLabel, vnd } = useCashback()
                 <p class="text-[var(--color-muted)] text-sm leading-relaxed max-w-xl mx-auto">
                     Shopee trả hoa hồng tiếp thị cho tụi mình vì đơn của bạn. Tụi mình chia lại
                     <b class="text-[var(--color-brand-green)]">{{ cashbackRate }}% khoản hoa hồng đó</b>
-                    cho chính bạn — cộng thêm vào phần mã giảm giá bạn đã được, chứ không thay thế nó.
+                    <template v-if="voucherTool">cho chính bạn — cộng thêm vào phần mã giảm giá bạn đã được, chứ không thay thế nó.</template>
+                    <template v-else>cho chính bạn — giá mua vẫn y như tự mở app, mã giảm giá của Shopee/shop vẫn dùng bình thường.</template>
                 </p>
             </div>
 
@@ -68,7 +69,7 @@ const { cashbackRate, minWithdrawal, joinHref, joinLabel, vnd } = useCashback()
                          rồi im lặng sẽ bị đọc thành "đủ điều kiện này là chắc chắn có tiền", và
                          đúng một trường hợp rơi ra ngoài là mất sạch niềm tin vừa xây. -->
                     <p class="text-xs text-[var(--color-muted)] mt-3 leading-relaxed">
-                        Kỹ thuật cũng có lúc trục trặc (nguồn cấp mã đổi đường dẫn, chuỗi chuyển hướng gãy).
+                        Kỹ thuật cũng có lúc trục trặc ({{ voucherTool ? 'nguồn cấp mã đổi đường dẫn, chuỗi chuyển hướng gãy' : 'Shopee ghi thiếu mã của bạn trong báo cáo' }}).
                         Hiếm, nhưng có — gặp thì nhắn tụi mình kèm mã đơn để đối chiếu.
                     </p>
                 </div>
@@ -83,7 +84,8 @@ const { cashbackRate, minWithdrawal, joinHref, joinLabel, vnd } = useCashback()
                         </li>
                         <li class="flex gap-2">
                             <span class="text-[var(--color-accent)] flex-none">✕</span>
-                            <span>Tự mở app Shopee tìm lại sản phẩm rồi đặt (mã giảm giá cũng mất luôn)</span>
+                            <span v-if="voucherTool">Tự mở app Shopee tìm lại sản phẩm rồi đặt (mã giảm giá cũng mất luôn)</span>
+                            <span v-else>Tự mở app Shopee tìm lại sản phẩm rồi đặt, hoặc bấm link của người khác sau link của tụi mình</span>
                         </li>
                         <li class="flex gap-2">
                             <span class="text-[var(--color-accent)] flex-none">✕</span>

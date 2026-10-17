@@ -41,7 +41,7 @@ const { cashbackRate } = useCashback()
         <section class="px-4 pb-14">
             <div class="max-w-3xl mx-auto text-center">
                 <Link href="/" class="btn-fire inline-block px-8 py-4 rounded-2xl no-underline">
-                    Về trang chủ lấy mã →
+                    Về trang chủ dán link →
                 </Link>
             </div>
         </section>

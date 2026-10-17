@@ -39,6 +39,7 @@ class KieuSmartLinkSourceTest extends TestCase
     protected function setUp(): void
     {
         parent::setUp();
+        $this->enableVoucherTool();
 
         config([
             'services.kieusmartlink.endpoint' => self::ENDPOINT,

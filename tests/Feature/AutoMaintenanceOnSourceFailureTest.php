@@ -23,6 +23,12 @@ class AutoMaintenanceOnSourceFailureTest extends TestCase
 {
     use RefreshDatabase;
 
+    protected function setUp(): void
+    {
+        parent::setUp();
+        $this->enableVoucherTool();
+    }
+
     /** Nguồn trả lời thế nào cũng được, test chỉ quan tâm ok=true/false. */
     private function sourceAnswers(bool ...$answers): void
     {

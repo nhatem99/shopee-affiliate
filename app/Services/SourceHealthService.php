@@ -21,7 +21,7 @@ use Illuminate\Support\Facades\Log;
  * lúc nguồn dự phòng đang chạy ngon. Nên khi đang để laymavoucher thì kiểm tra laymavoucher.
  * kieusmartlink cũng vậy: đang để nó thì kiểm tra nó.
  * Cùng lý do đó, để ganma mà đã tắt "mã YTB gọi kèm kieushopee" thì bỏ qua hẳn — xem
- * skipWhileYtbOnly().
+ * skip().
  * Bật/tắt bảo trì dùng đúng Setting `maintenance_mode` mà MaintenanceMode middleware
  * và trang Cài đặt vẫn đọc — không thêm đường thứ hai để sớm muộn hai bên lệch nhau.
  *
@@ -83,8 +83,20 @@ class SourceHealthService
      */
     public function check(): array
     {
+        // Web tắt lấy mã thì trang khách không gọi nguồn mã nào nữa — nguồn chết không phải lý do
+        // đóng trang (đóng là chặn luôn cả link hoàn tiền lẫn /go/ của bài nhóm).
+        if (! CashbackLinkService::voucherToolEnabled()) {
+            return $this->skip(
+                'Bỏ qua — web đang tắt lấy mã giảm giá nên nguồn mã lỗi cũng không ảnh hưởng khách.',
+                'SourceHealthService: web tắt lấy mã — đã tự tắt chế độ bảo trì',
+            );
+        }
+
         if ($this->sources->ytbOnly()) {
-            return $this->skipWhileYtbOnly();
+            return $this->skip(
+                'Bỏ qua — chế độ mã YTB đang không gọi kieushopee nên kieushopee lỗi cũng không ảnh hưởng khách.',
+                'SourceHealthService: chế độ mã YTB không gọi kieushopee nữa — đã tự tắt chế độ bảo trì',
+            );
         }
 
         // Dùng đúng testConnection() của nút "Kiểm tra kết nối" ở /admin/api-config: cùng tham
@@ -126,18 +138,20 @@ class SourceHealthService
      * Lần bảo trì do chính lớp này bật (lúc kieushopee chết) thì mở lại luôn: lý do đóng trang
      * không còn chạm tới khách nữa, để nguyên thì admin tắt công tắc xong trang vẫn đóng.
      *
+     * Web tắt lấy mã (CashbackLinkService::voucherToolEnabled) cũng bỏ qua y như vậy.
+     *
      * @return array{checked_at: string, ok: bool, message: string, consecutive_failures: int, action: ?string}
      */
-    private function skipWhileYtbOnly(): array
+    private function skip(string $message, string $reopenLog): array
     {
         $status = [
             'checked_at' => now()->toIso8601String(),
             'source' => KieuShopeeService::SOURCE,
             'ok' => true,
             'skipped' => true,
-            'message' => 'Bỏ qua — chế độ mã YTB đang không gọi kieushopee nên kieushopee lỗi cũng không ảnh hưởng khách.',
+            'message' => $message,
             'consecutive_failures' => 0,
-            'action' => $this->reopen('SourceHealthService: chế độ mã YTB không gọi kieushopee nữa — đã tự tắt chế độ bảo trì'),
+            'action' => $this->reopen($reopenLog),
         ];
 
         Setting::set(self::STATUS_KEY, json_encode($status, JSON_UNESCAPED_UNICODE));
@@ -151,7 +165,8 @@ class SourceHealthService
      *
      * `source` null = lần kiểm tra lưu trước khi có laymavoucher, lúc đó chỉ có kieushopee.
      *
-     * `skipped` true = lần đó bỏ qua vì chế độ mã YTB không gọi kieushopee — xem skipWhileYtbOnly().
+     * `skipped` true = lần đó bỏ qua vì chế độ mã YTB không gọi kieushopee, hoặc web đang tắt lấy mã —
+     * xem skip().
      *
      * @return array{checked_at: ?string, source: ?string, ok: ?bool, skipped: bool, message: ?string, consecutive_failures: int, action: ?string}
      */

@@ -6,6 +6,7 @@ use App\Http\Controllers\NotificationController;
 use App\Http\Controllers\ProfileController;
 use App\Models\Setting;
 use App\Services\AdminAlertService;
+use App\Services\CashbackLinkService;
 use App\Services\CashbackService;
 use App\Services\ChatService;
 use App\Services\ImpersonationService;
@@ -100,6 +101,9 @@ class HandleInertiaRequests extends Middleware
                 // (Pages/Home.vue, lưu ở localStorage) và trang /history (Pages/History.vue).
                 // Mặc định TẮT: mã trong link cũ có thể đã hết lượt/hết hạn từ lúc quét.
                 'historyRebuyEnabled' => Setting::getBool('history_rebuy_enabled', false),
+                // Công tắc "Lấy mã giảm giá trên web" (mặc định TẮT): tắt thì ô dán link ở trang chủ
+                // chỉ ra link hoàn tiền, mọi chữ nói về mã FB/IG/YTB trên trang khách phải ẩn theo.
+                'voucherToolEnabled' => CashbackLinkService::voucherToolEnabled(),
             ],
         ]);
     }

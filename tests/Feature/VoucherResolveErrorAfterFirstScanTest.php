@@ -18,6 +18,12 @@ class VoucherResolveErrorAfterFirstScanTest extends TestCase
 {
     use RefreshDatabase;
 
+    protected function setUp(): void
+    {
+        parent::setUp();
+        $this->enableVoucherTool();
+    }
+
     private const PAGE_URL_AFTER_FIRST_SCAN = '/voucher/resolve';
 
     /** Lỗi validate (chuỗi dán vào không phải link) đi qua back() mặc định của ValidationException. */

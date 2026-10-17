@@ -234,7 +234,7 @@ const providerLabels = { momo: 'MoMo', zalopay: 'ZaloPay' }
                     </li>
                 </ol>
                 <Link href="/" class="btn-fire inline-block mt-5 px-5 py-2.5 rounded-xl text-sm no-underline">
-                    Về trang chủ lấy mã →
+                    Về trang chủ dán link →
                 </Link>
             </div>
 

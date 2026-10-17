@@ -28,6 +28,7 @@ class YtbVoucherStatusTest extends TestCase
     protected function setUp(): void
     {
         parent::setUp();
+        $this->enableVoucherTool();
 
         Cache::flush();
         // Làm mới ngầm (Cache::flexible) chạy ngay tại chỗ thay vì đợi request kết thúc.

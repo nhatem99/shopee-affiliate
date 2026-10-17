@@ -16,6 +16,8 @@ const SECTIONS = [
 
 const props = defineProps({
     customerAuthEnabled: { type: Boolean, required: true },
+    // Công tắc "Lấy mã giảm giá trên web" — tắt (mặc định) thì trang chủ chỉ ra link hoàn tiền.
+    voucherToolEnabled: { type: Boolean, default: false },
     maintenanceMode: { type: Boolean, required: true },
     autoMaintenanceEnabled: { type: Boolean, default: false },
     // { checked_at, ok, skipped, message, consecutive_failures, action } — null ở mọi trường khi
@@ -54,6 +56,8 @@ const festiveDecor = ref(props.festiveDecor)
 const savingFestive = ref(false)
 const historyRebuyEnabled = ref(props.historyRebuyEnabled)
 const savingHistoryRebuy = ref(false)
+const voucherToolEnabled = ref(props.voucherToolEnabled)
+const savingVoucherTool = ref(false)
 const fbigWindowAutoSwitch = ref(props.fbigWindowAutoSwitch)
 const savingFbigAutoSwitch = ref(false)
 const ytbWithKieuShopee = ref(props.ytbWithKieuShopee)
@@ -89,6 +93,7 @@ watch(() => props.maintenanceMode, (v) => { maintenanceMode.value = v })
 watch(() => props.autoMaintenanceEnabled, (v) => { autoMaintenanceEnabled.value = v })
 watch(() => props.festiveDecor, (v) => { festiveDecor.value = v })
 watch(() => props.historyRebuyEnabled, (v) => { historyRebuyEnabled.value = v })
+watch(() => props.voucherToolEnabled, (v) => { voucherToolEnabled.value = v })
 watch(() => props.fbigWindowAutoSwitch, (v) => { fbigWindowAutoSwitch.value = v })
 watch(() => props.ytbWithKieuShopee, (v) => { ytbWithKieuShopee.value = v })
 watch(() => props.goLinksMobileOnly, (v) => { goLinksMobileOnly.value = v })
@@ -194,6 +199,24 @@ function toggleFestive() {
             toast.error('Không lưu được cài đặt, vui lòng thử lại.')
         },
         onFinish: () => { savingFestive.value = false },
+    })
+}
+
+function toggleVoucherTool() {
+    const next = !voucherToolEnabled.value
+    voucherToolEnabled.value = next
+    savingVoucherTool.value = true
+
+    router.post('/admin/settings', { voucher_tool_enabled: next }, {
+        preserveScroll: true,
+        onSuccess: () => toast.success(next
+            ? 'Đã bật lại lấy mã giảm giá trên web.'
+            : 'Đã tắt — trang chủ giờ chỉ ra link hoàn tiền, không còn mã.'),
+        onError: () => {
+            voucherToolEnabled.value = !next // rollback nếu lưu lỗi
+            toast.error('Không lưu được cài đặt, vui lòng thử lại.')
+        },
+        onFinish: () => { savingVoucherTool.value = false },
     })
 }
 
@@ -641,6 +664,45 @@ function saveCashbackDisplayRate() {
 
             <section id="nguon-ma" class="scroll-mt-20 space-y-4">
                 <h2 class="px-1 text-xs font-bold uppercase tracking-wider text-[var(--color-muted)]">🎟️ Nguồn lấy mã</h2>
+
+                <div class="bg-[var(--color-surface)] rounded-2xl border border-[var(--color-line)] p-6">
+                    <div class="flex items-start justify-between gap-6">
+                        <div class="min-w-0">
+                            <h2 class="font-bold text-[var(--color-ink)] mb-1">🎟️ Lấy mã giảm giá trên web</h2>
+                            <p class="text-sm text-[var(--color-muted)] leading-relaxed">
+                                <b>Tắt</b> (mặc định, giống dealngon): dán link ở trang chủ chỉ ra <b>link hoàn tiền</b> —
+                                link affiliate chính thức của Shopee, <b>không còn mã FB/IG/YTB</b>. Khách đăng nhập: link mang mã khách để hoàn tiền;
+                                khách vãng lai vẫn lấy được link, chỉ là không hoàn tiền. Dùng được cả trên máy tính.
+                                <b>Bật</b>: trang chủ lấy mã như cũ (các công tắc nguồn mã bên dưới có tác dụng trở lại).
+                                Bài nhóm FB / bot Zalo nhóm không đổi theo công tắc này.
+                            </p>
+                        </div>
+
+                        <button
+                            type="button"
+                            role="switch"
+                            :aria-checked="voucherToolEnabled"
+                            @click="toggleVoucherTool"
+                            :disabled="savingVoucherTool"
+                            class="relative flex-none w-14 h-8 rounded-full transition-colors duration-200 disabled:opacity-60"
+                            :class="voucherToolEnabled ? 'bg-[var(--color-accent)]' : 'bg-[var(--color-line)]'"
+                        >
+                            <span
+                                class="absolute top-1 left-1 w-6 h-6 rounded-full bg-white shadow-md transition-transform duration-200"
+                                :class="voucherToolEnabled ? 'translate-x-6' : 'translate-x-0'"
+                            ></span>
+                        </button>
+                    </div>
+
+                    <div class="mt-4 pt-4 border-t border-[var(--color-line)] flex items-center gap-2 text-sm">
+                        <span class="w-2 h-2 rounded-full flex-none" :class="voucherToolEnabled ? 'bg-[var(--color-accent)]' : 'bg-[var(--color-muted)]'"></span>
+                        <span class="text-[var(--color-ink)] font-medium">
+                            {{ voucherToolEnabled
+                                ? 'Đang bật — trang chủ lấy mã giảm giá như cũ.'
+                                : 'Đang tắt — trang chủ chỉ ra link hoàn tiền, không có mã.' }}
+                        </span>
+                    </div>
+                </div>
                 <p class="px-1 text-sm text-[var(--color-muted)]">
                     Chọn nguồn chính ở trang <Link href="/admin/api-config" class="font-semibold text-[var(--color-accent)] hover:underline">Cấu hình API</Link>
                     — hai công tắc dưới chỉnh cách nguồn ganma (mã YouTube) chạy.

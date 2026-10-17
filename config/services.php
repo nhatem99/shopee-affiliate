@@ -80,6 +80,9 @@ return [
         // cáo Shopee thấy được đơn đến từ nhóm. Cùng quy tắc: không đặt tên miền vào đây.
         'utm_content_fb_group' => env('SHOPEE_UTM_CONTENT_FB_GROUP', 'FBG'),
         'utm_content_zalo' => env('SHOPEE_UTM_CONTENT_ZALO', 'ZL'),
+        // Nhãn kênh của link hoàn tiền dán ở trang chủ khi web tắt lấy mã (CashbackLinkService) —
+        // đi trước mã khách. Cùng nhãn với dealngon.
+        'utm_content_cashback' => env('SHOPEE_UTM_CONTENT_CASHBACK', 'CB'),
 
         // Marker nhận ra "mã YouTube". Link an_redir của ganma mang sub_id dạng "YT3-<token>";
         // đi theo redirect thì Shopee đổ nguyên văn giá trị đó sang utm_content, nên khe đầu
@@ -277,6 +280,12 @@ return [
         'ffprobe' => env('FFPROBE_BINARY', 'ffprobe'),
         // Bỏ trống thì tự tìm DejaVu Sans Bold (Ubuntu) / Arial Bold (Mac) — font phải có dấu tiếng Việt.
         'font' => env('FB_VIDEO_FONT'),
+    ],
+
+    // Web mới của chính mình, khách tietkiemvi đã được chuyển sang (tài khoản, ví, lịch sử) — thông
+    // báo "chuyển sang dealngon" trỏ tới đây (DealngonMoveNotification).
+    'dealngon' => [
+        'url' => env('DEALNGON_URL', 'https://dealngon.top'),
     ],
 
 ];

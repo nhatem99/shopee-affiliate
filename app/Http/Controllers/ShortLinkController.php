@@ -6,6 +6,7 @@ use App\Exceptions\AffiliateScanException;
 use App\Models\ApiConfig;
 use App\Models\Setting;
 use App\Services\AffiliateLinkRewriterService;
+use App\Services\CashbackLinkService;
 use App\Services\FacebookPageService;
 use App\Services\FacebookPostTarget;
 use App\Services\FacebookReelSlotService;
@@ -50,6 +51,12 @@ class ShortLinkController extends Controller
             'product_name' => ['nullable', 'string', 'max:255'],
             'product_image' => ['nullable', 'url', 'max:2000'],
         ]);
+
+        // Web tắt lấy mã: ref cũ (còn trong lịch sử trình duyệt tới 7 ngày) cũng không đổi ra link
+        // có mã nữa — khách dán lại link ở trang chủ để nhận link mới.
+        if (! CashbackLinkService::voucherToolEnabled()) {
+            return response()->json(['message' => 'Web không lấy mã giảm giá nữa — dán lại link sản phẩm ở trang chủ để nhận link mua nhé.'], 422);
+        }
 
         $voucherRef = $this->refs->resolve($validated['ref']);
 

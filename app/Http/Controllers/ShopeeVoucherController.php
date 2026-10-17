@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Exceptions\AffiliateScanException;
+use App\Services\CashbackLinkService;
 use App\Services\FacebookRedirectFlagService;
 use App\Services\ShopeeLinkResolverService;
 use App\Services\TrackingService;
@@ -29,6 +30,14 @@ class ShopeeVoucherController extends Controller
 
     public function resolve(Request $request): Response|RedirectResponse
     {
+        // Admin tắt "Lấy mã giảm giá trên web": trang chủ đi /link-hoan-tien, không còn gọi tới đây.
+        // Vẫn chặn ở server để tab cũ hay ai gọi thẳng endpoint cũng không lấy được link có mã.
+        if (! CashbackLinkService::voucherToolEnabled()) {
+            return redirect()->route('home')->withErrors([
+                'voucher_url' => 'Web không lấy mã giảm giá nữa — tải lại trang rồi dán link để nhận link mua nhé.',
+            ]);
+        }
+
         // Công cụ chỉ dành cho khách trên điện thoại (bấm link Facebook/Zalo) — admin luôn qua
         // được để test từ máy tính. Chặn ở đây để không ai gọi thẳng endpoint này bỏ qua giao
         // diện (ẩn khung tìm mã ở Home.vue chỉ là UI, không phải bảo mật thật).

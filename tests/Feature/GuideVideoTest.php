@@ -22,6 +22,12 @@ class GuideVideoTest extends TestCase
 {
     use RefreshDatabase;
 
+    protected function setUp(): void
+    {
+        parent::setUp();
+        $this->enableVoucherTool();
+    }
+
     public function test_trang_huong_dan_mo_duoc_khi_chua_dat_video(): void
     {
         // Không video thì trang vẫn phải sống: phần hướng dẫn bằng chữ mới là nội dung chính.

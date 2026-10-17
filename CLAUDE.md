@@ -122,6 +122,7 @@ resources/js/
 |------|-----------|---------|
 | `GET /` | — | Home scanner |
 | `POST /affiliate/scan` | throttle:affiliate-scan | Scan URL → affiliate link |
+| `POST /link-hoan-tien` | throttle:affiliate-scan | Ô dán link khi TẮT "Lấy mã giảm giá trên web" (mặc định từ 17/10/2026): link `s.shopee.vn/an_redir` sub_id `CB-<mã khách>---`, khách vãng lai `CB` — CashbackLinkService. `/voucher/resolve`, `/voucher/shorten`, `/huong-dan` chỉ chạy khi bật |
 | `GET /history` | auth | User scan history |
 | `GET /admin/dashboard` | auth, admin | Admin stats |
 | `GET/PATCH /admin/orders` | auth, admin | Commission management |

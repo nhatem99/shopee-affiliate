@@ -79,7 +79,7 @@ const platformLabels = { shopee: 'Shopee', lazada: 'Lazada', tiki: 'Tiki', tikto
                 <p class="text-4xl mb-4">📋</p>
                 <p class="text-[var(--color-muted)] font-semibold">Chưa có lịch sử quét mã nào.</p>
                 <Link href="/" class="btn-fire mt-4 inline-block px-6 py-3 rounded-xl">
-                    Lấy mã ngay →
+                    Dán link ngay →
                 </Link>
             </div>
         </div>

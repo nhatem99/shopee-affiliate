@@ -39,6 +39,7 @@ class LaymaVoucherSourceTest extends TestCase
     protected function setUp(): void
     {
         parent::setUp();
+        $this->enableVoucherTool();
 
         Cache::flush();
 

@@ -20,6 +20,9 @@ export function useCashback() {
     const cashbackRate = computed(() => Number(page.props.settings?.cashbackRate ?? 0))
     const cashbackOn = computed(() => cashbackRate.value > 0)
     const minWithdrawal = computed(() => Number(page.props.settings?.minWithdrawal ?? 0))
+    // Công tắc "Lấy mã giảm giá trên web" (mặc định tắt): tắt thì trang khách không còn mã giảm
+    // giá nào để nhắc tới — câu nào hứa "vẫn được mã giảm giá" phải đổi theo.
+    const voucherTool = computed(() => page.props.settings?.voucherToolEnabled ?? false)
 
     // Đăng ký có thể bị admin tắt (Setting 'customer_auth_enabled'). Khi tắt, /register trả 404
     // qua middleware customer.auth.enabled — nên mọi CTA phải tự đổi đích sang /login thay vì
@@ -40,6 +43,7 @@ export function useCashback() {
         cashbackRate,
         cashbackOn,
         minWithdrawal,
+        voucherTool,
         customerAuthEnabled,
         joinHref,
         joinLabel,

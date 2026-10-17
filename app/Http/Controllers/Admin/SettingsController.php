@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Admin;
 use App\Http\Controllers\Controller;
 use App\Models\Setting;
 use App\Services\CashbackLeaderboardService;
+use App\Services\CashbackLinkService;
 use App\Services\CashbackService;
 use App\Services\ChatService;
 use App\Services\DailyCheckInService;
@@ -26,6 +27,7 @@ class SettingsController extends Controller
     {
         return Inertia::render('Admin/Settings', [
             'customerAuthEnabled' => Setting::getBool('customer_auth_enabled', true),
+            'voucherToolEnabled' => CashbackLinkService::voucherToolEnabled(),
             // Video hướng dẫn lấy mã ở trang công khai /huong-dan — xem GuideVideoService.
             'guideVideo' => app(GuideVideoService::class)->adminState(),
             'maintenanceMode' => Setting::getBool('maintenance_mode', false),
@@ -64,6 +66,7 @@ class SettingsController extends Controller
         // là "sometimes" — không bắt buộc phải gửi hết cùng lúc.
         $validated = $request->validate([
             'customer_auth_enabled' => ['sometimes', 'boolean'],
+            'voucher_tool_enabled' => ['sometimes', 'boolean'],
             'maintenance_mode' => ['sometimes', 'boolean'],
             'auto_maintenance_enabled' => ['sometimes', 'boolean'],
             'festive_decor' => ['sometimes', 'boolean'],
@@ -105,6 +108,13 @@ class SettingsController extends Controller
         // Chỉ áp cho tài khoản đăng ký TỪ ĐÂY về sau — không cộng/trừ lại ai đã nhận rồi.
         if (array_key_exists('welcome_bonus_amount', $validated)) {
             Setting::set(WelcomeBonusService::AMOUNT_KEY, (string) $validated['welcome_bonus_amount']);
+        }
+
+        // Tắt = trang chủ chỉ ra link hoàn tiền (CashbackLinkService), không gọi nguồn mã nào. Bài
+        // nhóm FB / bot Zalo nhóm không đổi theo công tắc này — chúng có công tắc riêng
+        // (group_links_direct_affiliate).
+        if (array_key_exists('voucher_tool_enabled', $validated)) {
+            Setting::set(CashbackLinkService::VOUCHER_TOOL_KEY, $validated['voucher_tool_enabled'] ? '1' : '0');
         }
 
         if (array_key_exists('customer_auth_enabled', $validated)) {

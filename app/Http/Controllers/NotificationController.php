@@ -7,6 +7,7 @@ use Illuminate\Http\Request;
 use Illuminate\Notifications\DatabaseNotification;
 use Inertia\Inertia;
 use Inertia\Response;
+use Symfony\Component\HttpFoundation\Response as SymfonyResponse;
 
 class NotificationController extends Controller
 {
@@ -24,13 +25,23 @@ class NotificationController extends Controller
     /**
      * Bấm vào một thông báo: đánh dấu đã đọc rồi đưa tới trang nó trỏ đến.
      */
-    public function read(Request $request, string $id): RedirectResponse
+    public function read(Request $request, string $id): RedirectResponse|SymfonyResponse
     {
         /** @var DatabaseNotification $notification */
         $notification = $request->user()->notifications()->findOrFail($id);
         $notification->markAsRead();
 
-        return redirect($notification->data['url'] ?? route('notifications'));
+        $url = $notification->data['url'] ?? route('notifications');
+
+        // Trỏ sang web khác (thông báo chuyển sang dealngon): chuông bấm bằng router.post của
+        // Inertia, redirect 302 thường thì XHR đi theo sang tên miền khác và chết vì CORS —
+        // Inertia::location bắt trình duyệt tự chuyển trang.
+        $host = parse_url($url, PHP_URL_HOST);
+        if (is_string($host) && $host !== $request->getHost()) {
+            return Inertia::location($url);
+        }
+
+        return redirect($url);
     }
 
     public function readAll(Request $request): RedirectResponse

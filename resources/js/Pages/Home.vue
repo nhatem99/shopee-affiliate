@@ -41,6 +41,9 @@ const props = defineProps({
     // Thẻ Điểm danh nhận quà — null khi admin tắt chương trình (xem DailyCheckInService).
     // Khách vãng lai vẫn có dữ liệu này: thẻ hiện đủ kho quà và dẫn họ đi đăng ký.
     dailyCheckIn: { type: Object, default: null },
+    // Web tắt lấy mã (settings.voucherToolEnabled = false): kết quả của /link-hoan-tien —
+    // { product, link, logged_in }. Khách vãng lai cũng có link, chỉ là không mang mã khách.
+    cashbackResult: { type: Object, default: null },
 })
 
 // Nơi khách phải bấm sau khi Facebook mở ra — dùng lại ở nhiều câu hướng dẫn nên gom một chỗ.
@@ -50,7 +53,7 @@ const linkLocation = computed(() => props.facebookMode === 'reel'
 
 const toast = useToast()
 const auth = useAuthStore()
-const { cashbackRate, cashbackOn, joinHref, joinLabel } = useCashback()
+const { cashbackRate, cashbackOn, joinHref, joinLabel, voucherTool } = useCashback()
 const { celebrate } = useFestive()
 
 // Nhắc hoàn tiền cho khách VÃNG LAI. Chỉ hiện khi chương trình đang bật và khách chưa đăng nhập:
@@ -88,7 +91,8 @@ const history = useLocalStorage('sv_history', [])
 // định) thì mọi mục lịch sử chỉ còn là sổ ghi những sản phẩm đã tra: khách muốn mua phải dán lại
 // link để quét mới, vì mã gắn trong ref cũ có thể đã hết lượt/hết hạn từ lúc quét.
 const page = usePage()
-const historyRebuy = computed(() => page.props.settings?.historyRebuyEnabled ?? false)
+// Web tắt lấy mã thì ref cũ trong lịch sử không đổi ra link được nữa (/voucher/shorten từ chối).
+const historyRebuy = computed(() => voucherTool.value && (page.props.settings?.historyRebuyEnabled ?? false))
 
 // Dọn lịch sử ngay khi mở trang, trước khi khách kịp bấm phải mục chết:
 //  - ref chỉ sống 7 ngày (VoucherRefService::TTL_DAYS) — mục cũ hơn bấm chắc chắn lỗi.
@@ -259,7 +263,7 @@ function resolveVoucher() {
     // (router.post tự huỷ lượt cũ) — khoá cứng là khách đứng nhìn ô im lặng suốt 20-45 giây.
     // Nói cho khách biết vì sao không có gì xảy ra, thay vì im lặng bỏ qua.
     if (resolving.value && url === resolvingUrl && Date.now() - resolvingSince < RESOLVE_STALE_MS) {
-        toast.info('Đang tìm mã cho link này rồi, đợi thêm chút nhé...')
+        toast.info(voucherTool.value ? 'Đang tìm mã cho link này rồi, đợi thêm chút nhé...' : 'Đang lấy link này rồi, đợi chút nhé...')
 
         return
     }
@@ -285,7 +289,7 @@ function resolveVoucher() {
     ytbReturnNudge.value = false
     ytbStep2Done.value = false
 
-    router.post('/voucher/resolve', { url }, {
+    router.post(voucherTool.value ? '/voucher/resolve' : '/link-hoan-tien', { url }, {
         preserveScroll: true,
         onSuccess: () => {
             if (seq !== resolveSeq) return
@@ -293,6 +297,11 @@ function resolveVoucher() {
             // Ghi lại link vừa quét xong để khoá nút. Chỉ đặt ở onSuccess: quét lỗi thì phải cho
             // khách bấm thử lại, không được khoá.
             resolvedUrl.value = voucherUrl.value.trim()
+            if (props.cashbackResult) {
+                onCashbackResult(url)
+
+                return
+            }
             const result = props.voucherResult
             if (result?.voucher_ref) {
                 history.value = [
@@ -331,7 +340,7 @@ function resolveVoucher() {
             if (seq !== resolveSeq) return
             // `url` là lỗi validate của Laravel (chuỗi dán vào không phải link), `voucher_url`
             // là lỗi nghiệp vụ controller trả về — cả hai đều đã viết cho khách đọc.
-            voucherError.value = errors.voucher_url || errors.url || 'Có lỗi xảy ra, vui lòng thử lại.'
+            voucherError.value = errors.voucher_url || errors.link_url || errors.url || 'Có lỗi xảy ra, vui lòng thử lại.'
             toast.error(voucherError.value)
         },
         // onFinish chạy trong MỌI trường hợp, kể cả request đứt giữa đường (mạng yếu, khách
@@ -344,6 +353,47 @@ function resolveVoucher() {
             resolvingUrl = null
         },
     })
+}
+
+// Web tắt lấy mã: link trả về đã là link mua cuối cùng (s.shopee.vn/an_redir), không còn ref hay
+// bước nào ở giữa. Lịch sử lưu chính link khách dán (url) — bấm lại là tạo link mới, vì link hoàn
+// tiền gắn với tài khoản đang đăng nhập LÚC TẠO, dùng lại link cũ có thể mang mã của người khác.
+function onCashbackResult(url) {
+    const result = props.cashbackResult
+    if (result?.link) {
+        history.value = [
+            {
+                url,
+                product_name: result.product?.product_name || null,
+                product_image: result.product?.product_image || null,
+                created_at: new Date().toISOString(),
+            },
+            ...history.value.filter((h) => h.url !== url),
+        ].slice(0, 5)
+        celebrate()
+    }
+    scrollToResult()
+}
+
+// Xong là scrollToResult tự cuộn tới kết quả, không cần cuộn/focus ở đây (focus là bật bàn phím).
+function resolveAgain(h) {
+    voucherUrl.value = h.url
+    resolveVoucher()
+}
+
+const copyingCashback = ref(false)
+
+async function copyCashbackLink() {
+    if (!props.cashbackResult?.link || copyingCashback.value) return
+    copyingCashback.value = true
+    try {
+        await navigator.clipboard.writeText(props.cashbackResult.link)
+        toast.success('Đã sao chép link!')
+    } catch (e) {
+        toast.error('Không thể sao chép link, vui lòng thử lại.')
+    } finally {
+        copyingCashback.value = false
+    }
 }
 
 const shorteningKey = ref(null)
@@ -635,18 +685,44 @@ const steps = computed(() => [
         { icon: '🔑', label: 'Đăng nhập', desc: 'Bắt buộc nếu bạn muốn được hoàn tiền — đơn chỉ ghi nhận được về tài khoản đang đăng nhập tại lúc bấm mua. Chỉ cần làm một lần.' },
     ] : []),
     { icon: '📎', label: 'Dán link', desc: 'Copy link sản phẩm từ app hoặc web Shopee, dán vào ô ở đầu trang.' },
-    { icon: '🔍', label: 'Tự quét mã', desc: 'Không cần bấm nút — hệ thống tự tìm mã Facebook, YouTube, Instagram còn hiệu lực ngay khi bạn dán link.' },
-    { icon: '🛍️', label: 'Bấm mua', desc: 'Bấm nút mua ở khối kết quả — link đã áp sẵn mã giảm giá sẽ tự mở ra, không cần nhập mã.' },
+    ...(voucherTool.value ? [
+        { icon: '🔍', label: 'Tự quét mã', desc: 'Không cần bấm nút — hệ thống tự tìm mã Facebook, YouTube, Instagram còn hiệu lực ngay khi bạn dán link.' },
+        { icon: '🛍️', label: 'Bấm mua', desc: 'Bấm nút mua ở khối kết quả — link đã áp sẵn mã giảm giá sẽ tự mở ra, không cần nhập mã.' },
+    ] : [
+        { icon: '🛍️', label: 'Bấm mua', desc: 'Bấm "Mua trên Shopee" ở khối kết quả rồi đặt hàng ngay trong lượt mở đó.' },
+        ...(cashbackOn.value ? [
+            { icon: '💰', label: 'Nhận tiền', desc: 'Đơn hoàn thành bên Shopee và được đối soát là tiền vào ví — rút về MoMo/ZaloPay.' },
+        ] : []),
+    ]),
 ])
 
 // Tiêu đề phải nói đúng thứ khách nhận được: chưa bật hoàn tiền thì trang chỉ tìm mã giảm giá,
 // hứa "nhận hoàn tiền" lúc đó là hứa suông.
-const stepsTitle = computed(() => cashbackOn.value ? 'Các bước nhận hoàn tiền' : 'Các bước lấy mã giảm giá')
+const stepsTitle = computed(() => {
+    if (cashbackOn.value) return 'Các bước nhận hoàn tiền'
+
+    return voucherTool.value ? 'Các bước lấy mã giảm giá' : 'Các bước mua qua link'
+})
 
 // FAQ phải theo trạng thái chương trình hoàn tiền: khi admin chưa bật (tỉ lệ = 0) thì hệ thống
 // thật sự không trả đồng nào, nên câu trả lời cũ mới là câu đúng. Bật lên rồi mà vẫn để nguyên
 // câu "không tạo hoàn tiền" thì chính trang của mình đang phủ nhận chức năng của mình.
-const faqs = computed(() => [
+// Web tắt lấy mã: không còn mã, không còn đi qua Facebook hay khung giờ back mã để giải thích.
+const cashbackFaqs = computed(() => [
+    { q: 'Công cụ này hoạt động như thế nào?', a: 'Bạn dán link sản phẩm Shopee vào ô ở đầu trang — hệ thống trả về link mua chính thức của Shopee Affiliate. Mua qua link đó thì giá y như tự mở app, Shopee trả hoa hồng tiếp thị cho tụi mình vì đơn của bạn.' },
+    cashbackOn.value
+        ? { q: 'Tôi có được hoàn tiền không?', a: `Có. Bạn được hoàn ${cashbackRate.value}% khoản hoa hồng tiếp thị mà Shopee trả cho tụi mình vì đơn của bạn. Điều kiện bắt buộc: phải đăng nhập TRƯỚC khi dán link và bấm mua — link tạo lúc chưa đăng nhập không mang mã của bạn, đơn đó không quy về tài khoản nào được và sau này không cứu lại được. Tiền vào ví sau khi đơn chuyển sang trạng thái Hoàn thành trên Shopee và được đối soát.` }
+        : { q: 'Tôi có được hoàn tiền không?', a: 'Hiện chương trình hoàn tiền đang tạm dừng — link vẫn mua được bình thường, giá y như tự mở app.' },
+    ...(cashbackOn.value ? [
+        { q: 'Sao tôi mua rồi mà ví vẫn 0đ?', a: 'Hay gặp nhất: (1) Lúc tạo link bạn chưa đăng nhập — link không mang mã của bạn, trường hợp này không cứu được. (2) Sau khi mở link bạn lại bấm link của người khác rồi mới đặt — đơn tính cho họ. (3) Đơn chưa "Hoàn thành" trên Shopee hoặc chưa tới kỳ đối soát — tụi mình nhập báo cáo Shopee theo đợt. Vẫn không thấy thì nhắn tụi mình kèm ngày đặt và mã đơn Shopee để đối chiếu.' },
+        { q: 'Tiền hoàn tính trên cái gì?', a: `Tính trên hoa hồng tiếp thị Shopee trả cho tụi mình vì đơn của bạn, không phải trên giá trị đơn hàng. Mức hoàn hiện tại là ${cashbackRate.value}% khoản hoa hồng đó. Hoa hồng mỗi ngành hàng mỗi khác nên số tiền hoàn của mỗi đơn cũng khác nhau.` },
+    ] : []),
+    { q: 'Mua qua link có đắt hơn không?', a: 'Không. Giá, phí ship và mã giảm giá của Shopee/shop y hệt như bạn tự mở app mua — link chỉ để Shopee biết đơn đi qua tụi mình.' },
+    { q: 'Có mất phí không?', a: 'Hoàn toàn miễn phí.' },
+    { q: 'Hỗ trợ những sàn nào?', a: 'Ô dán link ở đầu trang hiện chỉ hỗ trợ Shopee.' },
+])
+
+const faqs = computed(() => !voucherTool.value ? cashbackFaqs.value : [
     { q: 'Công cụ này hoạt động như thế nào?', a: 'Bạn dán link sản phẩm Shopee vào ô ở đầu trang — hệ thống tự tìm mã giảm giá đang áp dụng cho sản phẩm đó và trả về một link đã gắn sẵn mã, không phải nhập mã thủ công.' },
     { q: 'Vì sao bấm nút lại mở ra Facebook?', a: 'Vì đây là mã dành riêng cho người mua đến từ Facebook — Shopee chỉ áp mã khi bạn bấm vào link nằm trên Facebook. Quy trình là: bấm "Lấy mã qua Facebook" → bấm tiếp "Mở Facebook ngay" (ứng dụng Facebook sẽ mở ra) → bấm link hiện ở đó → về Shopee với mã đã được áp sẵn. Bỏ qua bước này thì mã sẽ không có hiệu lực.' },
     { q: 'Mấy giờ thì có mã mới (back mã)?', a: 'Mã YouTube được nạp lại lượt vào 0h, 9h, 12h và 18h. Mã IG – FB nạp lại vào 0h, 9h, 15h và 20h (giờ Việt Nam). Mã có số lượng giới hạn nên thường hết rất nhanh — nếu Shopee báo hết lượt, bạn quay lại đúng khung giờ trên để lấy mã mới.' },
@@ -701,8 +777,17 @@ onUnmounted(() => {
          thì hệ thống không trả đồng nào, quảng cáo hoàn tiền trên kết quả tìm kiếm lúc đó là
          kéo khách vào để thất vọng. -->
     <Head>
-        <title>{{ cashbackOn ? 'Mã Giảm Giá Shopee + Hoàn Tiền Về Ví | tietkiemvi.com' : 'Tìm Voucher Shopee Facebook YouTube Instagram | tietkiemvi.com' }}</title>
+        <title v-if="!voucherTool">{{ cashbackOn ? 'Mua Shopee Hoàn Tiền Về Ví | tietkiemvi.com' : 'Link Mua Shopee | tietkiemvi.com' }}</title>
+        <title v-else>{{ cashbackOn ? 'Mã Giảm Giá Shopee + Hoàn Tiền Về Ví | tietkiemvi.com' : 'Tìm Voucher Shopee Facebook YouTube Instagram | tietkiemvi.com' }}</title>
         <meta
+            v-if="!voucherTool"
+            name="description"
+            :content="cashbackOn
+                ? `Dán link Shopee → nhận link mua, được chia lại ${cashbackRate}% hoa hồng của đơn vào số dư trên web, rút về MoMo/ZaloPay khi đủ mức tối thiểu. Đăng nhập trước khi dán link thì đơn mới được ghi nhận.`
+                : 'Dán link sản phẩm Shopee → nhận link mua chính thức của Shopee.'"
+        />
+        <meta
+            v-else
             name="description"
             :content="cashbackOn
                 ? `Dán link Shopee → nhận mã giảm giá áp sẵn, và được chia lại ${cashbackRate}% hoa hồng của đơn vào số dư trên web, rút về MoMo/ZaloPay khi đủ mức tối thiểu. Đăng nhập trước khi bấm mua thì đơn mới được ghi nhận.`
@@ -715,14 +800,22 @@ onUnmounted(() => {
             <div class="max-w-3xl mx-auto">
                 <!-- Khung giờ back mã: đặt trên cùng để khách vừa vào trang là biết ngay
                      lúc nào nguồn cấp mã nạp lại lượt, trước cả ô dán link. -->
-                <RestockSchedule class="mb-4" />
+                <RestockSchedule v-if="voucherTool" class="mb-4" />
 
                 <!-- Tiêu đề nằm NGOÀI vùng dính để vùng dính giữ nguyên kích thước khi cuộn. -->
                 <div v-if="canUseVoucherTool" class="px-1 mb-1">
-                    <h1 class="text-xl md:text-2xl font-extrabold text-[var(--color-ink)] mb-1">
-                        Dán link sản phẩm Shopee để lấy mã giảm giá
-                    </h1>
-                    <p class="text-sm text-[var(--color-muted)]">Nhận ngay link đã áp sẵn mã giảm giá — không cần nhập mã, miễn phí.</p>
+                    <template v-if="voucherTool">
+                        <h1 class="text-xl md:text-2xl font-extrabold text-[var(--color-ink)] mb-1">
+                            Dán link sản phẩm Shopee để lấy mã giảm giá
+                        </h1>
+                        <p class="text-sm text-[var(--color-muted)]">Nhận ngay link đã áp sẵn mã giảm giá — không cần nhập mã, miễn phí.</p>
+                    </template>
+                    <template v-else>
+                        <h1 class="text-xl md:text-2xl font-extrabold text-[var(--color-ink)] mb-1">
+                            {{ cashbackOn ? 'Dán link sản phẩm Shopee để mua hoàn tiền' : 'Dán link sản phẩm Shopee để lấy link mua' }}
+                        </h1>
+                        <p v-if="cashbackOn" class="text-sm text-[var(--color-muted)]">Mua qua link của tụi mình, giá y như tự mở app — nhận lại {{ cashbackRate }}% hoa hồng của đơn vào ví.</p>
+                    </template>
                 </div>
 
                 <!-- top-16 = chiều cao header sticky của AppLayout (h-16). Nền đặc chỉ bật khi
@@ -783,7 +876,8 @@ onUnmounted(() => {
                                     <circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" stroke-dasharray="30 70" />
                                 </svg>
                                 <span v-else>🔍</span>
-                                {{ resolving ? 'Đang tìm mã...' : 'Tìm mã ngay' }}
+                                <template v-if="voucherTool">{{ resolving ? 'Đang tìm mã...' : 'Tìm mã ngay' }}</template>
+                                <template v-else>{{ resolving ? 'Đang lấy link...' : 'Lấy link' }}</template>
                             </button>
                         </div>
                         <p v-if="voucherError" class="text-red-500 text-sm mt-2">{{ voucherError }}</p>
@@ -998,6 +1092,50 @@ onUnmounted(() => {
                     </div>
                 </div>
 
+                <!-- Web tắt lấy mã: link trả về đã là link mua cuối cùng, chỉ còn một nút. Thẻ <a> thật,
+                     cùng tab — điều kiện để điện thoại mở thẳng app Shopee (tab mới làm hỏng
+                     universal link, cùng lý do với nút Facebook ở trên). -->
+                <div v-if="canUseVoucherTool && cashbackResult" ref="voucherResultEl" class="mt-4 card-glass rounded-2xl p-5">
+                    <div v-if="cashbackResult.product" class="flex gap-4 items-start mb-5">
+                        <div class="w-16 h-16 rounded-xl bg-[var(--color-peach-soft)] flex-none overflow-hidden">
+                            <img v-if="cashbackResult.product.product_image" :src="cashbackResult.product.product_image" :alt="cashbackResult.product.product_name" class="w-full h-full object-cover" />
+                            <div v-else class="w-full h-full flex items-center justify-center text-2xl">🛍️</div>
+                        </div>
+                        <div class="flex-1 min-w-0">
+                            <span class="inline-flex items-center justify-center w-5 h-5 rounded bg-[#F5511E] text-white text-[10px] font-black mb-1">S</span>
+                            <p class="font-semibold text-[var(--color-ink)] text-sm line-clamp-2">{{ cashbackResult.product.product_name || 'Sản phẩm' }}</p>
+                            <p class="font-bold text-[var(--color-accent)] mt-1">{{ vnd(cashbackResult.product.discounted_price) }}</p>
+                        </div>
+                    </div>
+                    <p v-else class="text-sm text-[var(--color-muted)] mb-5">Không lấy được thông tin sản phẩm, nhưng bạn vẫn có thể dùng link bên dưới.</p>
+
+                    <div ref="resultCtaEl" class="flex items-stretch gap-1.5 mb-4">
+                        <a
+                            :href="cashbackResult.link"
+                            class="btn-fire flex-1 min-w-0 px-6 py-4 rounded-xl flex items-center justify-center gap-2 text-base animate-pulse-ring no-underline"
+                        >
+                            <span>🛒</span>
+                            <span class="truncate">Mua trên Shopee</span>
+                        </a>
+                        <button
+                            @click="copyCashbackLink"
+                            :disabled="copyingCashback"
+                            title="Sao chép link"
+                            class="flex-none w-12 rounded-xl flex items-center justify-center transition-all bg-[var(--color-peach-soft)] hover:bg-[var(--color-peach)] text-[var(--color-ink)] disabled:opacity-60"
+                        >
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="w-4 h-4"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+                        </button>
+                    </div>
+
+                    <div class="flex items-start gap-2 bg-[var(--color-peach-soft)] border border-[var(--color-accent)]/25 rounded-xl px-3 py-2.5">
+                        <span class="text-sm leading-none">💡</span>
+                        <p class="text-xs text-[var(--color-accent-deep)] leading-relaxed">
+                            Đặt hàng <b>ngay trong lượt mở này</b> — bấm link của người khác sau đó thì đơn tính cho họ.
+                            <template v-if="cashbackOn && cashbackResult.logged_in">Đơn hoàn thành bên Shopee là tiền vào ví — theo dõi ở <Link href="/don-hang" class="font-bold underline underline-offset-2">Đơn hàng</Link>.</template>
+                        </p>
+                    </div>
+                </div>
+
                 <!-- Ưu đãi đang có (mã YTB còn bao nhiêu %): trả lời "giờ dán link có còn mã không"
                      ngay dưới ô nhập. Server chỉ gửi khi nguồn đang là ganma — xem YtbVoucherStatusService. -->
                 <YtbVoucherStatus v-if="canUseVoucherTool && ytbVouchers?.length" :vouchers="ytbVouchers" class="mt-4" />
@@ -1061,13 +1199,24 @@ onUnmounted(() => {
                             <!-- Công tắc "Mua lại từ lịch sử" (Admin > Cài đặt) đang TẮT: không có
                                  nút mua nào ở đây, khách muốn mua phải dán lại link để quét mới —
                                  mã trong ref cũ có thể đã hết lượt/hết hạn từ lúc quét. -->
+                            <!-- Mục ghi lúc web tắt lấy mã: nhớ chính link khách dán, bấm là tạo link
+                                 mới theo chế độ đang chạy (xem onCashbackResult). -->
                             <button
-                                v-if="!historyRebuy"
+                                v-if="h.url"
+                                type="button"
+                                @click="resolveAgain(h)"
+                                :disabled="resolving"
+                                class="btn-fire px-4 py-2 rounded-lg text-xs inline-flex items-center gap-1.5 disabled:opacity-60"
+                            >
+                                <span>🔁</span> Lấy lại link
+                            </button>
+                            <button
+                                v-else-if="!historyRebuy"
                                 type="button"
                                 @click="focusVoucherTool"
                                 class="px-4 py-2 rounded-lg text-xs font-bold inline-flex items-center gap-1.5 border border-[var(--color-line)] text-[var(--color-muted)] hover:border-[var(--color-accent)] hover:text-[var(--color-accent)] transition"
                             >
-                                <span>📋</span> Dán lại link để lấy mã
+                                <span>📋</span> {{ voucherTool ? 'Dán lại link để lấy mã' : 'Dán lại link' }}
                             </button>
                             <!-- Chế độ mã YTB: mua lại từ lịch sử cũng phải kích hoạt YouTube trước
                                  (bước 1) y như lần đầu — trạng thái nhớ theo ref trong sessionStorage. -->
@@ -1173,7 +1322,7 @@ onUnmounted(() => {
                          qua kỳ đối soát, và muốn cầm được tiền thì còn mốc rút tối thiểu. Kể đúng
                          thứ tự các chặng, rồi lấy chính sự thẳng thắn đó làm câu chốt. -->
                     <p class="text-white/80 mb-8">
-                        Vẫn dán link, vẫn được mã giảm giá như thường. Đăng nhập trước khi bấm mua thì đơn của bạn
+                        {{ voucherTool ? 'Vẫn dán link, vẫn được mã giảm giá như thường.' : 'Vẫn dán link, giá vẫn y như tự mở app.' }} Đăng nhập trước khi bấm mua thì đơn của bạn
                         còn được ghi nhận: Shopee chốt đơn ở trạng thái Hoàn thành, tụi mình đối soát báo cáo,
                         rồi {{ cashbackRate }}% hoa hồng của đơn đó vào ví bạn. Không nhanh, nhưng có thật —
                         và tụi mình nói trước cả những lúc bạn không được hoàn.
@@ -1185,7 +1334,7 @@ onUnmounted(() => {
                 </template>
                 <template v-else>
                     <h2 class="text-2xl md:text-3xl font-extrabold text-white mb-4">Sẵn sàng tiết kiệm tiền?</h2>
-                    <p class="text-white/80 mb-8">Dán link sản phẩm là có ngay mã giảm giá — miễn phí, không cần nhập tay.</p>
+                    <p class="text-white/80 mb-8">{{ voucherTool ? 'Dán link sản phẩm là có ngay mã giảm giá — miễn phí, không cần nhập tay.' : 'Dán link sản phẩm là có ngay link mua — miễn phí.' }}</p>
                     <button @click="focusVoucherTool"
                         class="bg-white text-[var(--color-accent)] font-bold px-8 py-4 rounded-2xl hover:shadow-xl transition">
                         Lấy link ngay — Miễn phí

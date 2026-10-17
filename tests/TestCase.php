@@ -2,7 +2,9 @@
 
 namespace Tests;
 
+use App\Models\Setting;
 use App\Models\User;
+use App\Services\CashbackLinkService;
 use Illuminate\Foundation\Testing\TestCase as BaseTestCase;
 use Spatie\Permission\Models\Role;
 use Spatie\Permission\PermissionRegistrar;
@@ -16,6 +18,14 @@ abstract class TestCase extends BaseTestCase
         // Máy dev có thể đã có file dữ liệu IP thật (geoip:update) — test mà đọc nó thì IP công
         // khai trong test bị chặn hay không tùy máy chạy. Test cần thì tự gắn GeoIpDatabase giả.
         config(['services.geoip.database' => storage_path('framework/testing/no-geoip.mmdb')]);
+    }
+
+    /**
+     * Web mặc định TẮT lấy mã (chỉ ra link hoàn tiền) — test của luồng lấy mã phải bật lại.
+     */
+    protected function enableVoucherTool(): void
+    {
+        Setting::set(CashbackLinkService::VOUCHER_TOOL_KEY, '1');
     }
 
     protected function setUpRoles(): void

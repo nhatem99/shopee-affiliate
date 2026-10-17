@@ -19,12 +19,12 @@ import { useCashback } from '@/composables/useCashback'
  * giá trị đơn hàng. Đây là chỗ ít bối cảnh nhất trên giao diện nên càng không được phép nói tắt
  * thành "giảm X%".
  */
-const { cashbackRate, missingOut, joinHref } = useCashback()
+const { cashbackRate, missingOut, joinHref, voucherTool } = useCashback()
 
 const messages = computed(() => [
     `🔥 Đăng nhập trước khi bấm mua để được hoàn ${cashbackRate.value}% hoa hồng của đơn`,
     '💸 Tiền hoàn vào ví trên web, rút về MoMo/ZaloPay khi đủ mức tối thiểu',
-    '🎁 Đăng ký miễn phí, vẫn lấy mã giảm giá như thường',
+    voucherTool.value ? '🎁 Đăng ký miễn phí, vẫn lấy mã giảm giá như thường' : '🎁 Đăng ký miễn phí — mua Shopee giá như cũ mà còn được hoàn tiền',
 ])
 </script>
 

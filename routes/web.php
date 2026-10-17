@@ -25,10 +25,12 @@ use App\Http\Controllers\Auth\GoogleController;
 use App\Http\Controllers\Auth\LoginController;
 use App\Http\Controllers\Auth\RegisterController;
 use App\Http\Controllers\BlogController;
+use App\Http\Controllers\CashbackLinkController;
 use App\Http\Controllers\ChatController;
 use App\Http\Controllers\CheckInController;
 use App\Http\Controllers\FlashSaleController;
 use App\Http\Controllers\GuideController;
+use App\Http\Controllers\HomeController;
 use App\Http\Controllers\NotificationController;
 use App\Http\Controllers\OrderHistoryController;
 use App\Http\Controllers\ProfileController;
@@ -39,37 +41,13 @@ use App\Http\Controllers\VoucherCatalogController;
 use App\Http\Controllers\WithdrawalController;
 use App\Services\CashbackLeaderboardService;
 use App\Services\CashbackService;
-use App\Services\DailyCheckInService;
 use App\Services\MembershipTierService;
-use App\Services\TrackingService;
-use App\Services\YtbVoucherStatusService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 use Inertia\Inertia;
 
 // Home
-Route::get('/', function (Request $request, TrackingService $tracking, CashbackService $cashback, CashbackLeaderboardService $leaderboard, MembershipTierService $tiers, DailyCheckInService $checkIn, YtbVoucherStatusService $ytbVouchers) {
-    $tracking->log('page_view', $request, ['url' => $request->fullUrl()]);
-
-    return Inertia::render('Home', [
-        // Công cụ lấy mã chỉ dùng được trên điện thoại — admin luôn xem/test được từ máy tính.
-        'canUseVoucherTool' => TrackingService::isMobile($request->userAgent())
-            || ($request->user()?->isAdmin() ?? false),
-        // Bảng xếp hạng hoàn tiền tháng này. Chỉ tính khi chương trình đang bật: tắt rồi mà vẫn
-        // truy vấn là tốn công cho một khối frontend đằng nào cũng ẩn (useCashback::cashbackOn).
-        'leaderboard' => $cashback->rate() > 0 ? $leaderboard->forMonth($request->user()) : null,
-        // Hạng thành viên & đặc quyền. null = chương trình tắt, khối ở frontend tự biến mất
-        // (MembershipTierService::enabled đã gộp luôn điều kiện tỉ lệ hoàn tiền > 0).
-        'membershipTiers' => $tiers->enabled() ? $tiers->publicTiers($request->user()) : null,
-        // Điểm danh nhận quà. null = admin đã tắt, thẻ ở frontend tự biến mất. Đóng closure để
-        // những lượt partial reload không xin tới nó (ví dụ reload riêng voucherResult sau mỗi lần
-        // dán link) không phải chạy lại mấy truy vấn đếm kho quà.
-        'dailyCheckIn' => fn () => $checkIn->enabled() ? $checkIn->state($request->user()) : null,
-        // Khối "Ưu đãi đang có" (mã YTB còn bao nhiêu %) — null khi nguồn không phải ganma hoặc
-        // chưa có số liệu, xem YtbVoucherStatusService.
-        'ytbVouchers' => fn () => $ytbVouchers->forDisplay(),
-    ]);
-})->name('home');
+Route::get('/', [HomeController::class, 'index'])->name('home');
 
 // Auth (guests only)
 Route::middleware('guest')->group(function () {
@@ -113,6 +91,13 @@ Route::get('/affiliate/scan', $redirectHomeKeepingFlash);
 Route::post('/affiliate/scan', [AffiliateController::class, 'scan'])
     ->middleware('throttle:affiliate-scan')
     ->name('affiliate.scan');
+
+// Web tắt lấy mã (CashbackLinkService::voucherToolEnabled): dán link Shopee → link hoàn tiền mang
+// mã khách, khách vãng lai nhận link không mã. Lưới GET như /voucher/resolve bên dưới.
+Route::get('/link-hoan-tien', $redirectHomeKeepingFlash);
+Route::post('/link-hoan-tien', [CashbackLinkController::class, 'store'])
+    ->middleware('throttle:affiliate-scan')
+    ->name('cashback.link');
 
 // tietkiemvi.com public voucher tool — no auth required
 // GET fallback: redirect home if user refreshes after a resolve

@@ -2,8 +2,11 @@
 
 namespace App\Http\Controllers;
 
+use App\Services\CashbackLinkService;
+use App\Services\CashbackService;
 use App\Services\GuideVideoService;
 use App\Services\TrackingService;
+use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
 use Inertia\Response;
@@ -16,13 +19,21 @@ use Inertia\Response;
  * Chưa đặt video thì trang vẫn còn nguyên phần hướng dẫn bằng chữ — phần chữ mới là nội dung
  * chính, video là thứ đi kèm. Không 404 như /hoan-tien: trang kia không có tỉ lệ hoàn tiền thì
  * thật sự không còn gì để nói, còn trang này thì có.
+ *
+ * Web tắt lấy mã thì trang này nói sai (kích hoạt YouTube, đi qua Facebook...) — chuyển sang
+ * /hoan-tien, hoặc trang chủ nếu chương trình hoàn tiền cũng đang tắt. Giữ URL vì bài đăng cũ
+ * còn trỏ tới.
  */
 class GuideController extends Controller
 {
     public function __construct(private GuideVideoService $guideVideo) {}
 
-    public function index(Request $request, TrackingService $tracking): Response
+    public function index(Request $request, TrackingService $tracking, CashbackService $cashback): Response|RedirectResponse
     {
+        if (! CashbackLinkService::voucherToolEnabled()) {
+            return redirect()->route($cashback->rate() > 0 ? 'cashback.info' : 'home');
+        }
+
         $tracking->log('page_view', $request, ['url' => $request->fullUrl()]);
 
         return Inertia::render('Guide', [

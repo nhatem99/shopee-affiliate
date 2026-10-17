@@ -143,11 +143,11 @@ const statusMeta = {
                 <p class="text-4xl mb-3">🧾</p>
                 <p class="font-bold text-[var(--color-ink)] mb-1">Chưa ghi nhận đơn nào</p>
                 <p class="text-sm text-[var(--color-muted)] max-w-md mx-auto">
-                    Đơn chỉ được ghi nhận khi bạn <b>đang đăng nhập</b> lúc lấy mã và bấm mua qua link ở đây.
+                    Đơn chỉ được ghi nhận khi bạn <b>đang đăng nhập</b> lúc dán link và bấm mua qua link ở đây.
                     Đơn mới đặt cũng cần vài ngày để hiện, vì bên mình đối soát theo báo cáo Shopee.
                 </p>
                 <Link href="/" class="btn-fire mt-5 inline-block px-6 py-3 rounded-xl no-underline">
-                    Về trang chủ lấy mã →
+                    Về trang chủ dán link →
                 </Link>
             </div>
 
